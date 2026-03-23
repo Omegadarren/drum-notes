@@ -1971,6 +1971,9 @@ document.getElementById('btn-delete-group').addEventListener('click', async () =
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
     setLoading(false);
     document.getElementById('group-detail-screen').classList.remove('active');
+    document.getElementById('groups-screen').classList.add('active');
+    currentGroupId   = null;
+    currentGroupData = null;
     hint('Group deleted.', 3000);
     loadMyGroups();
   } catch (err) {
@@ -1990,6 +1993,9 @@ document.getElementById('btn-leave-group').addEventListener('click', async () =>
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
     setLoading(false);
     document.getElementById('group-detail-screen').classList.remove('active');
+    document.getElementById('groups-screen').classList.add('active');
+    currentGroupId   = null;
+    currentGroupData = null;
     hint('You left the group.', 3000);
     loadMyGroups();
   } catch (err) {

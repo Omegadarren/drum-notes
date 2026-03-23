@@ -385,9 +385,21 @@
       box-shadow: 0 8px 40px rgba(0,0,0,0.7);
       max-width: 90vw;
     }
-    .del-toast-text { font-size: 16px; }
+    .del-toast-text { font-size: 16px; flex: 1; min-width: 0; }
     .del-toast-yes {
       background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+    .del-toast-edit {
+      background: #2563eb;
       color: #fff;
       border: none;
       border-radius: 9px;
@@ -907,7 +919,7 @@ function drawAnnotation(annLayer, ann) {
   label.textContent = ann.text;
   label.style.left  = (ann.xPct * 100) + '%';
   label.style.top   = (ann.yPct * 100) + '%';
-  label.title = 'Tap to delete';
+  label.title = 'Tap to edit or delete';
 
   // Single-tap on label → delete confirm
   let tapped = false;
@@ -933,19 +945,43 @@ function drawAnnotation(annLayer, ann) {
   annLayer.appendChild(label);
 }
 
-// ─────────────────── Delete confirm ──────────────────────
+// ─────────────────── Edit / Delete action toast ─────────
 function showDeleteConfirm(ann, labelEl) {
   document.querySelectorAll('.del-toast').forEach(el => el.remove());
 
   const toast = document.createElement('div');
   toast.className = 'del-toast';
   toast.innerHTML = `
-    <span class="del-toast-text">Delete "<strong>${esc(ann.text)}</strong>"?</span>
-    <button class="del-toast-yes">Delete</button>
-    <button class="del-toast-no">Keep</button>`;
+    <span class="del-toast-text">"<strong>${esc(ann.text)}</strong>"</span>
+    <button class="del-toast-edit">✎ Edit</button>
+    <button class="del-toast-yes">🗑 Delete</button>
+    <button class="del-toast-no">✕</button>`;
   document.body.appendChild(toast);
 
-  let autoClose = setTimeout(() => toast.remove(), 5000);
+  let autoClose = setTimeout(() => toast.remove(), 6000);
+
+  // Edit — remove old label, open pre-filled input at same position
+  toast.querySelector('.del-toast-edit').addEventListener('click', () => {
+    clearTimeout(autoClose);
+    toast.remove();
+    const pageData = app.pages[ann.page];
+    if (!pageData) return;
+    // Remove rendered label first
+    labelEl.remove();
+    // Remove from session temporarily (re-added on commit)
+    const sess = currentSession();
+    sess.annotations = sess.annotations.filter(a => a.id !== ann.id);
+    saveCurrentSession();
+    // Open input at original position
+    showAnnInput(pageData.annLayer, ann.page, ann.xPct, ann.yPct);
+    // Pre-fill with existing text after input is in the DOM
+    requestAnimationFrame(() => {
+      if (app.pendingAnn) {
+        app.pendingAnn.input.value = ann.text;
+        app.pendingAnn.input.select();
+      }
+    });
+  });
 
   toast.querySelector('.del-toast-yes').addEventListener('click', () => {
     clearTimeout(autoClose);

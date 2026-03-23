@@ -1877,11 +1877,23 @@ async function openGroupSetlist(setlistId, sl) {
   }
   setLoading(true, 'Downloading setlist…');
   try {
-    const url   = await storage.ref(sl.storagePath).getDownloadURL();
-    const resp  = await fetch(url);
-    const buf   = await resp.arrayBuffer();
-    const b64   = btoa(String.fromCharCode(...new Uint8Array(buf)));
-    const pdfData = 'data:application/pdf;base64,' + b64;
+    const url = await storage.ref(sl.storagePath).getDownloadURL();
+    // Use XHR instead of fetch — better CORS compatibility on Safari/iOS
+    const buf = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+      xhr.onerror = () => reject(new Error('Network error — check your connection'));
+      xhr.send();
+    });
+    // Chunked btoa — avoids call stack overflow on large PDFs
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    }
+    const pdfData = 'data:application/pdf;base64,' + btoa(binary);
     const session = {
       id:             genId(),
       name:           sl.name,

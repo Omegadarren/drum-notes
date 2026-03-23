@@ -688,6 +688,34 @@
       color: #60a5fa;
     }
     .invite-code-hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .btn-copy-code {
+      margin-top: 14px;
+      background: #1a3a5c;
+      color: #60a5fa;
+      border: 1.5px solid #60a5fa;
+      border-radius: 12px;
+      padding: 12px 0;
+      font-size: 17px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+      width: 100%;
+      letter-spacing: 1px;
+    }
+    .btn-copy-code:active { opacity: 0.7; }
+    .btn-paste-code {
+      background: #2a2a2c;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-paste-code:active { opacity: 0.7; }
 
     .danger-btn {
       background: transparent;
@@ -806,6 +834,7 @@
         <div class="invite-code-label">Invite Code — share this with your band</div>
         <div class="invite-code-value" id="group-invite-code">——</div>
         <div class="invite-code-hint">Members tap "Join Group" and enter this code</div>
+        <button class="btn-copy-code" id="btn-copy-code">📋 Copy Code</button>
       </div>
       <button class="danger-btn" id="btn-delete-group">Delete Group</button>
     </div>
@@ -838,10 +867,13 @@
     <div class="modal-title">Join Group 🔗</div>
     <div>
       <div class="field-label">Enter the invite code from your band admin</div>
-      <input class="text-input" id="inp-invite-code" type="text"
-             placeholder="e.g. DRUMS7" maxlength="8"
-             autocomplete="off" autocorrect="off" spellcheck="false"
-             style="text-transform:uppercase;letter-spacing:4px;font-size:26px;">
+      <div style="display:flex;gap:10px;align-items:stretch;">
+        <input class="text-input" id="inp-invite-code" type="text"
+               placeholder="e.g. DRUMS7" maxlength="8"
+               autocomplete="off" autocorrect="off" spellcheck="false"
+               style="text-transform:uppercase;letter-spacing:4px;font-size:26px;flex:1;">
+        <button class="btn-paste-code" id="btn-paste-code">📋 Paste</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-join-group-cancel">Cancel</button>
@@ -1662,6 +1694,17 @@ document.getElementById('btn-join-group').addEventListener('click', () => {
 document.getElementById('btn-join-group-cancel').addEventListener('click', () => {
   document.getElementById('join-group-modal').classList.remove('open');
 });
+document.getElementById('btn-paste-code').addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    const code = text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    if (code) document.getElementById('inp-invite-code').value = code;
+  } catch (err) {
+    // Clipboard read requires user permission — focus the field so user can paste manually
+    document.getElementById('inp-invite-code').focus();
+    hint('Tap and hold the field, then choose Paste', 3000);
+  }
+});
 document.getElementById('inp-invite-code').addEventListener('input', e => {
   e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 });
@@ -1706,6 +1749,19 @@ async function openGroupDetail(gid, gdata) {
   document.getElementById('group-detail-screen').classList.add('active');
   loadGroupSetlists(gid);
 }
+
+document.getElementById('btn-copy-code').addEventListener('click', () => {
+  const code = document.getElementById('group-invite-code').textContent;
+  if (!code || code === '——') return;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('btn-copy-code');
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Code', 2000);
+  }).catch(() => {
+    // Fallback for browsers that block clipboard without gesture
+    hint('Code: ' + code, 6000);
+  });
+});
 
 document.getElementById('btn-group-detail-back').addEventListener('click', () => {
   document.getElementById('group-detail-screen').classList.remove('active');

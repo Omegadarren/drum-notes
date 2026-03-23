@@ -1940,7 +1940,18 @@ document.getElementById('btn-upload-confirm').addEventListener('click', async ()
     const setlistId   = genId();
     const storagePath = `groups/${currentGroupId}/${setlistId}.pdf`;
     const ref         = storage.ref(storagePath);
-    await ref.put(pendingSetlistFile);
+    await new Promise((resolve, reject) => {
+      const task  = ref.put(pendingSetlistFile);
+      const timer = setTimeout(() => {
+        task.cancel();
+        reject(new Error('Upload timed out. Check that Firebase Storage rules allow writes (see Firebase Console → Storage → Rules).'));
+      }, 60000);
+      task.on('state_changed',
+        null,
+        err  => { clearTimeout(timer); reject(err); },
+        ()   => { clearTimeout(timer); resolve(); }
+      );
+    });
     await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
       name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
     });

@@ -639,6 +639,16 @@
       font-weight: 700;
     }
     .group-row-arrow { color: var(--muted); font-size: 20px; flex-shrink: 0; }
+    .join-group-item {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      touch-action: manipulation;
+      font-size: 17px;
+    }
+    .join-group-item:last-child { border-bottom: none; }
+    .join-group-item:active { background: #2a2a2c; }
+    .join-group-item.selected { background: #1a3a5c; color: #60a5fa; font-weight: 600; }
 
     .groups-empty {
       text-align: center;
@@ -863,10 +873,14 @@
 
 <!-- ==================== JOIN GROUP MODAL ==================== -->
 <div class="modal-bg" id="join-group-modal">
-  <div class="modal-box">
-    <div class="modal-title">Join Group 🔗</div>
+  <div class="modal-box" style="max-height:85vh;overflow:hidden;display:flex;flex-direction:column;gap:16px;">
+    <div class="modal-title">Join a Group 🔗</div>
     <div>
-      <div class="field-label">Enter the invite code from your band admin</div>
+      <div class="field-label">Select a group</div>
+      <div id="join-groups-list" style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:12px;"></div>
+    </div>
+    <div>
+      <div class="field-label">Enter invite code</div>
       <div style="display:flex;gap:10px;align-items:stretch;">
         <input class="text-input" id="inp-invite-code" type="text"
                placeholder="e.g. DRUMS7" maxlength="8"
@@ -877,7 +891,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-join-group-cancel">Cancel</button>
-      <button class="btn-primary" id="btn-join-group-save">Join →</button>
+      <button class="btn-primary" id="btn-join-group-save" disabled style="opacity:0.4;">Join →</button>
     </div>
   </div>
 </div>
@@ -1584,6 +1598,7 @@ function genInviteCode() {
 // ── Groups screen ─────────────────────────────────────────
 let currentGroupId   = null;
 let currentGroupData = null;
+let selectedJoinGroupId = null;
 
 document.getElementById('btn-groups').addEventListener('click', async () => {
   document.getElementById('start-screen').style.display = 'none';
@@ -1607,11 +1622,6 @@ async function loadMyGroups() {
   const listEl = document.getElementById('my-groups-list');
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   try {
-    // Groups where I'm a member
-    const snap = await db.collectionGroup('members')
-      .where(firebase.firestore.FieldPath.documentId(), '==', fbUid)
-      .get();
-    // Actually query per group — simpler approach: store joined group IDs locally
     const myGroupIds = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
     if (!myGroupIds.length) {
       listEl.innerHTML = '<div class="groups-empty">No groups yet. Create or join one below.</div>';
@@ -1686,10 +1696,40 @@ document.getElementById('btn-create-group-save').addEventListener('click', async
 });
 
 // ── Join Group ────────────────────────────────────────────
-document.getElementById('btn-join-group').addEventListener('click', () => {
+document.getElementById('btn-join-group').addEventListener('click', async () => {
+  selectedJoinGroupId = null;
   document.getElementById('inp-invite-code').value = '';
+  const saveBtn = document.getElementById('btn-join-group-save');
+  saveBtn.disabled = true;
+  saveBtn.style.opacity = '0.4';
   document.getElementById('join-group-modal').classList.add('open');
-  setTimeout(() => document.getElementById('inp-invite-code').focus(), 120);
+  // Load all available groups
+  const listEl = document.getElementById('join-groups-list');
+  listEl.innerHTML = '<div class="groups-empty" style="padding:16px;">Loading groups…</div>';
+  try {
+    const snap = await db.collection('groups').orderBy('name').limit(50).get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="groups-empty" style="padding:16px;">No groups found.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.forEach(doc => {
+      const g = doc.data();
+      const item = document.createElement('div');
+      item.className = 'join-group-item';
+      item.textContent = '🎸 ' + g.name;
+      item.addEventListener('click', () => {
+        listEl.querySelectorAll('.join-group-item').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        selectedJoinGroupId = doc.id;
+        saveBtn.disabled = false;
+        saveBtn.style.opacity = '1';
+      });
+      listEl.appendChild(item);
+    });
+  } catch (err) {
+    listEl.innerHTML = '<div class="groups-empty" style="padding:16px;">Could not load groups.</div>';
+  }
 });
 document.getElementById('btn-join-group-cancel').addEventListener('click', () => {
   document.getElementById('join-group-modal').classList.remove('open');
@@ -1710,21 +1750,20 @@ document.getElementById('inp-invite-code').addEventListener('input', e => {
 });
 document.getElementById('btn-join-group-save').addEventListener('click', async () => {
   const code = document.getElementById('inp-invite-code').value.trim().toUpperCase();
+  if (!selectedJoinGroupId) { alert('Please select a group from the list.'); return; }
   if (code.length < 4) { alert('Please enter the invite code.'); return; }
-  setLoading(true, 'Looking up group…');
+  setLoading(true, 'Joining group…');
   try { fbUid = await waitForAuth(); } catch (e) { setLoading(false); alert('Not connected. Check internet.'); return; }
   try {
-    const snap = await db.collection('groups').where('inviteCode', '==', code).limit(1).get();
-    if (snap.empty) { setLoading(false); alert('No group found with that code. Check with your admin.'); return; }
-    const gdoc = snap.docs[0];
-    const gid  = gdoc.id;
-    // Already a member?
+    const gdoc = await db.collection('groups').doc(selectedJoinGroupId).get();
+    if (!gdoc.exists) { setLoading(false); alert('Group not found.'); return; }
+    if (gdoc.data().inviteCode !== code) { setLoading(false); alert('Wrong invite code. Check with your admin.'); return; }
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
-    if (ids.includes(gid)) { setLoading(false); hint('You are already in this group.'); document.getElementById('join-group-modal').classList.remove('open'); return; }
+    if (ids.includes(selectedJoinGroupId)) { setLoading(false); hint('You are already in this group.'); document.getElementById('join-group-modal').classList.remove('open'); return; }
     await gdoc.ref.collection('members').doc(fbUid).set({
       name: getProfileName() || 'Unknown', joinedAt: Date.now()
     });
-    ids.unshift(gid);
+    ids.unshift(selectedJoinGroupId);
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
     document.getElementById('join-group-modal').classList.remove('open');
     setLoading(false);

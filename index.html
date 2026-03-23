@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>DrumNotes</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --hdr: 60px;
+      --bg: #111;
+      --surface: #1c1c1e;
+      --border: #2c2c2e;
+      --accent: #e53935;
+      --accent-glow: rgba(229,57,53,0.18);
+      --text: #f2f2f7;
+      --muted: #8e8e93;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ===================== START SCREEN ===================== */
+    #start-screen {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 28px;
+      gap: 14px;
+    }
+
+    .app-icon { font-size: 80px; }
+    .app-name  { font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }
+    .app-sub   { font-size: 18px; color: var(--muted); margin-bottom: 10px; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 16px;
+      padding: 18px 48px;
+      font-size: 21px;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: -0.3px;
+      touch-action: manipulation;
+    }
+    .btn-primary:active { opacity: 0.72; }
+
+    .sessions-wrap {
+      width: 100%;
+      max-width: 580px;
+      margin-top: 20px;
+    }
+    .sessions-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: var(--muted);
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .session-row {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      gap: 14px;
+      touch-action: manipulation;
+    }
+    .session-row:active { background: #2a2a2c; }
+    .session-row-icon  { font-size: 28px; flex-shrink: 0; }
+    .session-row-info  { flex: 1; min-width: 0; }
+    .session-row-name  { font-size: 19px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .session-row-meta  { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .session-row-del   { color: var(--muted); font-size: 22px; padding: 4px 6px; flex-shrink: 0; touch-action: manipulation; }
+    .session-row-del:active { color: var(--accent); }
+
+    /* ===================== MODAL ===================== */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      padding: 24px;
+    }
+    .modal-bg.open { display: flex; }
+
+    .modal-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 32px 28px;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .modal-title { font-size: 28px; font-weight: 700; }
+    .field-label { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+
+    .text-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: var(--text);
+      font-size: 19px;
+      outline: none;
+      font-family: inherit;
+    }
+    .text-input:focus { border-color: var(--accent); }
+
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      touch-action: manipulation;
+    }
+    .upload-zone.has-file { border-color: var(--accent); border-style: solid; }
+    .upload-zone-icon { font-size: 38px; margin-bottom: 10px; }
+    .upload-zone-hint { font-size: 16px; color: var(--muted); }
+    .upload-zone-name { font-size: 15px; color: var(--text); font-weight: 500; margin-top: 8px; }
+
+    #pdf-input { display: none; }
+
+    .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 13px 26px;
+      font-size: 18px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-ghost:active { opacity: 0.7; }
+
+    /* ===================== VIEWER ===================== */
+    #viewer {
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+      position: relative;
+    }
+    #viewer.active { display: flex; }
+
+    .vhdr {
+      height: var(--hdr);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+      z-index: 10;
+      position: relative;
+    }
+    .vhdr-back {
+      font-size: 34px;
+      line-height: 1;
+      color: var(--text);
+      padding: 2px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .vhdr-back:active { background: #333; }
+
+    .vhdr-title {
+      flex: 1;
+      font-size: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .vhdr-chip {
+      font-size: 12px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: #2a2a2c;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .vhdr-chip.editing {
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+    .vhdr-menu {
+      font-size: 24px;
+      padding: 4px 8px;
+      border-radius: 10px;
+      cursor: pointer;
+      color: var(--muted);
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .vhdr-menu:active { background: #333; }
+
+    /* Dropdown */
+    .dropdown-menu {
+      position: absolute;
+      top: calc(var(--hdr) + 6px);
+      right: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 100;
+      min-width: 220px;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .dropdown-menu.open { display: block; }
+    .dropdown-item {
+      padding: 17px 22px;
+      font-size: 17px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      touch-action: manipulation;
+    }
+    .dropdown-item:last-child { border-bottom: none; }
+    .dropdown-item:active { background: #2a2a2c; }
+    .dropdown-item.danger { color: var(--accent); }
+
+    /* ===================== PDF SCROLL ===================== */
+    #pdf-scroll {
+      flex: 1;
+      overflow-y: scroll;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      background: #0a0a0a;
+    }
+
+    .page-wrap {
+      position: relative;
+      width: 100%;
+      display: block;
+      border-bottom: 4px solid #0a0a0a;
+    }
+    .page-wrap canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Annotation overlay — transparent to touch by default */
+    .ann-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* Individual annotation text */
+    .ann-label {
+      position: absolute;
+      color: #ff0000;
+      font-family: Arial, sans-serif;
+      font-size: 14pt;
+      font-weight: normal;
+      white-space: nowrap;
+      transform: translateY(-50%);
+      pointer-events: auto;
+      cursor: pointer;
+      touch-action: manipulation;
+      text-shadow:
+        1px  1px 3px rgba(0,0,0,0.8),
+       -1px -1px 3px rgba(0,0,0,0.8),
+        1px -1px 3px rgba(0,0,0,0.8),
+       -1px  1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Dot marker before each annotation */
+    .ann-label::before {
+      content: '● ';
+      font-size: 8px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+
+    /* Inline annotation input + buttons */
+    .ann-input-wrap {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transform: translateY(-50%);
+      pointer-events: auto;
+      z-index: 50;
+    }
+    .ann-input {
+      background: rgba(8,8,8,0.92);
+      border: 2px solid #ff0000;
+      border-radius: 9px;
+      color: #ff0000;
+      font-family: Arial, sans-serif;
+      font-size: 14pt;
+      padding: 6px 10px;
+      outline: none;
+      width: 220px;
+    }
+    .ann-input::placeholder { color: rgba(255,0,0,0.35); }
+
+    .ann-done {
+      background: #ff0000;
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 18px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .ann-done:active { opacity: 0.75; }
+
+    .ann-cancel {
+      background: #3a3a3c;
+      color: #ccc;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 12px;
+      font-size: 15px;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .ann-cancel:active { opacity: 0.7; }
+
+    /* ===================== DELETE CONFIRM TOAST ===================== */
+    .del-toast {
+      position: fixed;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2c2c2e;
+      border: 1px solid #3a3a3c;
+      border-radius: 16px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 500;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      max-width: 90vw;
+    }
+    .del-toast-text { font-size: 16px; }
+    .del-toast-yes {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+    .del-toast-no {
+      background: #48484a;
+      color: #ddd;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 14px;
+      font-size: 15px;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+
+    /* ===================== LOADING ===================== */
+    #loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 400;
+    }
+    #loading.show { display: flex; }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #2c2c2e;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-msg { color: var(--muted); font-size: 17px; }
+
+    /* ===================== HINT TOAST ===================== */
+    .hint-toast {
+      position: fixed;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.78);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #ddd;
+      padding: 12px 24px;
+      border-radius: 22px;
+      font-size: 15px;
+      z-index: 300;
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 0.6s;
+    }
+    .hint-toast.gone { opacity: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ==================== START SCREEN ==================== -->
+<div id="start-screen">
+  <div class="app-icon">🥁</div>
+  <div class="app-name">DrumNotes</div>
+  <div class="app-sub">Sheet music annotations for rehearsal</div>
+  <button class="btn-primary" id="btn-new">Start new session…</button>
+  <div class="sessions-wrap" id="sessions-wrap"></div>
+</div>
+
+<!-- ==================== NEW SESSION MODAL ==================== -->
+<div class="modal-bg" id="modal">
+  <div class="modal-box">
+    <div class="modal-title">New Session</div>
+    <div>
+      <div class="field-label">Session name</div>
+      <input class="text-input" id="inp-name" type="text"
+             placeholder="e.g. Saturday Rehearsal"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div>
+      <div class="field-label">Sheet music (PDF)</div>
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-zone-icon">🎼</div>
+        <div class="upload-zone-hint">Tap to choose a PDF</div>
+        <div class="upload-zone-name" id="upload-name"></div>
+      </div>
+      <input id="pdf-input" type="file" accept="application/pdf">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-open">Open →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== VIEWER ==================== -->
+<div id="viewer">
+  <div class="vhdr">
+    <div class="vhdr-back" id="btn-back">‹</div>
+    <div class="vhdr-title" id="view-title">—</div>
+    <div class="vhdr-chip" id="mode-chip">Scroll</div>
+    <div class="vhdr-menu" id="btn-menu">⋯</div>
+  </div>
+
+  <!-- Dropdown menu -->
+  <div class="dropdown-menu" id="dropdown">
+    <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
+    <div class="dropdown-item danger" id="mi-back">← Back to sessions</div>
+  </div>
+
+  <div id="pdf-scroll"></div>
+</div>
+
+<!-- ==================== LOADING ==================== -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loading-msg">Loading…</div>
+</div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────
+//  DrumNotes — iPad PDF sheet music annotator
+//  Deployable to GitHub Pages as a single index.html file
+// ─────────────────────────────────────────────────────────
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── Storage key ──────────────────────────────────────────
+const STORE = 'drumnotes_v1';
+
+// ── App state (no frameworks needed) ─────────────────────
+const app = {
+  sessions:    [],   // [{ id, name, pdfData, annotations, createdAt }]
+  currentId:   null,
+  pdfDoc:      null,
+  pages:       [],   // [{ wrap, canvas, annLayer, w, h }]
+  pendingAnn:  null, // { wrap, input, annLayer, pageIdx, xPct, yPct }
+};
+
+// ─────────────────── Persistence ───────────────────────
+function loadStore() {
+  try { app.sessions = JSON.parse(localStorage.getItem(STORE) || '[]'); }
+  catch { app.sessions = []; }
+}
+function saveStore() {
+  try { localStorage.setItem(STORE, JSON.stringify(app.sessions)); }
+  catch (e) {
+    if (e.name === 'QuotaExceededError')
+      hint('Storage full — please remove old sessions.', 4000);
+  }
+}
+function currentSession() {
+  return app.sessions.find(s => s.id === app.currentId) || null;
+}
+function saveCurrentSession() {
+  const s = currentSession();
+  if (!s) return;
+  const i = app.sessions.findIndex(x => x.id === s.id);
+  if (i >= 0) app.sessions[i] = s; else app.sessions.unshift(s);
+  saveStore();
+}
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g,
+    c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+// ─────────────────── Start Screen ──────────────────────
+function renderStart() {
+  loadStore();
+  const wrap = document.getElementById('sessions-wrap');
+  if (!app.sessions.length) { wrap.innerHTML = ''; return; }
+
+  let html = '<div class="sessions-label">Previous Sessions</div>';
+  app.sessions.forEach(s => {
+    const d   = new Date(s.createdAt).toLocaleDateString('en-US',
+                  { month: 'short', day: 'numeric', year: 'numeric' });
+    const cnt = s.annotations.length;
+    html += `
+      <div class="session-row" data-sid="${esc(s.id)}">
+        <div class="session-row-icon">🎵</div>
+        <div class="session-row-info">
+          <div class="session-row-name">${esc(s.name)}</div>
+          <div class="session-row-meta">${d} · ${cnt} note${cnt !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="session-row-del" data-del="${esc(s.id)}" title="Delete session">✕</div>
+      </div>`;
+  });
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('.session-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const s = app.sessions.find(x => x.id === row.dataset.sid);
+      if (s) openSession(s);
+    });
+  });
+  wrap.querySelectorAll('.session-row-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const s = app.sessions.find(x => x.id === btn.dataset.del);
+      if (s && confirm(`Delete "${s.name}"?\n\nThis will remove all its notes.`)) {
+        app.sessions = app.sessions.filter(x => x.id !== btn.dataset.del);
+        saveStore();
+        renderStart();
+      }
+    });
+  });
+}
+
+// ─────────────────── Modal ───────────────────────────────
+let pendingFile = null;
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  pendingFile = null;
+  document.getElementById('inp-name').value   = '';
+  document.getElementById('upload-name').textContent = '';
+  document.getElementById('upload-zone').classList.remove('has-file');
+  document.getElementById('pdf-input').value  = '';
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-name').focus(), 120);
+});
+
+document.getElementById('btn-cancel').addEventListener('click', () => {
+  document.getElementById('modal').classList.remove('open');
+});
+
+document.getElementById('upload-zone').addEventListener('click', () => {
+  document.getElementById('pdf-input').click();
+});
+
+document.getElementById('pdf-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  pendingFile = f;
+  document.getElementById('upload-name').textContent = f.name;
+  document.getElementById('upload-zone').classList.add('has-file');
+});
+
+document.getElementById('btn-open').addEventListener('click', async () => {
+  const name = document.getElementById('inp-name').value.trim();
+  if (!name)        { alert('Please enter a session name.'); return; }
+  if (!pendingFile) { alert('Please choose a PDF file.');    return; }
+
+  document.getElementById('modal').classList.remove('open');
+  setLoading(true, 'Loading PDF…');
+
+  const reader = new FileReader();
+  reader.onerror = () => { setLoading(false); alert('Could not read the file.'); };
+  reader.onload  = async ev => {
+    const session = {
+      id:          genId(),
+      name,
+      pdfData:     ev.target.result,   // base64 data URL
+      annotations: [],
+      createdAt:   Date.now(),
+    };
+    app.sessions.unshift(session);
+    app.currentId = session.id;
+    saveStore();
+    await launchViewer(session);
+    setLoading(false);
+  };
+  reader.readAsDataURL(pendingFile);
+});
+
+// ─────────────────── Open existing session ───────────────
+async function openSession(s) {
+  app.currentId = s.id;
+  setLoading(true, 'Opening session…');
+  await launchViewer(s);
+  setLoading(false);
+}
+
+// ─────────────────── Viewer ──────────────────────────────
+async function launchViewer(session) {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('viewer').classList.add('active');
+  document.getElementById('view-title').textContent = session.name;
+
+  app.pages      = [];
+  app.pendingAnn = null;
+  setChip('scroll');
+
+  const scroll = document.getElementById('pdf-scroll');
+  scroll.innerHTML = '';
+  scroll.scrollTop = 0;
+
+  try {
+    const bytes   = dataUrlToBytes(session.pdfData);
+    app.pdfDoc    = await pdfjsLib.getDocument({ data: bytes }).promise;
+    await renderPages(scroll);
+    drawAllAnnotations();
+    hint('Double-tap anywhere to add a note  ·  Tap a note to delete it', 4500);
+  } catch (err) {
+    console.error('PDF load error:', err);
+    alert('Could not load the PDF. The file may be damaged or too large.');
+    goBack();
+  }
+}
+
+function dataUrlToBytes(dataUrl) {
+  const b64 = dataUrl.split(',')[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+
+// ─────────────────── Render PDF pages ────────────────────
+async function renderPages(scroll) {
+  const W = scroll.clientWidth || window.innerWidth;
+
+  for (let p = 1; p <= app.pdfDoc.numPages; p++) {
+    const page = await app.pdfDoc.getPage(p);
+    const vp0  = page.getViewport({ scale: 1 });
+    const scale = W / vp0.width;
+    const vp   = page.getViewport({ scale });
+
+    const wrap     = document.createElement('div');
+    wrap.className = 'page-wrap';
+    wrap.style.height = vp.height + 'px';
+
+    const canvas   = document.createElement('canvas');
+    canvas.width   = vp.width;
+    canvas.height  = vp.height;
+
+    const annLayer     = document.createElement('div');
+    annLayer.className = 'ann-layer';
+
+    wrap.appendChild(canvas);
+    wrap.appendChild(annLayer);
+    scroll.appendChild(wrap);
+
+    app.pages.push({ wrap, canvas, annLayer, w: vp.width, h: vp.height });
+
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  }
+
+  // ── Double-tap detection on the scroll container ──────
+  let lastTime = 0;
+  let lastXY   = null;
+
+  scroll.addEventListener('touchend', e => {
+    // Only track single-finger lifts
+    if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
+
+    const t  = e.changedTouches[0];
+    const now = Date.now();
+    const dt  = now - lastTime;
+
+    if (dt > 30 && dt < 370 && lastXY) {
+      const dx = t.clientX - lastXY.x;
+      const dy = t.clientY - lastXY.y;
+      if (Math.hypot(dx, dy) < 44) {
+        // ✅ Double-tap confirmed
+        e.preventDefault();
+        closeDropdown();
+        if (app.pendingAnn) commitAnn();
+        doubleTapAt(t.clientX, t.clientY);
+      }
+    }
+
+    lastTime = now;
+    lastXY   = { x: t.clientX, y: t.clientY };
+  }, { passive: false });
+
+  // Close dropdown when user scrolls
+  scroll.addEventListener('scroll', closeDropdown, { passive: true });
+}
+
+// ─────────────────── Find page, show annotation input ────
+function doubleTapAt(cx, cy) {
+  for (let i = 0; i < app.pages.length; i++) {
+    const { wrap, annLayer, w, h } = app.pages[i];
+    const r = wrap.getBoundingClientRect();
+    if (cy >= r.top && cy <= r.bottom) {
+      const x = Math.max(0, cx - r.left);
+      const y = Math.max(0, cy - r.top);
+      showAnnInput(annLayer, i, x / w, y / h);
+      return;
+    }
+  }
+}
+
+// ─────────────────── Annotation input UI ─────────────────
+function showAnnInput(annLayer, pageIdx, xPct, yPct) {
+  if (app.pendingAnn) return;
+
+  const wrap     = document.createElement('div');
+  wrap.className = 'ann-input-wrap';
+  wrap.style.top = (yPct * 100) + '%';
+
+  // Prevent input from going off the right edge
+  if (xPct > 0.52) {
+    wrap.style.right          = ((1 - xPct) * 100) + '%';
+    wrap.style.flexDirection  = 'row-reverse';
+  } else {
+    wrap.style.left = (xPct * 100) + '%';
+  }
+
+  const input        = document.createElement('input');
+  input.type         = 'text';
+  input.className    = 'ann-input';
+  input.placeholder  = 'Note…';
+  input.autocomplete = 'off';
+  input.autocorrect  = 'off';
+  input.spellcheck   = false;
+  input.enterKeyHint = 'done';    // shows "Done" on iOS keyboard
+  input.inputMode    = 'text';
+
+  const doneBtn      = document.createElement('button');
+  doneBtn.type       = 'button';
+  doneBtn.className  = 'ann-done';
+  doneBtn.textContent = 'Done';
+
+  const cancelBtn    = document.createElement('button');
+  cancelBtn.type     = 'button';
+  cancelBtn.className = 'ann-cancel';
+  cancelBtn.textContent = '✕';
+
+  wrap.appendChild(input);
+  wrap.appendChild(doneBtn);
+  wrap.appendChild(cancelBtn);
+  annLayer.appendChild(wrap);
+
+  // Let touches through to the done/cancel buttons
+  annLayer.style.pointerEvents = 'auto';
+
+  app.pendingAnn = { wrap, input, annLayer, pageIdx, xPct, yPct };
+  setChip('edit');
+
+  // Focus triggers iOS keyboard; scroll input into view after keyboard appears
+  requestAnimationFrame(() => {
+    input.focus();
+    setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+  });
+
+  // Done button — use pointerdown so it fires before blur
+  doneBtn.addEventListener('pointerdown', e => { e.preventDefault(); commitAnn(); });
+  // Fallback for devices without pointer events
+  doneBtn.addEventListener('touchend',    e => { e.preventDefault(); commitAnn(); });
+
+  cancelBtn.addEventListener('pointerdown', e => { e.preventDefault(); cancelAnn(); });
+  cancelBtn.addEventListener('touchend',    e => { e.preventDefault(); cancelAnn(); });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')  { e.preventDefault(); commitAnn(); }
+    if (e.key === 'Escape') { cancelAnn(); }
+  });
+}
+
+function commitAnn() {
+  if (!app.pendingAnn) return;
+  const { wrap, input, annLayer, pageIdx, xPct, yPct } = app.pendingAnn;
+  const text = input.value.trim();
+
+  annLayer.removeChild(wrap);
+  annLayer.style.pointerEvents = '';
+  app.pendingAnn = null;
+  setChip('scroll');
+  input.blur();
+
+  if (text) {
+    const ann = { id: genId(), page: pageIdx, xPct, yPct, text };
+    const sess = currentSession();
+    sess.annotations.push(ann);
+    saveCurrentSession();
+    drawAnnotation(annLayer, ann);
+  }
+}
+
+function cancelAnn() {
+  if (!app.pendingAnn) return;
+  const { wrap, annLayer } = app.pendingAnn;
+  annLayer.removeChild(wrap);
+  annLayer.style.pointerEvents = '';
+  app.pendingAnn = null;
+  setChip('scroll');
+  if (document.activeElement) document.activeElement.blur();
+}
+
+// ─────────────────── Draw saved annotations ──────────────
+function drawAllAnnotations() {
+  const sess = currentSession();
+  if (!sess) return;
+  sess.annotations.forEach(ann => {
+    if (ann.page < app.pages.length)
+      drawAnnotation(app.pages[ann.page].annLayer, ann);
+  });
+}
+
+function drawAnnotation(annLayer, ann) {
+  const label     = document.createElement('span');
+  label.className = 'ann-label';
+  label.textContent = ann.text;
+  label.style.left  = (ann.xPct * 100) + '%';
+  label.style.top   = (ann.yPct * 100) + '%';
+  label.title = 'Tap to delete';
+
+  // Single-tap on label → delete confirm
+  let tapped = false;
+  let tapTimer = null;
+
+  label.addEventListener('touchend', e => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (tapped) {
+      // Second tap — still show delete (treat as single intended tap)
+      clearTimeout(tapTimer);
+      tapped = false;
+      showDeleteConfirm(ann, label);
+    } else {
+      tapped = true;
+      tapTimer = setTimeout(() => {
+        tapped = false;
+        showDeleteConfirm(ann, label);
+      }, 280);
+    }
+  }, { passive: false });
+
+  annLayer.appendChild(label);
+}
+
+// ─────────────────── Delete confirm ──────────────────────
+function showDeleteConfirm(ann, labelEl) {
+  document.querySelectorAll('.del-toast').forEach(el => el.remove());
+
+  const toast = document.createElement('div');
+  toast.className = 'del-toast';
+  toast.innerHTML = `
+    <span class="del-toast-text">Delete "<strong>${esc(ann.text)}</strong>"?</span>
+    <button class="del-toast-yes">Delete</button>
+    <button class="del-toast-no">Keep</button>`;
+  document.body.appendChild(toast);
+
+  let autoClose = setTimeout(() => toast.remove(), 5000);
+
+  toast.querySelector('.del-toast-yes').addEventListener('click', () => {
+    clearTimeout(autoClose);
+    labelEl.remove();
+    const sess = currentSession();
+    sess.annotations = sess.annotations.filter(a => a.id !== ann.id);
+    saveCurrentSession();
+    toast.remove();
+  });
+  toast.querySelector('.del-toast-no').addEventListener('click', () => {
+    clearTimeout(autoClose);
+    toast.remove();
+  });
+}
+
+// ─────────────────── Back / navigation ───────────────────
+document.getElementById('btn-back').addEventListener('click', goBack);
+document.getElementById('btn-back').addEventListener('touchend', e => {
+  e.preventDefault();
+  goBack();
+});
+
+document.getElementById('mi-back').addEventListener('click', () => {
+  closeDropdown();
+  goBack();
+});
+
+document.getElementById('mi-clear').addEventListener('click', () => {
+  closeDropdown();
+  const sess = currentSession();
+  if (!sess || !sess.annotations.length) { hint('No notes to clear.'); return; }
+  if (!confirm(`Clear all ${sess.annotations.length} note(s) from this session?`)) return;
+  sess.annotations = [];
+  saveCurrentSession();
+  app.pages.forEach(p => p.annLayer.querySelectorAll('.ann-label').forEach(el => el.remove()));
+  hint('All notes cleared.');
+});
+
+function goBack() {
+  if (app.pendingAnn) cancelAnn();
+  saveCurrentSession();
+  app.currentId = null;
+  app.pdfDoc    = null;
+  app.pages     = [];
+  document.querySelectorAll('.del-toast').forEach(el => el.remove());
+  document.getElementById('pdf-scroll').innerHTML = '';
+  document.getElementById('viewer').classList.remove('active');
+  document.getElementById('start-screen').style.display = '';
+  renderStart();
+}
+
+// ─────────────────── Dropdown menu ───────────────────────
+document.getElementById('btn-menu').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('dropdown').classList.toggle('open');
+});
+document.addEventListener('click',     closeDropdown);
+document.addEventListener('touchstart', closeDropdown, { passive: true });
+
+function closeDropdown() {
+  document.getElementById('dropdown').classList.remove('open');
+}
+
+// ─────────────────── UI helpers ──────────────────────────
+function setChip(mode) {
+  const chip = document.getElementById('mode-chip');
+  if (mode === 'edit') {
+    chip.textContent = '✎ Annotating';
+    chip.className   = 'vhdr-chip editing';
+  } else {
+    chip.textContent = 'Scroll';
+    chip.className   = 'vhdr-chip';
+  }
+}
+
+let hintTimer;
+function hint(msg, dur = 2800) {
+  document.querySelectorAll('.hint-toast').forEach(el => el.remove());
+  clearTimeout(hintTimer);
+  const el     = document.createElement('div');
+  el.className = 'hint-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  hintTimer = setTimeout(() => {
+    el.classList.add('gone');
+    setTimeout(() => el.remove(), 700);
+  }, dur);
+}
+
+function setLoading(show, msg = 'Loading…') {
+  document.getElementById('loading-msg').textContent = msg;
+  document.getElementById('loading').classList.toggle('show', show);
+}
+
+// ─────────────────── Init ────────────────────────────────
+loadStore();
+renderStart();
+</script>
+</body>
+</html>

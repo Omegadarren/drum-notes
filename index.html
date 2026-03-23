@@ -715,7 +715,6 @@
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
       pointer-events: none;
     }
-    .setlist-row:hover .songs-tooltip,
     .setlist-row.tooltip-open .songs-tooltip { display: block; }
 
     .invite-code-box {
@@ -1943,9 +1942,6 @@ async function loadGroupSetlists(gid) {
         ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-songs="${esc(sl.songs||'')}">✏️</button>` : ''}
         <div class="group-row-arrow">›</div>
         ${songsHtml}`;
-      row.querySelector('.group-row-arrow').addEventListener('click', () => openGroupSetlist(doc.id, sl));
-      row.querySelector('.setlist-row-icon').addEventListener('click', () => openGroupSetlist(doc.id, sl));
-      row.querySelector('.setlist-row-info').addEventListener('click', () => openGroupSetlist(doc.id, sl));
       if (isAdmin) {
         row.querySelector('.setlist-rename-btn').addEventListener('click', e => {
           e.stopPropagation();
@@ -1955,21 +1951,19 @@ async function loadGroupSetlists(gid) {
           document.getElementById('rename-setlist-modal').classList.add('open');
           setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
         });
-      } else {
-        row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
       }
-      // Long-press on touch to show song list tooltip
-      if (sl.songs) {
-        let pressTimer;
-        row.addEventListener('touchstart', () => {
-          pressTimer = setTimeout(() => {
-            row.classList.add('tooltip-open');
-            setTimeout(() => row.classList.remove('tooltip-open'), 2500);
-          }, 500);
-        }, { passive: true });
-        row.addEventListener('touchend',  () => clearTimeout(pressTimer), { passive: true });
-        row.addEventListener('touchmove', () => clearTimeout(pressTimer), { passive: true });
-      }
+      // Single tap: show/hide song list; double-tap: open setlist
+      row.addEventListener('click', () => {
+        if (sl.songs) {
+          row.classList.toggle('tooltip-open');
+        } else {
+          openGroupSetlist(doc.id, sl);
+        }
+      });
+      row.addEventListener('dblclick', () => {
+        row.classList.remove('tooltip-open');
+        openGroupSetlist(doc.id, sl);
+      });
       listEl.appendChild(row);
     });
   } catch (err) {

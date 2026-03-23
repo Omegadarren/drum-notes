@@ -1515,11 +1515,33 @@ const auth    = firebase.auth();
 
 // Current user uid (anonymous, stable per device)
 let fbUid = null;
-auth.signInAnonymously().then(cred => {
-  fbUid = cred.user.uid;
-}).catch(err => console.warn('Firebase anon auth failed:', err));
+let fbAuthReady = false;
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    fbUid = user.uid;
+  } else {
+    auth.signInAnonymously().catch(err => {
+      console.error('Firebase anon auth failed:', err);
+      alert('Could not connect to BandNotes cloud. Check your internet connection and try again.');
+    });
+  }
+  fbAuthReady = true;
+});
 
 // ── Helpers ───────────────────────────────────────────────
+function waitForAuth() {
+  return new Promise((resolve, reject) => {
+    if (fbUid) { resolve(fbUid); return; }
+    const unsub = auth.onAuthStateChanged(user => {
+      unsub();
+      if (user) { resolve(user.uid); }
+      else { reject(new Error('Not signed in')); }
+    });
+    setTimeout(() => reject(new Error('Auth timeout')), 10000);
+  });
+}
+
 function genInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -1531,10 +1553,17 @@ function genInviteCode() {
 let currentGroupId   = null;
 let currentGroupData = null;
 
-document.getElementById('btn-groups').addEventListener('click', () => {
+document.getElementById('btn-groups').addEventListener('click', async () => {
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('groups-screen').classList.add('active');
-  loadMyGroups();
+  try {
+    await waitForAuth();
+    loadMyGroups();
+  } catch (err) {
+    alert('Could not connect to Firebase. Make sure Anonymous Auth is enabled in your Firebase project.');
+    document.getElementById('groups-screen').classList.remove('active');
+    document.getElementById('start-screen').style.display = '';
+  }
 });
 
 document.getElementById('btn-groups-back').addEventListener('click', () => {
@@ -1543,7 +1572,6 @@ document.getElementById('btn-groups-back').addEventListener('click', () => {
 });
 
 async function loadMyGroups() {
-  if (!fbUid) { hint('Connecting…'); setTimeout(loadMyGroups, 1200); return; }
   const listEl = document.getElementById('my-groups-list');
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   try {
@@ -1599,9 +1627,10 @@ document.getElementById('btn-create-group-cancel').addEventListener('click', () 
 document.getElementById('btn-create-group-save').addEventListener('click', async () => {
   const name = document.getElementById('inp-group-name').value.trim();
   if (!name) { alert('Please enter a group name.'); return; }
-  if (!fbUid) { alert('Still connecting — please try again.'); return; }
   setLoading(true, 'Creating group…');
   try {
+    const uid = await waitForAuth();
+    fbUid = uid;
     const inviteCode = genInviteCode();
     const ref = await db.collection('groups').add({
       name, adminUid: fbUid, inviteCode, createdAt: Date.now()
@@ -1639,8 +1668,8 @@ document.getElementById('inp-invite-code').addEventListener('input', e => {
 document.getElementById('btn-join-group-save').addEventListener('click', async () => {
   const code = document.getElementById('inp-invite-code').value.trim().toUpperCase();
   if (code.length < 4) { alert('Please enter the invite code.'); return; }
-  if (!fbUid) { alert('Still connecting — please try again.'); return; }
   setLoading(true, 'Looking up group…');
+  try { fbUid = await waitForAuth(); } catch (e) { setLoading(false); alert('Not connected. Check internet.'); return; }
   try {
     const snap = await db.collection('groups').where('inviteCode', '==', code).limit(1).get();
     if (snap.empty) { setLoading(false); alert('No group found with that code. Check with your admin.'); return; }

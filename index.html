@@ -856,7 +856,7 @@ document.getElementById('import-input').addEventListener('change', async e => {
     await launchViewer(session);
     hint('Setlist imported — start adding your own notes!', 4000);
   } catch (err) {
-    alert('Could not import the file. Make sure it's a valid .dnotes setlist shared from DrumNotes.');
+    alert("Could not import the file. Make sure it's a valid .dnotes setlist shared from DrumNotes.");
   } finally {
     setLoading(false);
   }

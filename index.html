@@ -292,17 +292,20 @@
       color: #ff0000;
       font-family: Arial, sans-serif;
       font-size: 14pt;
-      font-weight: normal;
+      font-weight: bold;
       white-space: nowrap;
       transform: translateY(-50%);
       pointer-events: auto;
       cursor: pointer;
       touch-action: manipulation;
+      -webkit-font-smoothing: antialiased;
+      paint-order: stroke fill;
       text-shadow:
-        1px  1px 3px rgba(0,0,0,0.8),
-       -1px -1px 3px rgba(0,0,0,0.8),
-        1px -1px 3px rgba(0,0,0,0.8),
-       -1px  1px 3px rgba(0,0,0,0.8);
+        0 0 1px rgba(0,0,0,0.9),
+        1px  0 1px rgba(0,0,0,0.9),
+       -1px  0 1px rgba(0,0,0,0.9),
+        0  1px 1px rgba(0,0,0,0.9),
+        0 -1px 1px rgba(0,0,0,0.9);
     }
 
     /* Dot marker before each annotation */
@@ -325,20 +328,21 @@
       z-index: 50;
     }
     .ann-input {
-      background: rgba(8,8,8,0.92);
-      border: 2px solid #ff0000;
+      background: rgba(30,30,32,0.96);
+      border: 2px solid #555;
       border-radius: 9px;
-      color: #ff0000;
+      color: #f2f2f7;
       font-family: Arial, sans-serif;
-      font-size: 14pt;
+      font-size: 17px;
       padding: 6px 10px;
       outline: none;
       width: 220px;
     }
-    .ann-input::placeholder { color: rgba(255,0,0,0.35); }
+    .ann-input:focus { border-color: #888; }
+    .ann-input::placeholder { color: rgba(200,200,200,0.35); }
 
     .ann-done {
-      background: #ff0000;
+      background: #2563eb;
       color: #fff;
       border: none;
       border-radius: 9px;
@@ -708,21 +712,27 @@ function dataUrlToBytes(dataUrl) {
 
 // ─────────────────── Render PDF pages ────────────────────
 async function renderPages(scroll) {
-  const W = scroll.clientWidth || window.innerWidth;
+  const W   = scroll.clientWidth || window.innerWidth;
+  const DPR = window.devicePixelRatio || 1;   // iPad Pro = 2
 
   for (let p = 1; p <= app.pdfDoc.numPages; p++) {
-    const page = await app.pdfDoc.getPage(p);
-    const vp0  = page.getViewport({ scale: 1 });
-    const scale = W / vp0.width;
-    const vp   = page.getViewport({ scale });
+    const page  = await app.pdfDoc.getPage(p);
+    const vp0   = page.getViewport({ scale: 1 });
+    // Render at physical pixel density for crisp text
+    const scale = (W / vp0.width) * DPR;
+    const vp    = page.getViewport({ scale });
 
     const wrap     = document.createElement('div');
     wrap.className = 'page-wrap';
-    wrap.style.height = vp.height + 'px';
+    // CSS dimensions stay at logical pixels so layout is unchanged
+    const cssH = vp.height / DPR;
+    wrap.style.height = cssH + 'px';
 
     const canvas   = document.createElement('canvas');
-    canvas.width   = vp.width;
+    canvas.width   = vp.width;           // physical pixels
     canvas.height  = vp.height;
+    canvas.style.width  = (vp.width  / DPR) + 'px';  // displayed at logical size
+    canvas.style.height = (vp.height / DPR) + 'px';
 
     const annLayer     = document.createElement('div');
     annLayer.className = 'ann-layer';
@@ -731,9 +741,11 @@ async function renderPages(scroll) {
     wrap.appendChild(annLayer);
     scroll.appendChild(wrap);
 
-    app.pages.push({ wrap, canvas, annLayer, w: vp.width, h: vp.height });
+    // Store logical dimensions for annotation positioning
+    app.pages.push({ wrap, canvas, annLayer, w: vp.width / DPR, h: vp.height / DPR });
 
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
   }
 
   // ── Double-tap detection on the scroll container ──────

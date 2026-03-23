@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DrumNotes</title>
+  <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     *, *::before, *::after {
@@ -557,8 +557,8 @@
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
        alt="Todd Sucherman performing live"
        onerror="this.outerHTML='<div class=&quot;app-icon&quot;>🥁</div>'">
-  <div class="app-name">DrumNotes</div>
-  <div class="app-sub">Sheet music annotations for rehearsal</div>
+  <div class="app-name">BandNotes</div>
+  <div class="app-sub">Sheet music annotations for your band</div>
   <button class="btn-primary" id="btn-new">Start new session…</button>
   <button class="btn-import" id="btn-import">📥 &nbsp;Open band setlist</button>
   <input id="import-input" type="file" accept=".dnotes,application/json">
@@ -637,7 +637,7 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────
-//  DrumNotes — iPad PDF sheet music annotator
+//  BandNotes — shared sheet music annotations for bands
 //  Deployable to GitHub Pages as a single index.html file
 // ─────────────────────────────────────────────────────────
 
@@ -645,8 +645,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ── Storage keys ─────────────────────────────────────────
-const STORE   = 'drumnotes_v1';
-const PROFILE = 'drumnotes_profile_v1';
+const STORE   = 'bandnotes_v1';
+const PROFILE = 'bandnotes_profile_v1';
 
 // ── App state (no frameworks needed) ─────────────────────
 const app = {
@@ -839,7 +839,7 @@ document.getElementById('import-input').addEventListener('change', async e => {
   try {
     const text = await f.text();
     const data = JSON.parse(text);
-    if (data.format !== 'drumnotes-setlist-v1' || !data.pdfData || !data.name) {
+    if (data.format !== 'bandnotes-setlist-v1' || !data.pdfData || !data.name) {
       throw new Error('Invalid file');
     }
     // Create a fresh personal session — no notes imported, only the PDF
@@ -856,7 +856,7 @@ document.getElementById('import-input').addEventListener('change', async e => {
     await launchViewer(session);
     hint('Setlist imported — start adding your own notes!', 4000);
   } catch (err) {
-    alert("Could not import the file. Make sure it's a valid .dnotes setlist shared from DrumNotes.");
+    alert("Could not import the file. Make sure it's a valid .dnotes setlist shared from BandNotes.");
   } finally {
     setLoading(false);
   }
@@ -1193,7 +1193,7 @@ document.getElementById('mi-export').addEventListener('click', () => {
   if (!sess) return;
   try {
     const bundle = JSON.stringify({
-      format:     'drumnotes-setlist-v1',
+      format:     'bandnotes-setlist-v1',
       name:       sess.name,
       pdfData:    sess.pdfData,
       exportedAt: Date.now(),

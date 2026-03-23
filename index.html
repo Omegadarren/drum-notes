@@ -696,6 +696,28 @@
     }
     .setlist-rename-btn:active { background: #2a2a2c; }
 
+    /* Setlist songs tooltip */
+    .setlist-row { position: relative; }
+    .songs-tooltip {
+      display: none;
+      position: absolute;
+      left: 0; right: 0;
+      top: calc(100% + 6px);
+      background: #1c1c1e;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+      z-index: 50;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      pointer-events: none;
+    }
+    .setlist-row:hover .songs-tooltip,
+    .setlist-row.tooltip-open .songs-tooltip { display: block; }
+
     .invite-code-box {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -870,13 +892,20 @@
 
 <!-- ==================== RENAME SETLIST MODAL ==================== -->
 <div class="modal-bg" id="rename-setlist-modal">
-  <div class="modal-box">
-    <div class="modal-title">Rename Setlist ✏️</div>
+  <div class="modal-box" style="max-height:85vh;overflow-y:auto;">
+    <div class="modal-title">Edit Setlist ✏️</div>
     <div>
-      <div class="field-label">New setlist name</div>
+      <div class="field-label">Setlist name</div>
       <input class="text-input" id="inp-rename-setlist" type="text"
              placeholder="Setlist name…" maxlength="60"
              autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div>
+      <div class="field-label">Song list <span style="color:var(--muted);font-weight:400;">(optional — one per line)</span></div>
+      <textarea class="text-input" id="inp-rename-setlist-songs"
+                placeholder="1. Sweet Home Chicago&#10;2. Proud Mary"
+                rows="5" style="resize:none;font-size:15px;line-height:1.5;"
+                autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-rename-setlist-cancel">Cancel</button>
@@ -946,13 +975,20 @@
 
 <!-- ==================== UPLOAD SETLIST MODAL ==================== -->
 <div class="modal-bg" id="upload-setlist-modal">
-  <div class="modal-box">
+  <div class="modal-box" style="max-height:85vh;overflow-y:auto;">
     <div class="modal-title">Upload Setlist 🎼</div>
     <div>
       <div class="field-label">Setlist name</div>
       <input class="text-input" id="inp-setlist-name" type="text"
              placeholder="e.g. Friday Night Set" maxlength="60"
              autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div>
+      <div class="field-label">Song list <span style="color:var(--muted);font-weight:400;">(optional — one per line)</span></div>
+      <textarea class="text-input" id="inp-setlist-songs"
+                placeholder="1. Sweet Home Chicago&#10;2. Proud Mary&#10;3. Johnny B. Goode"
+                rows="5" style="resize:none;font-size:15px;line-height:1.5;"
+                autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
     </div>
     <div>
       <div class="field-label">PDF file</div>
@@ -1896,14 +1932,17 @@ async function loadGroupSetlists(gid) {
         { month: 'short', day: 'numeric', year: 'numeric' });
       const row = document.createElement('div');
       row.className = 'setlist-row';
+      const songsHtml = sl.songs
+        ? `<div class="songs-tooltip">${esc(sl.songs)}</div>` : '';
       row.innerHTML = `
         <div class="setlist-row-icon">🎼</div>
         <div class="setlist-row-info">
           <div class="setlist-row-name">${esc(sl.name)}</div>
-          <div class="setlist-row-meta">Uploaded ${d}</div>
+          <div class="setlist-row-meta">Uploaded ${d}${sl.songs ? ' • 📝 song list' : ''}</div>
         </div>
-        ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}">✏️</button>` : ''}
-        <div class="group-row-arrow">›</div>`;
+        ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-songs="${esc(sl.songs||'')}">✏️</button>` : ''}
+        <div class="group-row-arrow">›</div>
+        ${songsHtml}`;
       row.querySelector('.group-row-arrow').addEventListener('click', () => openGroupSetlist(doc.id, sl));
       row.querySelector('.setlist-row-icon').addEventListener('click', () => openGroupSetlist(doc.id, sl));
       row.querySelector('.setlist-row-info').addEventListener('click', () => openGroupSetlist(doc.id, sl));
@@ -1911,12 +1950,25 @@ async function loadGroupSetlists(gid) {
         row.querySelector('.setlist-rename-btn').addEventListener('click', e => {
           e.stopPropagation();
           document.getElementById('inp-rename-setlist').value = e.currentTarget.dataset.name;
+          document.getElementById('inp-rename-setlist-songs').value = e.currentTarget.dataset.songs || '';
           document.getElementById('rename-setlist-modal').dataset.setlistId = e.currentTarget.dataset.id;
           document.getElementById('rename-setlist-modal').classList.add('open');
           setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
         });
       } else {
         row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      }
+      // Long-press on touch to show song list tooltip
+      if (sl.songs) {
+        let pressTimer;
+        row.addEventListener('touchstart', () => {
+          pressTimer = setTimeout(() => {
+            row.classList.add('tooltip-open');
+            setTimeout(() => row.classList.remove('tooltip-open'), 2500);
+          }, 500);
+        }, { passive: true });
+        row.addEventListener('touchend',  () => clearTimeout(pressTimer), { passive: true });
+        row.addEventListener('touchmove', () => clearTimeout(pressTimer), { passive: true });
       }
       listEl.appendChild(row);
     });
@@ -1984,6 +2036,7 @@ let pendingSetlistFile = null;
 document.getElementById('btn-upload-setlist').addEventListener('click', () => {
   pendingSetlistFile = null;
   document.getElementById('inp-setlist-name').value = '';
+  document.getElementById('inp-setlist-songs').value = '';
   document.getElementById('upload-setlist-name').textContent = '';
   document.getElementById('upload-setlist-zone').classList.remove('has-file');
   document.getElementById('setlist-pdf-input').value = '';
@@ -2004,7 +2057,8 @@ document.getElementById('btn-upload-cancel').addEventListener('click', () => {
   document.getElementById('upload-setlist-modal').classList.remove('open');
 });
 document.getElementById('btn-upload-confirm').addEventListener('click', async () => {
-  const name = document.getElementById('inp-setlist-name').value.trim();
+  const name  = document.getElementById('inp-setlist-name').value.trim();
+  const songs = document.getElementById('inp-setlist-songs').value.trim();
   if (!name)              { alert('Please enter a setlist name.'); return; }
   if (!pendingSetlistFile){ alert('Please choose a PDF file.');    return; }
   if (!currentGroupId)    { return; }
@@ -2027,7 +2081,7 @@ document.getElementById('btn-upload-confirm').addEventListener('click', async ()
       );
     });
     await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
-      name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
+      name, songs: songs || '', storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
     });
     setLoading(false);
     hint(`"${name}" uploaded!`, 3000);
@@ -2044,12 +2098,13 @@ document.getElementById('btn-rename-setlist-cancel').addEventListener('click', (
 });
 document.getElementById('btn-rename-setlist-save').addEventListener('click', async () => {
   const name      = document.getElementById('inp-rename-setlist').value.trim();
+  const songs     = document.getElementById('inp-rename-setlist-songs').value.trim();
   const setlistId = document.getElementById('rename-setlist-modal').dataset.setlistId;
   if (!name) { alert('Please enter a name.'); return; }
   if (!setlistId || !currentGroupId) return;
   setLoading(true, 'Renaming…');
   try {
-    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).update({ name });
+    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).update({ name, songs: songs || '' });
     document.getElementById('rename-setlist-modal').classList.remove('open');
     setLoading(false);
     hint(`Renamed to "${name}"`, 2500);

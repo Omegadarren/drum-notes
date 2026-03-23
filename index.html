@@ -39,8 +39,68 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 48px 28px;
+      padding: 16px 28px 48px;
       gap: 14px;
+    }
+
+    /* Profile bar at top of start screen */
+    .profile-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .profile-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .profile-name-label { color: var(--muted); font-weight: 400; font-size: 14px; }
+    .profile-edit-btn {
+      font-size: 13px;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 12px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .profile-edit-btn:active { background: #2a2a2c; }
+
+    /* Import setlist button */
+    .btn-import {
+      background: transparent;
+      color: #60a5fa;
+      border: 1.5px solid #60a5fa;
+      border-radius: 16px;
+      padding: 15px 36px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-import:active { opacity: 0.7; }
+    #import-input { display: none; }
+
+    .private-hint {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: -4px;
     }
 
     .app-icon { font-size: 80px; }
@@ -484,6 +544,15 @@
 
 <!-- ==================== START SCREEN ==================== -->
 <div id="start-screen">
+  <!-- Profile bar -->
+  <div class="profile-bar">
+    <div class="profile-name">
+      <span class="profile-name-label">Playing as</span>
+      <span id="profile-display">—</span>
+    </div>
+    <button class="profile-edit-btn" id="btn-edit-profile">Change</button>
+  </div>
+
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
        alt="Todd Sucherman performing live"
@@ -491,6 +560,9 @@
   <div class="app-name">DrumNotes</div>
   <div class="app-sub">Sheet music annotations for rehearsal</div>
   <button class="btn-primary" id="btn-new">Start new session…</button>
+  <button class="btn-import" id="btn-import">📥 &nbsp;Open band setlist</button>
+  <input id="import-input" type="file" accept=".dnotes,application/json">
+  <div class="private-hint">🔒 Your notes are private to this device</div>
   <div class="sessions-wrap" id="sessions-wrap"></div>
 </div>
 
@@ -520,6 +592,22 @@
   </div>
 </div>
 
+<!-- ==================== PROFILE MODAL ==================== -->
+<div class="modal-bg" id="profile-modal">
+  <div class="modal-box">
+    <div class="modal-title">Who are you? 🥁</div>
+    <div>
+      <div class="field-label">Your name (shown on this device only)</div>
+      <input class="text-input" id="inp-profile-name" type="text"
+             placeholder="e.g. Dave" maxlength="30"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="btn-profile-save">Save →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== VIEWER ==================== -->
 <div id="viewer">
   <div class="vhdr">
@@ -531,6 +619,7 @@
 
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
+    <div class="dropdown-item" id="mi-export">📤&nbsp; Share setlist with band</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
     <div class="dropdown-item danger" id="mi-back">← Back to sessions</div>
   </div>
@@ -555,8 +644,9 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// ── Storage key ──────────────────────────────────────────
-const STORE = 'drumnotes_v1';
+// ── Storage keys ─────────────────────────────────────────
+const STORE   = 'drumnotes_v1';
+const PROFILE = 'drumnotes_profile_v1';
 
 // ── App state (no frameworks needed) ─────────────────────
 const app = {
@@ -597,13 +687,54 @@ function esc(s) {
     c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 
-// ─────────────────── Start Screen ──────────────────────
+// ─────────────────── Profile (per-device name) ───────────
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE) || 'null'); }
+  catch { return null; }
+}
+function saveProfile(name) {
+  localStorage.setItem(PROFILE, JSON.stringify({ name }));
+}
+function getProfileName() {
+  const p = loadProfile();
+  return p && p.name ? p.name : null;
+}
+function updateProfileDisplay() {
+  const name = getProfileName();
+  document.getElementById('profile-display').textContent = name || '(not set)';
+}
+function showProfileModal(required = false) {
+  const inp = document.getElementById('inp-profile-name');
+  inp.value = getProfileName() || '';
+  document.getElementById('profile-modal').classList.add('open');
+  // If required (first run), hide the ability to dismiss without saving
+  document.getElementById('profile-modal').dataset.required = required ? '1' : '';
+  setTimeout(() => inp.focus(), 120);
+}
+
+document.getElementById('btn-profile-save').addEventListener('click', () => {
+  const name = document.getElementById('inp-profile-name').value.trim();
+  if (!name) { alert('Please enter your name.'); return; }
+  saveProfile(name);
+  document.getElementById('profile-modal').classList.remove('open');
+  updateProfileDisplay();
+});
+document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
+
+// Close profile modal by tapping backdrop (only if not required)
+document.getElementById('profile-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('profile-modal')) {
+    const required = document.getElementById('profile-modal').dataset.required === '1';
+    if (!required) document.getElementById('profile-modal').classList.remove('open');
+  }
+});
 function renderStart() {
   loadStore();
+  updateProfileDisplay();
   const wrap = document.getElementById('sessions-wrap');
   if (!app.sessions.length) { wrap.innerHTML = ''; return; }
 
-  let html = '<div class="sessions-label">Previous Sessions</div>';
+  let html = '<div class="sessions-label">Your Sessions</div>';
   app.sessions.forEach(s => {
     const d   = new Date(s.createdAt).toLocaleDateString('en-US',
                   { month: 'short', day: 'numeric', year: 'numeric' });
@@ -693,6 +824,42 @@ document.getElementById('btn-open').addEventListener('click', async () => {
     setLoading(false);
   };
   reader.readAsDataURL(pendingFile);
+});
+
+// ─────────────────── Import setlist (.dnotes file) ───────
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-input').value = '';
+  document.getElementById('import-input').click();
+});
+
+document.getElementById('import-input').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  setLoading(true, 'Importing setlist…');
+  try {
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if (data.format !== 'drumnotes-setlist-v1' || !data.pdfData || !data.name) {
+      throw new Error('Invalid file');
+    }
+    // Create a fresh personal session — no notes imported, only the PDF
+    const session = {
+      id:          genId(),
+      name:        data.name,
+      pdfData:     data.pdfData,
+      annotations: [],
+      createdAt:   Date.now(),
+    };
+    app.sessions.unshift(session);
+    app.currentId = session.id;
+    saveStore();
+    await launchViewer(session);
+    hint('Setlist imported — start adding your own notes!', 4000);
+  } catch (err) {
+    alert('Could not import the file. Make sure it's a valid .dnotes setlist shared from DrumNotes.');
+  } finally {
+    setLoading(false);
+  }
 });
 
 // ─────────────────── Open existing session ───────────────
@@ -1020,6 +1187,32 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
   goBack();
 });
 
+document.getElementById('mi-export').addEventListener('click', () => {
+  closeDropdown();
+  const sess = currentSession();
+  if (!sess) return;
+  try {
+    const bundle = JSON.stringify({
+      format:     'drumnotes-setlist-v1',
+      name:       sess.name,
+      pdfData:    sess.pdfData,
+      exportedAt: Date.now(),
+    });
+    const blob = new Blob([bundle], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = sess.name.replace(/[^a-z0-9 _-]/gi, '_') + '.dnotes';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    hint('Setlist exported — share the .dnotes file with your band via AirDrop!', 5000);
+  } catch (err) {
+    alert('Export failed: ' + err.message);
+  }
+});
+
 document.getElementById('mi-back').addEventListener('click', () => {
   closeDropdown();
   goBack();
@@ -1094,6 +1287,7 @@ function setLoading(show, msg = 'Loading…') {
 
 // ─────────────────── Init ────────────────────────────────
 loadStore();
+if (!getProfileName()) showProfileModal(true);
 renderStart();
 </script>
 </body>

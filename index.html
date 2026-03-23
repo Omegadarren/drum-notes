@@ -847,10 +847,28 @@
         <div class="invite-code-hint">Members tap "Join Group" and enter this code</div>
         <button class="btn-copy-code" id="btn-copy-code">📋 Copy Code</button>
       </div>
+      <button class="ghdr-action" id="btn-rename-group" style="width:100%;margin-top:12px;padding:14px;border-radius:12px;font-size:16px;">✏️ Rename Group</button>
       <button class="danger-btn" id="btn-delete-group">Delete Group</button>
     </div>
     <div id="group-member-section" style="display:none;margin-top:32px;">
       <button class="danger-btn" id="btn-leave-group">Leave Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RENAME GROUP MODAL ==================== -->
+<div class="modal-bg" id="rename-group-modal">
+  <div class="modal-box">
+    <div class="modal-title">Rename Group ✏️</div>
+    <div>
+      <div class="field-label">New group name</div>
+      <input class="text-input" id="inp-rename-group" type="text"
+             placeholder="Band name…" maxlength="40"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-rename-group-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-rename-group-save">Save →</button>
     </div>
   </div>
 </div>
@@ -1973,6 +1991,35 @@ document.getElementById('btn-upload-confirm').addEventListener('click', async ()
   } catch (err) {
     setLoading(false);
     alert('Upload failed: ' + err.message);
+  }
+});
+
+// ── Rename Group ─────────────────────────────────────────
+document.getElementById('btn-rename-group').addEventListener('click', () => {
+  if (!currentGroupData) return;
+  document.getElementById('inp-rename-group').value = currentGroupData.name;
+  document.getElementById('rename-group-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-rename-group').select(), 120);
+});
+document.getElementById('btn-rename-group-cancel').addEventListener('click', () => {
+  document.getElementById('rename-group-modal').classList.remove('open');
+});
+document.getElementById('btn-rename-group-save').addEventListener('click', async () => {
+  const name = document.getElementById('inp-rename-group').value.trim();
+  if (!name) { alert('Please enter a name.'); return; }
+  if (name === currentGroupData.name) { document.getElementById('rename-group-modal').classList.remove('open'); return; }
+  setLoading(true, 'Renaming…');
+  try {
+    await db.collection('groups').doc(currentGroupId).update({ name });
+    currentGroupData = { ...currentGroupData, name };
+    document.getElementById('group-detail-title').textContent = name;
+    document.getElementById('rename-group-modal').classList.remove('open');
+    setLoading(false);
+    hint(`Renamed to "${name}"`, 2500);
+    loadMyGroups();
+  } catch (err) {
+    setLoading(false);
+    alert('Could not rename: ' + err.message);
   }
 });
 

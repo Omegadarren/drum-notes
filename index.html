@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Firebase v10 compat (no bundler needed) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -538,6 +543,167 @@
       transition: opacity 0.6s;
     }
     .hint-toast.gone { opacity: 0; }
+
+    /* ===================== GROUPS SCREEN ===================== */
+    #groups-screen {
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+    }
+    #groups-screen.active { display: flex; }
+
+    .ghdr {
+      height: var(--hdr);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .ghdr-back {
+      font-size: 34px;
+      line-height: 1;
+      color: var(--text);
+      padding: 2px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .ghdr-back:active { background: #333; }
+    .ghdr-title {
+      flex: 1;
+      font-size: 20px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ghdr-action {
+      font-size: 14px;
+      color: #60a5fa;
+      border: 1.5px solid #60a5fa;
+      background: transparent;
+      border-radius: 10px;
+      padding: 7px 16px;
+      cursor: pointer;
+      flex-shrink: 0;
+      font-weight: 600;
+      touch-action: manipulation;
+    }
+    .ghdr-action:active { opacity: 0.7; }
+
+    .groups-scroll {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 20px 20px 60px;
+    }
+
+    .groups-section-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      margin-top: 24px;
+    }
+    .groups-section-label:first-child { margin-top: 0; }
+
+    .group-row {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      gap: 14px;
+      touch-action: manipulation;
+    }
+    .group-row:active { background: #2a2a2c; }
+    .group-row-icon { font-size: 26px; flex-shrink: 0; }
+    .group-row-info { flex: 1; min-width: 0; }
+    .group-row-name { font-size: 19px; font-weight: 500; }
+    .group-row-meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .group-row-badge {
+      font-size: 11px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+    .group-row-arrow { color: var(--muted); font-size: 20px; flex-shrink: 0; }
+
+    .groups-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 16px;
+      padding: 40px 0;
+    }
+
+    /* ===================== GROUP DETAIL SCREEN ===================== */
+    #group-detail-screen {
+      height: 100vh;
+      display: none;
+      flex-direction: column;
+    }
+    #group-detail-screen.active { display: flex; }
+
+    .setlist-row {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      gap: 14px;
+      touch-action: manipulation;
+    }
+    .setlist-row:active { background: #2a2a2c; }
+    .setlist-row-icon { font-size: 26px; flex-shrink: 0; }
+    .setlist-row-info { flex: 1; min-width: 0; }
+    .setlist-row-name { font-size: 19px; font-weight: 500; }
+    .setlist-row-meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+    .invite-code-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 10px;
+    }
+    .invite-code-label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+    .invite-code-value {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: #60a5fa;
+    }
+    .invite-code-hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+    .danger-btn {
+      background: transparent;
+      color: var(--accent);
+      border: 1.5px solid var(--accent);
+      border-radius: 12px;
+      padding: 13px 24px;
+      font-size: 17px;
+      cursor: pointer;
+      font-weight: 600;
+      touch-action: manipulation;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .danger-btn:active { opacity: 0.7; }
+
   </style>
 </head>
 <body>
@@ -559,9 +725,9 @@
        onerror="this.outerHTML='<div class=&quot;app-icon&quot;>🥁</div>'">
   <div class="app-name">BandNotes</div>
   <div class="app-sub">Sheet music annotations for your band</div>
-  <button class="btn-primary" id="btn-new">Start new session…</button>
-  <button class="btn-import" id="btn-import">📥 &nbsp;Open band setlist</button>
-  <input id="import-input" type="file" accept=".dnotes,application/json">
+
+  <button class="btn-primary" id="btn-groups">🎸 &nbsp;Band Groups</button>
+  <button class="btn-import" id="btn-new">🎼 &nbsp;My Private Sessions</button>
   <div class="private-hint">🔒 Your notes are private to this device</div>
   <div class="sessions-wrap" id="sessions-wrap"></div>
 </div>
@@ -608,8 +774,109 @@
   </div>
 </div>
 
-<!-- ==================== VIEWER ==================== -->
-<div id="viewer">
+<!-- ==================== GROUPS SCREEN ==================== -->
+<div id="groups-screen">
+  <div class="ghdr">
+    <div class="ghdr-back" id="btn-groups-back">‹</div>
+    <div class="ghdr-title">Band Groups</div>
+  </div>
+  <div class="groups-scroll">
+    <div class="groups-section-label">Your Groups</div>
+    <div id="my-groups-list"><div class="groups-empty">Loading…</div></div>
+    <div style="display:flex;gap:12px;margin-top:8px;">
+      <button class="ghdr-action" id="btn-create-group" style="flex:1;padding:15px;">➕ Create Group</button>
+      <button class="ghdr-action" id="btn-join-group"   style="flex:1;padding:15px;">🔗 Join Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== GROUP DETAIL SCREEN ==================== -->
+<div id="group-detail-screen">
+  <div class="ghdr">
+    <div class="ghdr-back" id="btn-group-detail-back">‹</div>
+    <div class="ghdr-title" id="group-detail-title">Group</div>
+    <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">⬆ Upload</button>
+  </div>
+  <div class="groups-scroll" id="group-detail-scroll">
+    <div class="groups-section-label">Setlists</div>
+    <div id="group-setlists-list"><div class="groups-empty">Loading…</div></div>
+    <div id="group-admin-section" style="display:none;">
+      <div class="groups-section-label" style="margin-top:32px;">Admin</div>
+      <div class="invite-code-box">
+        <div class="invite-code-label">Invite Code — share this with your band</div>
+        <div class="invite-code-value" id="group-invite-code">——</div>
+        <div class="invite-code-hint">Members tap "Join Group" and enter this code</div>
+      </div>
+      <button class="danger-btn" id="btn-delete-group">Delete Group</button>
+    </div>
+    <div id="group-member-section" style="display:none;margin-top:32px;">
+      <button class="danger-btn" id="btn-leave-group">Leave Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== CREATE GROUP MODAL ==================== -->
+<div class="modal-bg" id="create-group-modal">
+  <div class="modal-box">
+    <div class="modal-title">Create Group 🎸</div>
+    <div>
+      <div class="field-label">Group name (e.g. "The Groove Band")</div>
+      <input class="text-input" id="inp-group-name" type="text"
+             placeholder="Band name…" maxlength="40"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-create-group-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-create-group-save">Create →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== JOIN GROUP MODAL ==================== -->
+<div class="modal-bg" id="join-group-modal">
+  <div class="modal-box">
+    <div class="modal-title">Join Group 🔗</div>
+    <div>
+      <div class="field-label">Enter the invite code from your band admin</div>
+      <input class="text-input" id="inp-invite-code" type="text"
+             placeholder="e.g. DRUMS7" maxlength="8"
+             autocomplete="off" autocorrect="off" spellcheck="false"
+             style="text-transform:uppercase;letter-spacing:4px;font-size:26px;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-join-group-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-join-group-save">Join →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== UPLOAD SETLIST MODAL ==================== -->
+<div class="modal-bg" id="upload-setlist-modal">
+  <div class="modal-box">
+    <div class="modal-title">Upload Setlist 🎼</div>
+    <div>
+      <div class="field-label">Setlist name</div>
+      <input class="text-input" id="inp-setlist-name" type="text"
+             placeholder="e.g. Friday Night Set" maxlength="60"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div>
+      <div class="field-label">PDF file</div>
+      <div class="upload-zone" id="upload-setlist-zone">
+        <div class="upload-zone-icon">🎼</div>
+        <div class="upload-zone-hint">Tap to choose a PDF</div>
+        <div class="upload-zone-name" id="upload-setlist-name"></div>
+      </div>
+      <input id="setlist-pdf-input" type="file" accept="application/pdf">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-upload-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-upload-confirm">Upload →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== VIEWER ==================== --><div id="viewer">
   <div class="vhdr">
     <div class="vhdr-back" id="btn-back">‹</div>
     <div class="vhdr-title" id="view-title">—</div>
@@ -619,9 +886,8 @@
 
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
-    <div class="dropdown-item" id="mi-export">📤&nbsp; Share setlist with band</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
-    <div class="dropdown-item danger" id="mi-back">← Back to sessions</div>
+    <div class="dropdown-item danger" id="mi-back">← Back</div>
   </div>
 
   <div id="pdf-scroll"></div>
@@ -732,10 +998,13 @@ function renderStart() {
   loadStore();
   updateProfileDisplay();
   const wrap = document.getElementById('sessions-wrap');
-  if (!app.sessions.length) { wrap.innerHTML = ''; return; }
+  // Filter to only non-group sessions (private)
+  const privateSessions = app.sessions.filter(s => !s.groupSetlistId);
+  if (!privateSessions.length) { wrap.innerHTML = ''; return; }
 
-  let html = '<div class="sessions-label">Your Sessions</div>';
+  let html = '<div class="sessions-label">Private Sessions</div>';
   app.sessions.forEach(s => {
+    if (s.groupSetlistId) return; // skip group sessions in this list
     const d   = new Date(s.createdAt).toLocaleDateString('en-US',
                   { month: 'short', day: 'numeric', year: 'numeric' });
     const cnt = s.annotations.length;
@@ -770,9 +1039,10 @@ function renderStart() {
   });
 }
 
-// ─────────────────── Modal ───────────────────────────────
+// ─────────────────── Modal (private sessions) ────────────
 let pendingFile = null;
 
+// "My Private Sessions" — shows the new-session modal directly
 document.getElementById('btn-new').addEventListener('click', () => {
   pendingFile = null;
   document.getElementById('inp-name').value   = '';
@@ -824,42 +1094,6 @@ document.getElementById('btn-open').addEventListener('click', async () => {
     setLoading(false);
   };
   reader.readAsDataURL(pendingFile);
-});
-
-// ─────────────────── Import setlist (.dnotes file) ───────
-document.getElementById('btn-import').addEventListener('click', () => {
-  document.getElementById('import-input').value = '';
-  document.getElementById('import-input').click();
-});
-
-document.getElementById('import-input').addEventListener('change', async e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  setLoading(true, 'Importing setlist…');
-  try {
-    const text = await f.text();
-    const data = JSON.parse(text);
-    if (data.format !== 'bandnotes-setlist-v1' || !data.pdfData || !data.name) {
-      throw new Error('Invalid file');
-    }
-    // Create a fresh personal session — no notes imported, only the PDF
-    const session = {
-      id:          genId(),
-      name:        data.name,
-      pdfData:     data.pdfData,
-      annotations: [],
-      createdAt:   Date.now(),
-    };
-    app.sessions.unshift(session);
-    app.currentId = session.id;
-    saveStore();
-    await launchViewer(session);
-    hint('Setlist imported — start adding your own notes!', 4000);
-  } catch (err) {
-    alert("Could not import the file. Make sure it's a valid .dnotes setlist shared from BandNotes.");
-  } finally {
-    setLoading(false);
-  }
 });
 
 // ─────────────────── Open existing session ───────────────
@@ -1187,32 +1421,6 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
   goBack();
 });
 
-document.getElementById('mi-export').addEventListener('click', () => {
-  closeDropdown();
-  const sess = currentSession();
-  if (!sess) return;
-  try {
-    const bundle = JSON.stringify({
-      format:     'bandnotes-setlist-v1',
-      name:       sess.name,
-      pdfData:    sess.pdfData,
-      exportedAt: Date.now(),
-    });
-    const blob = new Blob([bundle], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = sess.name.replace(/[^a-z0-9 _-]/gi, '_') + '.dnotes';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    hint('Setlist exported — share the .dnotes file with your band via AirDrop!', 5000);
-  } catch (err) {
-    alert('Export failed: ' + err.message);
-  }
-});
-
 document.getElementById('mi-back').addEventListener('click', () => {
   closeDropdown();
   goBack();
@@ -1232,14 +1440,20 @@ document.getElementById('mi-clear').addEventListener('click', () => {
 function goBack() {
   if (app.pendingAnn) cancelAnn();
   saveCurrentSession();
+  const sess = currentSession();
+  const fromGroup = sess && sess.groupSetlistId;
   app.currentId = null;
   app.pdfDoc    = null;
   app.pages     = [];
   document.querySelectorAll('.del-toast').forEach(el => el.remove());
   document.getElementById('pdf-scroll').innerHTML = '';
   document.getElementById('viewer').classList.remove('active');
-  document.getElementById('start-screen').style.display = '';
-  renderStart();
+  if (fromGroup && currentGroupId) {
+    document.getElementById('group-detail-screen').classList.add('active');
+  } else {
+    document.getElementById('start-screen').style.display = '';
+    renderStart();
+  }
 }
 
 // ─────────────────── Dropdown menu ───────────────────────
@@ -1284,6 +1498,358 @@ function setLoading(show, msg = 'Loading…') {
   document.getElementById('loading-msg').textContent = msg;
   document.getElementById('loading').classList.toggle('show', show);
 }
+
+// ─────────────────── Firebase + Groups ──────────────────
+const FB_CONFIG = {
+  apiKey:            "AIzaSyB9mfkML8vmfRoHEeHLABd-ADF-2dJpnsk",
+  authDomain:        "bandnotes-5902c.firebaseapp.com",
+  projectId:         "bandnotes-5902c",
+  storageBucket:     "bandnotes-5902c.firebasestorage.app",
+  messagingSenderId: "1027615192372",
+  appId:             "1:1027615192372:web:e2637a7f46e8f7f785a161"
+};
+firebase.initializeApp(FB_CONFIG);
+const db      = firebase.firestore();
+const storage = firebase.storage();
+const auth    = firebase.auth();
+
+// Current user uid (anonymous, stable per device)
+let fbUid = null;
+auth.signInAnonymously().then(cred => {
+  fbUid = cred.user.uid;
+}).catch(err => console.warn('Firebase anon auth failed:', err));
+
+// ── Helpers ───────────────────────────────────────────────
+function genInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+// ── Groups screen ─────────────────────────────────────────
+let currentGroupId   = null;
+let currentGroupData = null;
+
+document.getElementById('btn-groups').addEventListener('click', () => {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('groups-screen').classList.add('active');
+  loadMyGroups();
+});
+
+document.getElementById('btn-groups-back').addEventListener('click', () => {
+  document.getElementById('groups-screen').classList.remove('active');
+  document.getElementById('start-screen').style.display = '';
+});
+
+async function loadMyGroups() {
+  if (!fbUid) { hint('Connecting…'); setTimeout(loadMyGroups, 1200); return; }
+  const listEl = document.getElementById('my-groups-list');
+  listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
+  try {
+    // Groups where I'm a member
+    const snap = await db.collectionGroup('members')
+      .where(firebase.firestore.FieldPath.documentId(), '==', fbUid)
+      .get();
+    // Actually query per group — simpler approach: store joined group IDs locally
+    const myGroupIds = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
+    if (!myGroupIds.length) {
+      listEl.innerHTML = '<div class="groups-empty">No groups yet. Create or join one below.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    for (const gid of myGroupIds) {
+      try {
+        const gdoc = await db.collection('groups').doc(gid).get();
+        if (!gdoc.exists) continue;
+        const g = gdoc.data();
+        const isAdmin = g.adminUid === fbUid;
+        const row = document.createElement('div');
+        row.className = 'group-row';
+        row.innerHTML = `
+          <div class="group-row-icon">🎸</div>
+          <div class="group-row-info">
+            <div class="group-row-name">${esc(g.name)}</div>
+            <div class="group-row-meta">${isAdmin ? '👑 Admin' : 'Member'}</div>
+          </div>
+          ${isAdmin ? '<span class="group-row-badge">ADMIN</span>' : ''}
+          <div class="group-row-arrow">›</div>`;
+        row.addEventListener('click', () => openGroupDetail(gid, g));
+        listEl.appendChild(row);
+      } catch (e) { /* skip unavailable */ }
+    }
+    if (!listEl.children.length) {
+      listEl.innerHTML = '<div class="groups-empty">No groups yet.</div>';
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="groups-empty">Could not load groups.</div>';
+    console.error(err);
+  }
+}
+
+// ── Create Group ──────────────────────────────────────────
+document.getElementById('btn-create-group').addEventListener('click', () => {
+  document.getElementById('inp-group-name').value = '';
+  document.getElementById('create-group-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-group-name').focus(), 120);
+});
+document.getElementById('btn-create-group-cancel').addEventListener('click', () => {
+  document.getElementById('create-group-modal').classList.remove('open');
+});
+document.getElementById('btn-create-group-save').addEventListener('click', async () => {
+  const name = document.getElementById('inp-group-name').value.trim();
+  if (!name) { alert('Please enter a group name.'); return; }
+  if (!fbUid) { alert('Still connecting — please try again.'); return; }
+  setLoading(true, 'Creating group…');
+  try {
+    const inviteCode = genInviteCode();
+    const ref = await db.collection('groups').add({
+      name, adminUid: fbUid, inviteCode, createdAt: Date.now()
+    });
+    // Add self as member
+    await ref.collection('members').doc(fbUid).set({
+      name: getProfileName() || 'Unknown', joinedAt: Date.now()
+    });
+    // Save group id locally
+    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
+    ids.unshift(ref.id);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    document.getElementById('create-group-modal').classList.remove('open');
+    setLoading(false);
+    hint(`Group "${name}" created! Invite code: ${inviteCode}`, 5000);
+    loadMyGroups();
+  } catch (err) {
+    setLoading(false);
+    alert('Could not create group: ' + err.message);
+  }
+});
+
+// ── Join Group ────────────────────────────────────────────
+document.getElementById('btn-join-group').addEventListener('click', () => {
+  document.getElementById('inp-invite-code').value = '';
+  document.getElementById('join-group-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-invite-code').focus(), 120);
+});
+document.getElementById('btn-join-group-cancel').addEventListener('click', () => {
+  document.getElementById('join-group-modal').classList.remove('open');
+});
+document.getElementById('inp-invite-code').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+document.getElementById('btn-join-group-save').addEventListener('click', async () => {
+  const code = document.getElementById('inp-invite-code').value.trim().toUpperCase();
+  if (code.length < 4) { alert('Please enter the invite code.'); return; }
+  if (!fbUid) { alert('Still connecting — please try again.'); return; }
+  setLoading(true, 'Looking up group…');
+  try {
+    const snap = await db.collection('groups').where('inviteCode', '==', code).limit(1).get();
+    if (snap.empty) { setLoading(false); alert('No group found with that code. Check with your admin.'); return; }
+    const gdoc = snap.docs[0];
+    const gid  = gdoc.id;
+    // Already a member?
+    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
+    if (ids.includes(gid)) { setLoading(false); hint('You are already in this group.'); document.getElementById('join-group-modal').classList.remove('open'); return; }
+    await gdoc.ref.collection('members').doc(fbUid).set({
+      name: getProfileName() || 'Unknown', joinedAt: Date.now()
+    });
+    ids.unshift(gid);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    document.getElementById('join-group-modal').classList.remove('open');
+    setLoading(false);
+    hint(`Joined "${gdoc.data().name}"!`, 3000);
+    loadMyGroups();
+  } catch (err) {
+    setLoading(false);
+    alert('Could not join group: ' + err.message);
+  }
+});
+
+// ── Group Detail ─────────────────────────────────────────
+async function openGroupDetail(gid, gdata) {
+  currentGroupId   = gid;
+  currentGroupData = gdata;
+  const isAdmin = gdata.adminUid === fbUid;
+  document.getElementById('group-detail-title').textContent  = gdata.name;
+  document.getElementById('btn-upload-setlist').style.display = isAdmin ? '' : 'none';
+  document.getElementById('group-admin-section').style.display  = isAdmin ? '' : 'none';
+  document.getElementById('group-member-section').style.display = isAdmin ? 'none' : '';
+  if (isAdmin) document.getElementById('group-invite-code').textContent = gdata.inviteCode;
+  document.getElementById('group-detail-screen').classList.add('active');
+  loadGroupSetlists(gid);
+}
+
+document.getElementById('btn-group-detail-back').addEventListener('click', () => {
+  document.getElementById('group-detail-screen').classList.remove('active');
+  currentGroupId   = null;
+  currentGroupData = null;
+});
+
+async function loadGroupSetlists(gid) {
+  const listEl = document.getElementById('group-setlists-list');
+  listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
+  try {
+    const snap = await db.collection('groups').doc(gid).collection('setlists')
+      .orderBy('uploadedAt', 'desc').get();
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="groups-empty">No setlists yet. Admin can upload one.</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.forEach(doc => {
+      const sl = doc.data();
+      const d  = new Date(sl.uploadedAt).toLocaleDateString('en-US',
+        { month: 'short', day: 'numeric', year: 'numeric' });
+      const row = document.createElement('div');
+      row.className = 'setlist-row';
+      row.innerHTML = `
+        <div class="setlist-row-icon">🎼</div>
+        <div class="setlist-row-info">
+          <div class="setlist-row-name">${esc(sl.name)}</div>
+          <div class="setlist-row-meta">Uploaded ${d}</div>
+        </div>
+        <div class="group-row-arrow">›</div>`;
+      row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    listEl.innerHTML = '<div class="groups-empty">Could not load setlists.</div>';
+    console.error(err);
+  }
+}
+
+async function openGroupSetlist(setlistId, sl) {
+  // Check if we already have a local session for this setlist
+  const localKey = 'bn_gs_' + setlistId;
+  const existing = app.sessions.find(s => s.groupSetlistId === setlistId);
+  if (existing) {
+    document.getElementById('group-detail-screen').classList.remove('active');
+    document.getElementById('groups-screen').classList.remove('active');
+    document.getElementById('start-screen').style.display = '';
+    openSession(existing);
+    return;
+  }
+  setLoading(true, 'Downloading setlist…');
+  try {
+    const url   = await storage.ref(sl.storagePath).getDownloadURL();
+    const resp  = await fetch(url);
+    const buf   = await resp.arrayBuffer();
+    const b64   = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const pdfData = 'data:application/pdf;base64,' + b64;
+    const session = {
+      id:             genId(),
+      name:           sl.name,
+      pdfData,
+      annotations:    [],
+      createdAt:      Date.now(),
+      groupSetlistId: setlistId,
+    };
+    app.sessions.unshift(session);
+    app.currentId = session.id;
+    saveStore();
+    document.getElementById('group-detail-screen').classList.remove('active');
+    document.getElementById('groups-screen').classList.remove('active');
+    await launchViewer(session);
+    hint('Setlist opened — double-tap to add your own notes!', 4500);
+  } catch (err) {
+    alert('Could not download setlist: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Upload Setlist (admin only) ───────────────────────────
+let pendingSetlistFile = null;
+
+document.getElementById('btn-upload-setlist').addEventListener('click', () => {
+  pendingSetlistFile = null;
+  document.getElementById('inp-setlist-name').value = '';
+  document.getElementById('upload-setlist-name').textContent = '';
+  document.getElementById('upload-setlist-zone').classList.remove('has-file');
+  document.getElementById('setlist-pdf-input').value = '';
+  document.getElementById('upload-setlist-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-setlist-name').focus(), 120);
+});
+document.getElementById('upload-setlist-zone').addEventListener('click', () => {
+  document.getElementById('setlist-pdf-input').click();
+});
+document.getElementById('setlist-pdf-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  pendingSetlistFile = f;
+  document.getElementById('upload-setlist-name').textContent = f.name;
+  document.getElementById('upload-setlist-zone').classList.add('has-file');
+});
+document.getElementById('btn-upload-cancel').addEventListener('click', () => {
+  document.getElementById('upload-setlist-modal').classList.remove('open');
+});
+document.getElementById('btn-upload-confirm').addEventListener('click', async () => {
+  const name = document.getElementById('inp-setlist-name').value.trim();
+  if (!name)              { alert('Please enter a setlist name.'); return; }
+  if (!pendingSetlistFile){ alert('Please choose a PDF file.');    return; }
+  if (!currentGroupId)    { return; }
+  document.getElementById('upload-setlist-modal').classList.remove('open');
+  setLoading(true, 'Uploading PDF…');
+  try {
+    const setlistId   = genId();
+    const storagePath = `groups/${currentGroupId}/${setlistId}.pdf`;
+    const ref         = storage.ref(storagePath);
+    await ref.put(pendingSetlistFile);
+    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
+      name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
+    });
+    setLoading(false);
+    hint(`"${name}" uploaded!`, 3000);
+    loadGroupSetlists(currentGroupId);
+  } catch (err) {
+    setLoading(false);
+    alert('Upload failed: ' + err.message);
+  }
+});
+
+// ── Delete / Leave Group ──────────────────────────────────
+document.getElementById('btn-delete-group').addEventListener('click', async () => {
+  if (!currentGroupId || !currentGroupData) return;
+  if (!confirm(`Delete "${currentGroupData.name}"?\n\nAll setlists will be removed and members will lose access.`)) return;
+  setLoading(true, 'Deleting group…');
+  try {
+    // Delete setlists sub-collection
+    const setlists = await db.collection('groups').doc(currentGroupId).collection('setlists').get();
+    for (const doc of setlists.docs) {
+      try { await storage.ref(doc.data().storagePath).delete(); } catch (e) {}
+      await doc.ref.delete();
+    }
+    await db.collection('groups').doc(currentGroupId).delete();
+    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
+      .filter(id => id !== currentGroupId);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    setLoading(false);
+    document.getElementById('group-detail-screen').classList.remove('active');
+    hint('Group deleted.', 3000);
+    loadMyGroups();
+  } catch (err) {
+    setLoading(false);
+    alert('Could not delete group: ' + err.message);
+  }
+});
+
+document.getElementById('btn-leave-group').addEventListener('click', async () => {
+  if (!currentGroupId || !currentGroupData) return;
+  if (!confirm(`Leave "${currentGroupData.name}"?`)) return;
+  setLoading(true, 'Leaving group…');
+  try {
+    await db.collection('groups').doc(currentGroupId).collection('members').doc(fbUid).delete();
+    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
+      .filter(id => id !== currentGroupId);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    setLoading(false);
+    document.getElementById('group-detail-screen').classList.remove('active');
+    hint('You left the group.', 3000);
+    loadMyGroups();
+  } catch (err) {
+    setLoading(false);
+    alert('Could not leave group: ' + err.message);
+  }
+});
 
 // ─────────────────── Init ────────────────────────────────
 loadStore();

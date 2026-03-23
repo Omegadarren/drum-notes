@@ -683,6 +683,18 @@
     .setlist-row-info { flex: 1; min-width: 0; }
     .setlist-row-name { font-size: 19px; font-weight: 500; }
     .setlist-row-meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
+    .setlist-rename-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 18px;
+      padding: 6px 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .setlist-rename-btn:active { background: #2a2a2c; }
 
     .invite-code-box {
       background: var(--surface);
@@ -852,6 +864,23 @@
     </div>
     <div id="group-member-section" style="display:none;margin-top:32px;">
       <button class="danger-btn" id="btn-leave-group">Leave Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RENAME SETLIST MODAL ==================== -->
+<div class="modal-bg" id="rename-setlist-modal">
+  <div class="modal-box">
+    <div class="modal-title">Rename Setlist ✏️</div>
+    <div>
+      <div class="field-label">New setlist name</div>
+      <input class="text-input" id="inp-rename-setlist" type="text"
+             placeholder="Setlist name…" maxlength="60"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-rename-setlist-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-rename-setlist-save">Save →</button>
     </div>
   </div>
 </div>
@@ -1860,6 +1889,7 @@ async function loadGroupSetlists(gid) {
       return;
     }
     listEl.innerHTML = '';
+    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
     snap.forEach(doc => {
       const sl = doc.data();
       const d  = new Date(sl.uploadedAt).toLocaleDateString('en-US',
@@ -1872,8 +1902,22 @@ async function loadGroupSetlists(gid) {
           <div class="setlist-row-name">${esc(sl.name)}</div>
           <div class="setlist-row-meta">Uploaded ${d}</div>
         </div>
+        ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}">✏️</button>` : ''}
         <div class="group-row-arrow">›</div>`;
-      row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      row.querySelector('.group-row-arrow').addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      row.querySelector('.setlist-row-icon').addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      row.querySelector('.setlist-row-info').addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      if (isAdmin) {
+        row.querySelector('.setlist-rename-btn').addEventListener('click', e => {
+          e.stopPropagation();
+          document.getElementById('inp-rename-setlist').value = e.currentTarget.dataset.name;
+          document.getElementById('rename-setlist-modal').dataset.setlistId = e.currentTarget.dataset.id;
+          document.getElementById('rename-setlist-modal').classList.add('open');
+          setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
+        });
+      } else {
+        row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+      }
       listEl.appendChild(row);
     });
   } catch (err) {
@@ -1991,6 +2035,28 @@ document.getElementById('btn-upload-confirm').addEventListener('click', async ()
   } catch (err) {
     setLoading(false);
     alert('Upload failed: ' + err.message);
+  }
+});
+
+// ── Rename Setlist ────────────────────────────────────────
+document.getElementById('btn-rename-setlist-cancel').addEventListener('click', () => {
+  document.getElementById('rename-setlist-modal').classList.remove('open');
+});
+document.getElementById('btn-rename-setlist-save').addEventListener('click', async () => {
+  const name      = document.getElementById('inp-rename-setlist').value.trim();
+  const setlistId = document.getElementById('rename-setlist-modal').dataset.setlistId;
+  if (!name) { alert('Please enter a name.'); return; }
+  if (!setlistId || !currentGroupId) return;
+  setLoading(true, 'Renaming…');
+  try {
+    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).update({ name });
+    document.getElementById('rename-setlist-modal').classList.remove('open');
+    setLoading(false);
+    hint(`Renamed to "${name}"`, 2500);
+    loadGroupSetlists(currentGroupId);
+  } catch (err) {
+    setLoading(false);
+    alert('Could not rename: ' + err.message);
   }
 });
 

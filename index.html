@@ -639,7 +639,8 @@
       flex-shrink: 0;
       font-weight: 700;
     }
-    .group-row-arrow { color: var(--muted); font-size: 20px; flex-shrink: 0; }
+    .group-row-arrow { color: var(--muted); font-size: 20px; flex-shrink: 0; cursor: pointer; padding: 8px 4px; touch-action: manipulation; }
+    .group-row-arrow:active { color: var(--text); }
     .join-group-item {
       padding: 14px 18px;
       border-bottom: 1px solid var(--border);
@@ -1940,8 +1941,14 @@ async function loadGroupSetlists(gid) {
           <div class="setlist-row-meta">Uploaded ${d}${sl.songs ? ' • 📝 song list' : ''}</div>
         </div>
         ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-songs="${esc(sl.songs||'')}">✏️</button>` : ''}
-        <div class="group-row-arrow">›</div>
+        <div class="group-row-arrow" title="Open setlist">›</div>
         ${songsHtml}`;
+      // Arrow always opens the setlist
+      row.querySelector('.group-row-arrow').addEventListener('click', e => {
+        e.stopPropagation();
+        row.classList.remove('tooltip-open');
+        openGroupSetlist(doc.id, sl);
+      });
       if (isAdmin) {
         row.querySelector('.setlist-rename-btn').addEventListener('click', e => {
           e.stopPropagation();
@@ -1952,17 +1959,16 @@ async function loadGroupSetlists(gid) {
           setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
         });
       }
-      // Single tap: show/hide song list; double-tap: open setlist
+      // Tap row body: show/hide song list, or hint if none
       row.addEventListener('click', () => {
         if (sl.songs) {
-          row.classList.toggle('tooltip-open');
+          const isOpen = row.classList.contains('tooltip-open');
+          // Close any other open tooltips
+          listEl.querySelectorAll('.setlist-row.tooltip-open').forEach(r => r.classList.remove('tooltip-open'));
+          if (!isOpen) row.classList.add('tooltip-open');
         } else {
-          openGroupSetlist(doc.id, sl);
+          hint('No song list for this setlist', 2000);
         }
-      });
-      row.addEventListener('dblclick', () => {
-        row.classList.remove('tooltip-open');
-        openGroupSetlist(doc.id, sl);
       });
       listEl.appendChild(row);
     });

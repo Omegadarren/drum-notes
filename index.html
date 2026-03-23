@@ -138,6 +138,7 @@
       touch-action: manipulation;
     }
     .btn-primary:active { opacity: 0.72; }
+    .btn-primary:disabled { background: #444; color: #777; cursor: default; opacity: 1; }
 
     .sessions-wrap {
       width: 100%;
@@ -1565,7 +1566,10 @@ let fbAuthReady = false;
 
 auth.onAuthStateChanged(user => {
   if (user) {
-    fbUid = user.uid;
+    // Prefer our own stored UID so admin status survives Firebase auth resets
+    const storedUid = localStorage.getItem('bandnotes_uid');
+    fbUid = storedUid || user.uid;
+    if (!storedUid) localStorage.setItem('bandnotes_uid', fbUid);
   } else {
     auth.signInAnonymously().catch(err => {
       console.error('Firebase anon auth failed:', err);
@@ -1685,6 +1689,10 @@ document.getElementById('btn-create-group-save').addEventListener('click', async
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
     ids.unshift(ref.id);
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    // Track admin ownership locally
+    const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+    if (!adminGroups.includes(ref.id)) adminGroups.unshift(ref.id);
+    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
     document.getElementById('create-group-modal').classList.remove('open');
     setLoading(false);
     hint(`Group "${name}" created! Invite code: ${inviteCode}`, 5000);
@@ -1765,6 +1773,12 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
     });
     ids.unshift(selectedJoinGroupId);
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    // If the Firestore adminUid matches our fbUid, reclaim admin status locally
+    if (gdoc.data().adminUid === fbUid) {
+      const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+      if (!adminGroups.includes(selectedJoinGroupId)) adminGroups.unshift(selectedJoinGroupId);
+      localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+    }
     document.getElementById('join-group-modal').classList.remove('open');
     setLoading(false);
     hint(`Joined "${gdoc.data().name}"!`, 3000);
@@ -1779,7 +1793,14 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
 async function openGroupDetail(gid, gdata) {
   currentGroupId   = gid;
   currentGroupData = gdata;
-  const isAdmin = gdata.adminUid === fbUid;
+  // Check admin via UID match OR local ownership record (survives auth/UID resets)
+  const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+  const isAdmin = gdata.adminUid === fbUid || adminGroups.includes(gid);
+  // Keep local record in sync with UID match so it persists going forward
+  if (gdata.adminUid === fbUid && !adminGroups.includes(gid)) {
+    adminGroups.unshift(gid);
+    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+  }
   document.getElementById('group-detail-title').textContent  = gdata.name;
   document.getElementById('btn-upload-setlist').style.display = isAdmin ? '' : 'none';
   document.getElementById('group-admin-section').style.display  = isAdmin ? '' : 'none';

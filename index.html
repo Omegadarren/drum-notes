@@ -1107,13 +1107,6 @@
       <div class="field-label">Note color</div>
       <div class="note-color-grid" id="note-color-grid"></div>
     </div>
-    <div>
-      <div class="field-label">Print</div>
-      <div style="display:flex;gap:10px;">
-        <button class="btn-ghost" id="btn-print-sheet" style="flex:1;">🖨️ Print</button>
-        <button class="btn-ghost" id="btn-print-pdf" style="flex:1;">📄 Print to PDF</button>
-      </div>
-    </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-note-style-cancel">Cancel</button>
       <button class="btn-primary" id="btn-note-style-done">Done</button>
@@ -1148,6 +1141,8 @@
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
+    <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
+    <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
   </div>
 
@@ -1836,12 +1831,12 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
   document.getElementById('note-size-display').textContent = next + 'pt';
 });
 
-document.getElementById('btn-print-sheet').addEventListener('click', () => {
-  document.getElementById('note-style-modal').classList.remove('open');
+document.getElementById('mi-print').addEventListener('click', () => {
+  closeDropdown();
   setTimeout(() => window.print(), 100);
 });
-document.getElementById('btn-print-pdf').addEventListener('click', () => {
-  document.getElementById('note-style-modal').classList.remove('open');
+document.getElementById('mi-print-pdf').addEventListener('click', () => {
+  closeDropdown();
   setTimeout(() => window.print(), 100);
 });
 

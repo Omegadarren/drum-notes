@@ -845,14 +845,23 @@
     @page { margin: 0; size: auto; }
     html, body { height: auto !important; overflow: visible !important;
                  background: #000 !important; margin: 0 !important; padding: 0 !important; }
-    body > *           { display: none !important; }
+    body > * { display: none !important; }
     #_print-content,
-    #_print-content.ready { display: block !important; position: static !important;
-                            top: auto !important; left: auto !important;
-                            z-index: auto !important; width: 100% !important; }
-    #_print-content img    { display: block; width: 100% !important; height: auto !important;
-                             -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    #_print-content img:not(:last-child) { page-break-after: always; break-after: page; }
+    #_print-content.ready {
+      display: block !important; position: static !important;
+      top: auto !important; left: auto !important;
+      z-index: auto !important; margin: 0 !important; padding: 0 !important;
+    }
+    /* Each image fills exactly one print page — no explicit page-break rules needed */
+    #_print-content img {
+      display: block !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: contain !important;
+      object-position: center top !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
   }
 
   </style>

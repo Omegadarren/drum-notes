@@ -1870,24 +1870,32 @@ function printAll() {
   if (!app.pages.length) { hint('No pages loaded'); return; }
   const images = app.pages.map(compositePage);
 
-  // Inject a print-only div directly into the main document.
-  // This is the only approach that works reliably on iOS Safari, Kindle Silk,
-  // and desktop — no popup permission needed, no iframe quirks.
   let pd = document.getElementById('_print-content');
   if (pd) pd.remove();
   pd = document.createElement('div');
   pd.id = '_print-content';
   pd.style.display = 'none';   // hidden normally; @media print shows it
-  images.forEach((src, i) => {
+
+  const imgs = images.map((src, i) => {
     const img = document.createElement('img');
     img.src = src;
     img.style.cssText = 'display:block;width:100%;' +
       (i < images.length - 1 ? 'page-break-after:always;break-after:page;' : '');
     pd.appendChild(img);
+    return img;
   });
   document.body.appendChild(pd);
-  window.print();
-  setTimeout(() => pd.remove(), 2000);
+
+  // Wait for every image to fully decode before opening the print dialog.
+  // On iOS Safari / Kindle, window.print() called before decode shows only
+  // whichever images the browser happened to render in time.
+  const decodeAll = imgs.map(img =>
+    typeof img.decode === 'function' ? img.decode() : Promise.resolve()
+  );
+  Promise.all(decodeAll).then(() => {
+    window.print();
+    setTimeout(() => pd.remove(), 3000);
+  });
 }
 
 async function savePDF() {

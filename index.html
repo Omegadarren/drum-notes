@@ -1399,15 +1399,15 @@ function showAnnInput(annLayer, pageIdx, xPct, yPct) {
   app.pendingAnn = { wrap, input, annLayer, pageIdx, xPct, yPct };
   setChip('edit');
 
-  // Pre-fill if a note was copied
-  if (app.copiedAnn) {
-    input.value    = app.copiedAnn;
-    app.copiedAnn  = null;
-  }
-
   // Focus triggers iOS keyboard; scroll input into view after keyboard appears
   requestAnimationFrame(() => {
     input.focus();
+    // Pre-fill after focus so iOS doesn't clear the value
+    if (app.copiedAnn) {
+      input.value   = app.copiedAnn;
+      app.copiedAnn = null;
+      input.select();
+    }
     setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
   });
 

@@ -1099,6 +1099,7 @@
       <div class="note-color-grid" id="note-color-grid"></div>
     </div>
     <div class="modal-actions">
+      <button class="btn-ghost" id="btn-note-style-cancel">Cancel</button>
       <button class="btn-primary" id="btn-note-style-done">Done</button>
     </div>
   </div>
@@ -1786,30 +1787,34 @@ document.getElementById('mi-back').addEventListener('click', () => {
 });
 
 // ─────────────────── Note Style modal ────────────────────
-document.getElementById('mi-note-style').addEventListener('click', () => {
+document.getElementById('mi-note-style').addEventListener('click', e => {
+  e.stopPropagation();
   closeDropdown();
-  const prefs = loadNotePrefs();
-  const size  = prefs.fontSize || 14;
-  const color = prefs.color    || NOTE_COLORS[0];
+  setTimeout(() => {
+    const prefs = loadNotePrefs();
+    const size  = prefs.fontSize || 14;
+    const color = prefs.color    || NOTE_COLORS[0];
 
-  document.getElementById('note-size-display').textContent = size + 'pt';
+    document.getElementById('note-size-display').textContent = size + 'pt';
 
-  // Build color grid
-  const grid = document.getElementById('note-color-grid');
-  grid.innerHTML = '';
-  NOTE_COLORS.forEach(c => {
-    const sw = document.createElement('button');
-    sw.className = 'note-color-swatch' + (c === color ? ' active' : '');
-    sw.style.background = c;
-    sw.title = c;
-    sw.addEventListener('click', () => {
-      grid.querySelectorAll('.note-color-swatch').forEach(s => s.classList.remove('active'));
-      sw.classList.add('active');
+    // Build color grid
+    const grid = document.getElementById('note-color-grid');
+    grid.innerHTML = '';
+    NOTE_COLORS.forEach(c => {
+      const sw = document.createElement('button');
+      sw.className = 'note-color-swatch' + (c === color ? ' active' : '');
+      sw.style.background = c;
+      sw.title = c;
+      sw.addEventListener('click', ev => {
+        ev.stopPropagation();
+        grid.querySelectorAll('.note-color-swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+      });
+      grid.appendChild(sw);
     });
-    grid.appendChild(sw);
-  });
 
-  document.getElementById('note-style-modal').classList.add('open');
+    document.getElementById('note-style-modal').classList.add('open');
+  }, 50);
 });
 
 document.getElementById('btn-note-size-down').addEventListener('click', () => {
@@ -1823,6 +1828,9 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
   document.getElementById('note-size-display').textContent = next + 'pt';
 });
 
+document.getElementById('btn-note-style-cancel').addEventListener('click', () => {
+  document.getElementById('note-style-modal').classList.remove('open');
+});
 document.getElementById('btn-note-style-done').addEventListener('click', () => {
   const fontSize = parseInt(document.getElementById('note-size-display').textContent, 10);
   const activeSwatch = document.querySelector('#note-color-grid .note-color-swatch.active');

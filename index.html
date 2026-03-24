@@ -688,6 +688,34 @@
     .setlist-row-info { flex: 1; min-width: 0; }
     .setlist-row-name { font-size: 19px; font-weight: 500; }
     .setlist-row-meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
+
+    /* Song Library screen */
+    #song-library-screen { display:none; position:fixed; inset:0; background:var(--bg); z-index:120; flex-direction:column; }
+    #song-library-screen.active { display:flex; }
+    .song-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
+    .song-row:last-child { border-bottom:none; }
+    .song-row:active { background:#1c1c1e; }
+    .song-row-icon { font-size:26px; flex-shrink:0; }
+    .song-row-info { flex:1; min-width:0; }
+    .song-row-name { font-size:19px; font-weight:500; }
+    .song-row-meta { font-size:13px; color:var(--muted); margin-top:3px; }
+    .song-row-actions { display:flex; gap:8px; flex-shrink:0; }
+    .song-action-btn { background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:16px; padding:6px 10px; cursor:pointer; touch-action:manipulation; }
+
+    /* Setlist builder song rows */
+    .sl-selected-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); }
+    .sl-selected-row:last-child { border-bottom:none; }
+    .sl-selected-name { flex:1; font-size:16px; }
+    .sl-order-btn { background:none; border:none; color:var(--muted); font-size:20px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
+    .sl-remove-btn { background:none; border:none; color:var(--muted); font-size:18px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
+    .sl-available-row { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
+    .sl-available-row:last-child { border-bottom:none; }
+    .sl-available-row:active { background:#1c1c1e; }
+    .sl-add-btn { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:5px 12px; font-size:16px; font-weight:700; cursor:pointer; touch-action:manipulation; flex-shrink:0; }
+
+    /* Song divider in viewer */
+    .song-divider { background:#1c1c1e; border-top:2px solid var(--border); border-bottom:2px solid var(--border); padding:10px 18px; font-size:16px; font-weight:600; color:var(--muted); letter-spacing:0.5px; }
+
     .setlist-rename-btn {
       background: none;
       border: 1px solid var(--border);
@@ -872,13 +900,14 @@
   <div class="ghdr">
     <div class="ghdr-back" id="btn-group-detail-back">‹</div>
     <div class="ghdr-title" id="group-detail-title">Group</div>
-    <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">⬆ Upload</button>
+    <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">✚ Setlist</button>
   </div>
   <div class="groups-scroll" id="group-detail-scroll">
     <div class="groups-section-label">Setlists</div>
     <div id="group-setlists-list"><div class="groups-empty">Loading…</div></div>
     <div id="group-admin-section" style="display:none;">
       <div class="groups-section-label" style="margin-top:32px;">Admin</div>
+      <button class="ghdr-action" id="btn-song-library" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:12px;">📚 Song Library</button>
       <div class="invite-code-box">
         <div class="invite-code-label">Invite Code — share this with your band</div>
         <div class="invite-code-value" id="group-invite-code">——</div>
@@ -889,6 +918,7 @@
       <button class="danger-btn" id="btn-delete-group">Delete Group</button>
     </div>
     <div id="group-member-section" style="display:none;margin-top:32px;">
+      <button class="ghdr-action" id="btn-song-library-member" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:12px;">📚 Song Library</button>
       <button class="danger-btn" id="btn-leave-group">Leave Group</button>
     </div>
   </div>
@@ -971,35 +1001,88 @@
   </div>
 </div>
 
-<!-- ==================== UPLOAD SETLIST MODAL ==================== -->
-<div class="modal-bg" id="upload-setlist-modal">
-  <div class="modal-box" style="max-height:85vh;overflow-y:auto;">
-    <div class="modal-title">Upload Setlist 🎼</div>
+<!-- ==================== UPLOAD SETLIST MODAL (legacy kept for back-compat) ==================== -->
+<div class="modal-bg" id="upload-setlist-modal" style="display:none;"></div>
+
+<!-- ==================== CREATE / EDIT SETLIST MODAL ==================== -->
+<div class="modal-bg" id="create-setlist-modal">
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto;gap:14px;">
+    <div class="modal-title" id="create-setlist-title">New Setlist 🎶</div>
     <div>
       <div class="field-label">Setlist name</div>
-      <input class="text-input" id="inp-setlist-name" type="text"
+      <input class="text-input" id="inp-create-setlist-name" type="text"
              placeholder="e.g. Friday Night Set" maxlength="60"
              autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div>
-      <div class="field-label">Song list <span style="color:var(--muted);font-weight:400;">(optional — one per line)</span></div>
-      <textarea class="text-input" id="inp-setlist-songs"
-                placeholder="1. Sweet Home Chicago&#10;2. Proud Mary&#10;3. Johnny B. Goode"
-                rows="5" style="resize:none;font-size:15px;line-height:1.5;"
-                autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+      <div class="field-label">Songs in this setlist <span style="color:var(--muted);font-weight:400;">— tap ＋ to add</span></div>
+      <div id="setlist-selected-songs" style="border:1.5px solid var(--border);border-radius:12px;min-height:48px;margin-bottom:10px;overflow:hidden;">
+        <div class="groups-empty" id="setlist-selected-empty" style="padding:14px;font-size:15px;">No songs yet</div>
+      </div>
+      <div class="field-label" style="margin-top:8px;">Song Library</div>
+      <div id="setlist-available-songs" style="border:1.5px solid var(--border);border-radius:12px;max-height:200px;overflow-y:auto;">
+        <div class="groups-empty" style="padding:14px;font-size:15px;" id="setlist-library-empty">Loading…</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-create-setlist-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-create-setlist-save">Save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SONG LIBRARY SCREEN ==================== -->
+<div id="song-library-screen">
+  <div class="ghdr">
+    <div class="ghdr-back" id="btn-song-library-back">‹</div>
+    <div class="ghdr-title" id="song-library-title">Song Library</div>
+    <button class="ghdr-action" id="btn-upload-song" style="display:none;">⬆ Add Song</button>
+  </div>
+  <div class="groups-scroll">
+    <div class="groups-section-label">All Songs</div>
+    <div id="song-library-list"><div class="groups-empty">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ==================== UPLOAD SONG MODAL ==================== -->
+<div class="modal-bg" id="upload-song-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add Song 🎵</div>
+    <div>
+      <div class="field-label">Song name</div>
+      <input class="text-input" id="inp-song-name" type="text"
+             placeholder="e.g. Sweet Home Chicago" maxlength="80"
+             autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div>
       <div class="field-label">PDF file</div>
-      <div class="upload-zone" id="upload-setlist-zone">
-        <div class="upload-zone-icon">🎼</div>
+      <div class="upload-zone" id="upload-song-zone">
+        <div class="upload-zone-icon">🎵</div>
         <div class="upload-zone-hint">Tap to choose a PDF</div>
-        <div class="upload-zone-name" id="upload-setlist-name"></div>
+        <div class="upload-zone-name" id="upload-song-filename"></div>
       </div>
-      <input id="setlist-pdf-input" type="file" accept="application/pdf">
+      <input id="song-pdf-input" type="file" accept="application/pdf">
     </div>
     <div class="modal-actions">
-      <button class="btn-ghost" id="btn-upload-cancel">Cancel</button>
-      <button class="btn-primary" id="btn-upload-confirm">Upload →</button>
+      <button class="btn-ghost" id="btn-upload-song-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-upload-song-confirm">Upload →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== RENAME SONG MODAL ==================== -->
+<div class="modal-bg" id="rename-song-modal">
+  <div class="modal-box">
+    <div class="modal-title">Rename Song ✏️</div>
+    <div>
+      <div class="field-label">Song name</div>
+      <input class="text-input" id="inp-rename-song" type="text"
+             placeholder="Song name…" maxlength="80"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-rename-song-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-rename-song-save">Save →</button>
     </div>
   </div>
 </div>
@@ -1041,13 +1124,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 // ── Storage keys ─────────────────────────────────────────
 const STORE   = 'bandnotes_v1';
 const PROFILE = 'bandnotes_profile_v1';
+const SA_KEY  = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
 
 // ── App state (no frameworks needed) ─────────────────────
 const app = {
-  sessions:    [],   // [{ id, name, pdfData, annotations, createdAt }]
+  sessions:    [],   // [{ id, name, pdfData|songPdfs, annotations, createdAt, groupId?, songIds?, isTemporary? }]
   currentId:   null,
   pdfDoc:      null,
-  pages:       [],   // [{ wrap, canvas, annLayer, w, h }]
+  pages:       [],   // [{ wrap, canvas, annLayer, w, h, songId, songPageIndex }]
   pendingAnn:  null, // { wrap, input, annLayer, pageIdx, xPct, yPct }
   copiedAnn:   null, // text of last copied annotation
 };
@@ -1058,7 +1142,13 @@ function loadStore() {
   catch { app.sessions = []; }
 }
 function saveStore() {
-  try { localStorage.setItem(STORE, JSON.stringify(app.sessions)); }
+  try {
+    // Never store temporary (multi-song setlist) sessions or their large PDF blobs
+    const toSave = app.sessions
+      .filter(s => !s.isTemporary)
+      .map(s => { const c = { ...s }; delete c.songPdfs; return c; });
+    localStorage.setItem(STORE, JSON.stringify(toSave));
+  }
   catch (e) {
     if (e.name === 'QuotaExceededError')
       hint('Storage full — please remove old sessions.', 4000);
@@ -1072,6 +1162,13 @@ function saveCurrentSession() {
   if (!s) return;
   const i = app.sessions.findIndex(x => x.id === s.id);
   if (i >= 0) app.sessions[i] = s; else app.sessions.unshift(s);
+  // Persist per-song annotations for group song setlists
+  if (s.groupId && s.songIds) {
+    s.songIds.forEach(songId => {
+      const anns = s.annotations.filter(a => a.songId === songId);
+      try { localStorage.setItem(SA_KEY(s.groupId, songId), JSON.stringify(anns)); } catch {}
+    });
+  }
   saveStore();
 }
 function genId() {
@@ -1247,10 +1344,44 @@ async function launchViewer(session) {
   scroll.innerHTML = '';
   scroll.scrollTop = 0;
 
+  // ── Double-tap detection (once per viewer open) ───────
+  let lastTime = 0;
+  let lastXY   = null;
+  scroll.addEventListener('touchend', e => {
+    if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
+    const t  = e.changedTouches[0];
+    const now = Date.now();
+    const dt  = now - lastTime;
+    if (dt > 30 && dt < 370 && lastXY) {
+      const dx = t.clientX - lastXY.x;
+      const dy = t.clientY - lastXY.y;
+      if (Math.hypot(dx, dy) < 44) {
+        e.preventDefault();
+        closeDropdown();
+        if (app.pendingAnn) commitAnn();
+        doubleTapAt(t.clientX, t.clientY);
+      }
+    }
+    lastTime = now;
+    lastXY   = { x: t.clientX, y: t.clientY };
+  }, { passive: false });
+  scroll.addEventListener('scroll', closeDropdown, { passive: true });
+
   try {
-    const bytes   = dataUrlToBytes(session.pdfData);
-    app.pdfDoc    = await pdfjsLib.getDocument({ data: bytes }).promise;
-    await renderPages(scroll);
+    if (session.songPdfs && session.songPdfs.length) {
+      // Multi-song setlist: render each PDF in sequence
+      const multi = session.songPdfs.length > 1;
+      for (const sp of session.songPdfs) {
+        const bytes  = dataUrlToBytes(sp.pdfData);
+        const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+        await renderPages(scroll, pdfDoc, sp.songId, sp.songName, multi);
+      }
+    } else {
+      // Legacy single-PDF session
+      const bytes = dataUrlToBytes(session.pdfData);
+      app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
+      await renderPages(scroll, app.pdfDoc, null, null, false);
+    }
     drawAllAnnotations();
     hint('Double-tap anywhere to add a note  ·  Tap a note to delete it', 4500);
   } catch (err) {
@@ -1269,12 +1400,19 @@ function dataUrlToBytes(dataUrl) {
 }
 
 // ─────────────────── Render PDF pages ────────────────────
-async function renderPages(scroll) {
+async function renderPages(scroll, pdfDoc, songId, songName, showDivider) {
   const W   = scroll.clientWidth || window.innerWidth;
   const DPR = window.devicePixelRatio || 1;   // iPad Pro = 2
 
-  for (let p = 1; p <= app.pdfDoc.numPages; p++) {
-    const page  = await app.pdfDoc.getPage(p);
+  if (showDivider && songName) {
+    const divider = document.createElement('div');
+    divider.className = 'song-divider';
+    divider.textContent = songName;
+    scroll.appendChild(divider);
+  }
+
+  for (let p = 1; p <= pdfDoc.numPages; p++) {
+    const page  = await pdfDoc.getPage(p);
     const vp0   = page.getViewport({ scale: 1 });
     // Render at physical pixel density for crisp text
     const scale = (W / vp0.width) * DPR;
@@ -1299,43 +1437,25 @@ async function renderPages(scroll) {
     wrap.appendChild(annLayer);
     scroll.appendChild(wrap);
 
-    // Store logical dimensions for annotation positioning
-    app.pages.push({ wrap, canvas, annLayer, w: vp.width / DPR, h: vp.height / DPR });
+    // Tag with songId so annotations can be routed correctly
+    app.pages.push({
+      wrap, canvas, annLayer,
+      w: vp.width / DPR, h: vp.height / DPR,
+      songId: songId || null,
+      songPageIndex: p - 1,
+    });
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
   }
+}
 
-  // ── Double-tap detection on the scroll container ──────
-  let lastTime = 0;
-  let lastXY   = null;
-
-  scroll.addEventListener('touchend', e => {
-    // Only track single-finger lifts
-    if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
-
-    const t  = e.changedTouches[0];
-    const now = Date.now();
-    const dt  = now - lastTime;
-
-    if (dt > 30 && dt < 370 && lastXY) {
-      const dx = t.clientX - lastXY.x;
-      const dy = t.clientY - lastXY.y;
-      if (Math.hypot(dx, dy) < 44) {
-        // ✅ Double-tap confirmed
-        e.preventDefault();
-        closeDropdown();
-        if (app.pendingAnn) commitAnn();
-        doubleTapAt(t.clientX, t.clientY);
-      }
-    }
-
-    lastTime = now;
-    lastXY   = { x: t.clientX, y: t.clientY };
-  }, { passive: false });
-
-  // Close dropdown when user scrolls
-  scroll.addEventListener('scroll', closeDropdown, { passive: true });
+// ─────────────────── Find page for annotation ────────────
+function findPageFor(ann) {
+  if (ann.songId !== undefined && ann.songId !== null) {
+    return app.pages.find(p => p.songId === ann.songId && p.songPageIndex === ann.songPage) || null;
+  }
+  return ann.page < app.pages.length ? app.pages[ann.page] : null;
 }
 
 // ─────────────────── Find page, show annotation input ────
@@ -1437,7 +1557,11 @@ function commitAnn() {
   input.blur();
 
   if (text) {
-    const ann = { id: genId(), page: pageIdx, xPct, yPct, text };
+    const pg  = app.pages[pageIdx];
+    // Use song-based model when the page belongs to a library song
+    const ann = (pg && pg.songId !== null && pg.songId !== undefined)
+      ? { id: genId(), songId: pg.songId, songPage: pg.songPageIndex, xPct, yPct, text }
+      : { id: genId(), page: pageIdx, xPct, yPct, text };
     const sess = currentSession();
     sess.annotations.push(ann);
     saveCurrentSession();
@@ -1460,8 +1584,8 @@ function drawAllAnnotations() {
   const sess = currentSession();
   if (!sess) return;
   sess.annotations.forEach(ann => {
-    if (ann.page < app.pages.length)
-      drawAnnotation(app.pages[ann.page].annLayer, ann);
+    const pg = findPageFor(ann);
+    if (pg) drawAnnotation(pg.annLayer, ann);
   });
 }
 
@@ -1548,8 +1672,10 @@ function showDeleteConfirm(ann, labelEl) {
   toast.querySelector('.del-toast-edit').addEventListener('click', () => {
     clearTimeout(autoClose);
     toast.remove();
-    const pageData = app.pages[ann.page];
-    if (!pageData) return;
+    const pg = findPageFor(ann);
+    if (!pg) return;
+    const pageIdx = app.pages.indexOf(pg);
+    if (pageIdx < 0) return;
     // Remove rendered label first
     labelEl.remove();
     // Remove from session temporarily (re-added on commit)
@@ -1557,7 +1683,7 @@ function showDeleteConfirm(ann, labelEl) {
     sess.annotations = sess.annotations.filter(a => a.id !== ann.id);
     saveCurrentSession();
     // Open input at original position
-    showAnnInput(pageData.annLayer, ann.page, ann.xPct, ann.yPct);
+    showAnnInput(pg.annLayer, pageIdx, ann.xPct, ann.yPct);
     // Pre-fill with existing text after input is in the DOM
     requestAnimationFrame(() => {
       if (app.pendingAnn) {
@@ -1615,7 +1741,11 @@ function goBack() {
   if (app.pendingAnn) cancelAnn();
   saveCurrentSession();
   const sess = currentSession();
-  const fromGroup = sess && sess.groupSetlistId;
+  const fromGroup = sess && (sess.groupSetlistId || sess.groupId);
+  // Discard temporary sessions (multi-song setlists) — annotations were persisted per-song
+  if (sess && sess.isTemporary) {
+    app.sessions = app.sessions.filter(s => s.id !== sess.id);
+  }
   app.currentId = null;
   app.pdfDoc    = null;
   app.pages     = [];
@@ -1931,31 +2061,45 @@ async function loadGroupSetlists(gid) {
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   try {
     const snap = await db.collection('groups').doc(gid).collection('setlists')
-      .orderBy('uploadedAt', 'desc').get();
+      .orderBy('createdAt', 'desc').get();
     if (snap.empty) {
-      listEl.innerHTML = '<div class="groups-empty">No setlists yet. Admin can upload one.</div>';
+      listEl.innerHTML = '<div class="groups-empty">No setlists yet. Tap ✚ Setlist to create one.</div>';
       return;
     }
     listEl.innerHTML = '';
     const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
     snap.forEach(doc => {
       const sl = doc.data();
-      const d  = new Date(sl.uploadedAt).toLocaleDateString('en-US',
+      // Support both new (createdAt) and legacy (uploadedAt) timestamps
+      const ts = sl.createdAt || sl.uploadedAt || 0;
+      const d  = new Date(ts).toLocaleDateString('en-US',
         { month: 'short', day: 'numeric', year: 'numeric' });
       const row = document.createElement('div');
       row.className = 'setlist-row';
-      const songsHtml = sl.songs
-        ? `<div class="songs-tooltip">${esc(sl.songs)}</div>` : '';
+
+      let metaText = '';
+      let tooltipHtml = '';
+      if (sl.songIds && sl.songIds.length) {
+        // New library-based format
+        metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}`;
+      } else if (sl.songs) {
+        // Legacy format with songs text
+        metaText = `Uploaded ${d} · 📝 song list`;
+        tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
+      } else {
+        metaText = `Uploaded ${d}`;
+      }
+
       row.innerHTML = `
         <div class="setlist-row-icon">🎼</div>
         <div class="setlist-row-info">
           <div class="setlist-row-name">${esc(sl.name)}</div>
-          <div class="setlist-row-meta">Uploaded ${d}${sl.songs ? ' • 📝 song list' : ''}</div>
+          <div class="setlist-row-meta">${metaText}</div>
         </div>
         ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-songs="${esc(sl.songs||'')}">✏️</button>` : ''}
         <div class="group-row-arrow" title="Open setlist">›</div>
-        ${songsHtml}`;
-      // Arrow always opens the setlist
+        ${tooltipHtml}`;
+
       row.querySelector('.group-row-arrow').addEventListener('click', e => {
         e.stopPropagation();
         row.classList.remove('tooltip-open');
@@ -1971,14 +2115,12 @@ async function loadGroupSetlists(gid) {
           setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
         });
       }
-      // Tap row body: show/hide song list, or hint if none
       row.addEventListener('click', () => {
         if (sl.songs) {
           const isOpen = row.classList.contains('tooltip-open');
-          // Close any other open tooltips
           listEl.querySelectorAll('.setlist-row.tooltip-open').forEach(r => r.classList.remove('tooltip-open'));
           if (!isOpen) row.classList.add('tooltip-open');
-        } else {
+        } else if (!sl.songIds) {
           hint('No song list for this setlist', 2000);
         }
       });
@@ -1991,8 +2133,67 @@ async function loadGroupSetlists(gid) {
 }
 
 async function openGroupSetlist(setlistId, sl) {
-  // Check if we already have a local session for this setlist
-  const localKey = 'bn_gs_' + setlistId;
+  // ── New format: songIds array ──────────────────────────
+  if (sl.songIds && sl.songIds.length) {
+    setLoading(true, 'Loading setlist…');
+    try {
+      const songPdfs  = [];
+      let   annotations = [];
+      for (const songId of sl.songIds) {
+        const songDoc = await db.collection('groups').doc(currentGroupId)
+          .collection('songs').doc(songId).get();
+        if (!songDoc.exists) continue;
+        const song = songDoc.data();
+        const url  = await storage.ref(song.storagePath).getDownloadURL();
+        const buf  = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'arraybuffer';
+          xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send();
+        });
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+        const pdfData = 'data:application/pdf;base64,' + btoa(binary);
+        songPdfs.push({ songId, songName: song.name, pdfData });
+        // Load saved per-song annotations from localStorage
+        try {
+          const anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
+          annotations = annotations.concat(anns);
+        } catch {}
+      }
+      if (!songPdfs.length) {
+        setLoading(false);
+        alert('Could not load any songs from this setlist.');
+        return;
+      }
+      const session = {
+        id:          genId(),
+        name:        sl.name,
+        groupId:     currentGroupId,
+        songIds:     sl.songIds,
+        songPdfs,
+        annotations,
+        isTemporary: true,
+        createdAt:   Date.now(),
+      };
+      app.sessions.unshift(session);
+      app.currentId = session.id;
+      document.getElementById('group-detail-screen').classList.remove('active');
+      await launchViewer(session);
+      hint('Double-tap anywhere to add a note!', 4500);
+    } catch (err) {
+      alert('Could not load setlist: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+    return;
+  }
+
+  // ── Legacy format: single storagePath PDF ─────────────
   const existing = app.sessions.find(s => s.groupSetlistId === setlistId);
   if (existing) {
     document.getElementById('group-detail-screen').classList.remove('active');
@@ -2004,7 +2205,6 @@ async function openGroupSetlist(setlistId, sl) {
   setLoading(true, 'Downloading setlist…');
   try {
     const url = await storage.ref(sl.storagePath).getDownloadURL();
-    // Use XHR instead of fetch — better CORS compatibility on Safari/iOS
     const buf = await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
@@ -2013,12 +2213,10 @@ async function openGroupSetlist(setlistId, sl) {
       xhr.onerror = () => reject(new Error('Network error — check your connection'));
       xhr.send();
     });
-    // Chunked btoa — avoids call stack overflow on large PDFs
     const bytes = new Uint8Array(buf);
     let binary = '';
-    for (let i = 0; i < bytes.length; i += 8192) {
+    for (let i = 0; i < bytes.length; i += 8192)
       binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    }
     const pdfData = 'data:application/pdf;base64,' + btoa(binary);
     const session = {
       id:             genId(),
@@ -2042,66 +2240,9 @@ async function openGroupSetlist(setlistId, sl) {
   }
 }
 
-// ── Upload Setlist (admin only) ───────────────────────────
-let pendingSetlistFile = null;
-
+// ── New Setlist (admin only) — opens setlist builder ─────
 document.getElementById('btn-upload-setlist').addEventListener('click', () => {
-  pendingSetlistFile = null;
-  document.getElementById('inp-setlist-name').value = '';
-  document.getElementById('inp-setlist-songs').value = '';
-  document.getElementById('upload-setlist-name').textContent = '';
-  document.getElementById('upload-setlist-zone').classList.remove('has-file');
-  document.getElementById('setlist-pdf-input').value = '';
-  document.getElementById('upload-setlist-modal').classList.add('open');
-  setTimeout(() => document.getElementById('inp-setlist-name').focus(), 120);
-});
-document.getElementById('upload-setlist-zone').addEventListener('click', () => {
-  document.getElementById('setlist-pdf-input').click();
-});
-document.getElementById('setlist-pdf-input').addEventListener('change', e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  pendingSetlistFile = f;
-  document.getElementById('upload-setlist-name').textContent = f.name;
-  document.getElementById('upload-setlist-zone').classList.add('has-file');
-});
-document.getElementById('btn-upload-cancel').addEventListener('click', () => {
-  document.getElementById('upload-setlist-modal').classList.remove('open');
-});
-document.getElementById('btn-upload-confirm').addEventListener('click', async () => {
-  const name  = document.getElementById('inp-setlist-name').value.trim();
-  const songs = document.getElementById('inp-setlist-songs').value.trim();
-  if (!name)              { alert('Please enter a setlist name.'); return; }
-  if (!pendingSetlistFile){ alert('Please choose a PDF file.');    return; }
-  if (!currentGroupId)    { return; }
-  document.getElementById('upload-setlist-modal').classList.remove('open');
-  setLoading(true, 'Uploading PDF…');
-  try {
-    const setlistId   = genId();
-    const storagePath = `groups/${currentGroupId}/${setlistId}.pdf`;
-    const ref         = storage.ref(storagePath);
-    await new Promise((resolve, reject) => {
-      const task  = ref.put(pendingSetlistFile);
-      const timer = setTimeout(() => {
-        task.cancel();
-        reject(new Error('Upload timed out. Check that Firebase Storage rules allow writes (see Firebase Console → Storage → Rules).'));
-      }, 60000);
-      task.on('state_changed',
-        null,
-        err  => { clearTimeout(timer); reject(err); },
-        ()   => { clearTimeout(timer); resolve(); }
-      );
-    });
-    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
-      name, songs: songs || '', storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
-    });
-    setLoading(false);
-    hint(`"${name}" uploaded!`, 3000);
-    loadGroupSetlists(currentGroupId);
-  } catch (err) {
-    setLoading(false);
-    alert('Upload failed: ' + err.message);
-  }
+  openCreateSetlistModal();
 });
 
 // ── Rename Setlist ────────────────────────────────────────
@@ -2204,6 +2345,331 @@ document.getElementById('btn-leave-group').addEventListener('click', async () =>
   } catch (err) {
     setLoading(false);
     alert('Could not leave group: ' + err.message);
+  }
+});
+
+// ─────────────────── Song Library ───────────────────────
+function openSongLibrary(gid, isAdmin) {
+  const title = currentGroupData ? currentGroupData.name + ' — Songs' : 'Song Library';
+  document.getElementById('song-library-title').textContent = title;
+  document.getElementById('btn-upload-song').style.display  = isAdmin ? '' : 'none';
+  document.getElementById('group-detail-screen').classList.remove('active');
+  document.getElementById('song-library-screen').classList.add('active');
+  loadSongLibrary(gid, isAdmin);
+}
+
+async function loadSongLibrary(gid, isAdmin) {
+  const listEl = document.getElementById('song-library-list');
+  listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
+  try {
+    const snap = await db.collection('groups').doc(gid).collection('songs')
+      .orderBy('uploadedAt', 'asc').get();
+    if (snap.empty) {
+      listEl.innerHTML = `<div class="groups-empty">${isAdmin
+        ? 'No songs yet. Tap ⬆ Add Song to upload the first one.'
+        : 'No songs in the library yet.'}</div>`;
+      return;
+    }
+    listEl.innerHTML = '';
+    snap.forEach(doc => {
+      const song = doc.data();
+      const row  = document.createElement('div');
+      row.className = 'song-row';
+      row.innerHTML = `
+        <div class="song-row-icon">🎵</div>
+        <div class="song-row-info">
+          <div class="song-row-name">${esc(song.name)}</div>
+          <div class="song-row-meta">Tap to open</div>
+        </div>
+        ${isAdmin ? `<button class="song-action-btn" data-action="rename" title="Rename">✏️</button>` : ''}
+        ${isAdmin ? `<button class="song-action-btn" data-action="delete" title="Delete">🗑</button>` : ''}
+        <div class="group-row-arrow">›</div>`;
+
+      const openSong = () => openLibrarySong(doc.id, song);
+      row.querySelector('.group-row-arrow').addEventListener('click', e => { e.stopPropagation(); openSong(); });
+      row.addEventListener('click', openSong);
+
+      if (isAdmin) {
+        row.querySelector('[data-action="rename"]').addEventListener('click', e => {
+          e.stopPropagation();
+          document.getElementById('inp-rename-song').value = song.name;
+          document.getElementById('rename-song-modal').dataset.songId   = doc.id;
+          document.getElementById('rename-song-modal').dataset.groupId  = gid;
+          document.getElementById('rename-song-modal').classList.add('open');
+          setTimeout(() => document.getElementById('inp-rename-song').select(), 120);
+        });
+        row.querySelector('[data-action="delete"]').addEventListener('click', async e => {
+          e.stopPropagation();
+          if (!confirm(`Delete "${song.name}"?\n\nThis removes the PDF and all saved notes for this song.`)) return;
+          setLoading(true, 'Deleting…');
+          try {
+            await storage.ref(song.storagePath).delete();
+            await db.collection('groups').doc(gid).collection('songs').doc(doc.id).delete();
+            setLoading(false);
+            hint(`"${song.name}" deleted.`, 2500);
+            loadSongLibrary(gid, isAdmin);
+          } catch (err) {
+            setLoading(false);
+            alert('Could not delete: ' + err.message);
+          }
+        });
+      }
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    listEl.innerHTML = '<div class="groups-empty">Could not load songs.</div>';
+    console.error(err);
+  }
+}
+
+async function openLibrarySong(songId, song) {
+  setLoading(true, 'Opening song…');
+  try {
+    const url = await storage.ref(song.storagePath).getDownloadURL();
+    const buf = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = 'arraybuffer';
+      xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send();
+    });
+    const bytes = new Uint8Array(buf);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 8192)
+      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    const pdfData = 'data:application/pdf;base64,' + btoa(binary);
+
+    // Load any saved annotations for this song
+    let annotations = [];
+    try { annotations = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]'); } catch {}
+
+    const session = {
+      id:          genId(),
+      name:        song.name,
+      groupId:     currentGroupId,
+      songIds:     [songId],
+      songPdfs:    [{ songId, songName: song.name, pdfData }],
+      annotations,
+      isTemporary: true,
+      createdAt:   Date.now(),
+    };
+    app.sessions.unshift(session);
+    app.currentId = session.id;
+    document.getElementById('song-library-screen').classList.remove('active');
+    document.getElementById('group-detail-screen').classList.remove('active');
+    await launchViewer(session);
+    hint('Double-tap anywhere to add a note!', 4000);
+  } catch (err) {
+    alert('Could not open song: ' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── Song Library — event handlers ────────────────────────
+document.getElementById('btn-song-library').addEventListener('click', () => {
+  if (!currentGroupId) return;
+  const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(currentGroupId);
+  openSongLibrary(currentGroupId, isAdmin);
+});
+document.getElementById('btn-song-library-member').addEventListener('click', () => {
+  if (!currentGroupId) return;
+  openSongLibrary(currentGroupId, false);
+});
+document.getElementById('btn-song-library-back').addEventListener('click', () => {
+  document.getElementById('song-library-screen').classList.remove('active');
+  document.getElementById('group-detail-screen').classList.add('active');
+});
+
+let pendingSongFile = null;
+document.getElementById('btn-upload-song').addEventListener('click', () => {
+  pendingSongFile = null;
+  document.getElementById('inp-song-name').value = '';
+  document.getElementById('upload-song-filename').textContent = '';
+  document.getElementById('upload-song-zone').classList.remove('has-file');
+  document.getElementById('song-pdf-input').value = '';
+  document.getElementById('upload-song-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-song-name').focus(), 120);
+});
+document.getElementById('upload-song-zone').addEventListener('click', () => {
+  document.getElementById('song-pdf-input').click();
+});
+document.getElementById('song-pdf-input').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  pendingSongFile = f;
+  document.getElementById('upload-song-filename').textContent = f.name;
+  document.getElementById('upload-song-zone').classList.add('has-file');
+});
+document.getElementById('btn-upload-song-cancel').addEventListener('click', () => {
+  document.getElementById('upload-song-modal').classList.remove('open');
+});
+document.getElementById('btn-upload-song-confirm').addEventListener('click', async () => {
+  const name = document.getElementById('inp-song-name').value.trim();
+  if (!name)          { alert('Please enter a song name.'); return; }
+  if (!pendingSongFile){ alert('Please choose a PDF file.');  return; }
+  if (!currentGroupId) { return; }
+  document.getElementById('upload-song-modal').classList.remove('open');
+  setLoading(true, 'Uploading song…');
+  try {
+    const songId      = genId();
+    const storagePath = `groups/${currentGroupId}/songs/${songId}.pdf`;
+    const ref = storage.ref(storagePath);
+    await new Promise((resolve, reject) => {
+      const task  = ref.put(pendingSongFile);
+      const timer = setTimeout(() => { task.cancel(); reject(new Error('Upload timed out.')); }, 60000);
+      task.on('state_changed', null,
+        err => { clearTimeout(timer); reject(err); },
+        ()  => { clearTimeout(timer); resolve(); }
+      );
+    });
+    await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).set({
+      name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
+    });
+    setLoading(false);
+    hint(`"${name}" added to library!`, 3000);
+    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(currentGroupId);
+    loadSongLibrary(currentGroupId, isAdmin);
+  } catch (err) {
+    setLoading(false);
+    alert('Upload failed: ' + err.message);
+  }
+});
+document.getElementById('btn-rename-song-cancel').addEventListener('click', () => {
+  document.getElementById('rename-song-modal').classList.remove('open');
+});
+document.getElementById('btn-rename-song-save').addEventListener('click', async () => {
+  const name   = document.getElementById('inp-rename-song').value.trim();
+  const songId = document.getElementById('rename-song-modal').dataset.songId;
+  const gid    = document.getElementById('rename-song-modal').dataset.groupId || currentGroupId;
+  if (!name) { alert('Please enter a name.'); return; }
+  if (!songId || !gid) return;
+  setLoading(true, 'Renaming…');
+  try {
+    await db.collection('groups').doc(gid).collection('songs').doc(songId).update({ name });
+    document.getElementById('rename-song-modal').classList.remove('open');
+    setLoading(false);
+    hint(`Renamed to "${name}"`, 2500);
+    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
+    loadSongLibrary(gid, isAdmin);
+  } catch (err) {
+    setLoading(false);
+    alert('Could not rename: ' + err.message);
+  }
+});
+
+// ─────────────────── Setlist Builder ────────────────────
+let selectedSetlistSongs = [];  // [{ id, name }]
+
+function openCreateSetlistModal() {
+  selectedSetlistSongs = [];
+  document.getElementById('create-setlist-title').textContent = 'New Setlist 🎶';
+  document.getElementById('create-setlist-modal').dataset.setlistId = '';
+  document.getElementById('inp-create-setlist-name').value = '';
+  renderSelectedSongs();
+  document.getElementById('create-setlist-modal').classList.add('open');
+  loadSetlistBuilderLibrary();
+  setTimeout(() => document.getElementById('inp-create-setlist-name').focus(), 120);
+}
+
+async function loadSetlistBuilderLibrary() {
+  const availEl = document.getElementById('setlist-available-songs');
+  availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Loading…</div>';
+  try {
+    const snap = await db.collection('groups').doc(currentGroupId).collection('songs')
+      .orderBy('uploadedAt', 'asc').get();
+    if (snap.empty) {
+      availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs in library yet. Add songs first via 📚 Song Library.</div>';
+      return;
+    }
+    availEl.innerHTML = '';
+    snap.forEach(doc => {
+      const song = doc.data();
+      const row  = document.createElement('div');
+      row.className = 'sl-available-row';
+      row.innerHTML = `<span>${esc(song.name)}</span><button class="sl-add-btn">＋</button>`;
+      row.querySelector('.sl-add-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        addSongToSetlist(doc.id, song.name);
+      });
+      availEl.appendChild(row);
+    });
+  } catch (err) {
+    availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Could not load songs.</div>';
+    console.error(err);
+  }
+}
+
+function addSongToSetlist(songId, songName) {
+  if (selectedSetlistSongs.find(s => s.id === songId)) {
+    hint('Already in setlist', 1500);
+    return;
+  }
+  selectedSetlistSongs.push({ id: songId, name: songName });
+  renderSelectedSongs();
+}
+
+function removeFromSetlist(songId) {
+  selectedSetlistSongs = selectedSetlistSongs.filter(s => s.id !== songId);
+  renderSelectedSongs();
+}
+
+function moveSetlistSong(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= selectedSetlistSongs.length) return;
+  const tmp = selectedSetlistSongs[idx];
+  selectedSetlistSongs[idx]    = selectedSetlistSongs[newIdx];
+  selectedSetlistSongs[newIdx] = tmp;
+  renderSelectedSongs();
+}
+
+function renderSelectedSongs() {
+  const container = document.getElementById('setlist-selected-songs');
+  if (!selectedSetlistSongs.length) {
+    container.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs yet — tap ＋ to add</div>';
+    return;
+  }
+  container.innerHTML = '';
+  selectedSetlistSongs.forEach((song, i) => {
+    const row = document.createElement('div');
+    row.className = 'sl-selected-row';
+    row.innerHTML = `
+      <button class="sl-order-btn" data-dir="-1" title="Move up">↑</button>
+      <button class="sl-order-btn" data-dir="1" title="Move down">↓</button>
+      <span class="sl-selected-name">${esc(song.name)}</span>
+      <button class="sl-remove-btn" title="Remove">✕</button>`;
+    row.querySelector('[data-dir="-1"]').addEventListener('click', () => moveSetlistSong(i, -1));
+    row.querySelector('[data-dir="1"]').addEventListener('click', () => moveSetlistSong(i, 1));
+    row.querySelector('.sl-remove-btn').addEventListener('click', () => removeFromSetlist(song.id));
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('btn-create-setlist-cancel').addEventListener('click', () => {
+  document.getElementById('create-setlist-modal').classList.remove('open');
+  selectedSetlistSongs = [];
+});
+document.getElementById('btn-create-setlist-save').addEventListener('click', async () => {
+  const name = document.getElementById('inp-create-setlist-name').value.trim();
+  if (!name)                     { alert('Please enter a setlist name.'); return; }
+  if (!selectedSetlistSongs.length) { alert('Please add at least one song.'); return; }
+  if (!currentGroupId) { return; }
+  document.getElementById('create-setlist-modal').classList.remove('open');
+  setLoading(true, 'Saving setlist…');
+  try {
+    const setlistId = genId();
+    const songIds   = selectedSetlistSongs.map(s => s.id);
+    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
+      name, songIds, createdBy: fbUid, createdAt: Date.now()
+    });
+    setLoading(false);
+    hint(`"${name}" saved!`, 3000);
+    selectedSetlistSongs = [];
+    loadGroupSetlists(currentGroupId);
+  } catch (err) {
+    setLoading(false);
+    alert('Could not save setlist: ' + err.message);
   }
 });
 

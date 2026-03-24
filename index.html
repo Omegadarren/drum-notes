@@ -389,12 +389,8 @@
       -webkit-user-select: none;
       -webkit-font-smoothing: antialiased;
       paint-order: stroke fill;
-      text-shadow:
-        0 0 1px rgba(0,0,0,0.9),
-        1px  0 1px rgba(0,0,0,0.9),
-       -1px  0 1px rgba(0,0,0,0.9),
-        0  1px 1px rgba(0,0,0,0.9),
-        0 -1px 1px rgba(0,0,0,0.9);
+      -webkit-text-stroke: 1.5px rgba(0,0,0,0.85);
+      text-stroke: 1.5px rgba(0,0,0,0.85);
     }
 
     /* Dot marker before each annotation */
@@ -1856,12 +1852,17 @@ function compositePage(pg) {
     if (pageAnns.length) {
       const fs = getNoteFontSize() * DPR;
       ctx.font         = `bold ${fs}px Arial, sans-serif`;
-      ctx.fillStyle    = getNoteColor();
       ctx.textBaseline = 'middle';
-      ctx.shadowColor  = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur   = Math.max(2, fs * 0.12);
+      // crisp stroke outline instead of blurry shadow
+      ctx.lineWidth    = Math.max(2, fs * 0.1);
+      ctx.lineJoin     = 'round';
+      ctx.strokeStyle  = 'rgba(0,0,0,0.85)';
+      ctx.fillStyle    = getNoteColor();
       pageAnns.forEach(ann => {
-        ctx.fillText('● ' + ann.text, ann.xPct * tmp.width, ann.yPct * tmp.height);
+        const x = ann.xPct * tmp.width;
+        const y = ann.yPct * tmp.height;
+        ctx.strokeText('● ' + ann.text, x, y);
+        ctx.fillText('● ' + ann.text, x, y);
       });
     }
   }

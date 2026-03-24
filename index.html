@@ -334,7 +334,8 @@
       touch-action: manipulation;
     }
     .dropdown-item:last-child { border-bottom: none; }
-    .dropdown-item:active { background: #2a2a2c; }
+    .dropdown-item:active,
+    .dropdown-item.pressed { background: #2a2a2c; }
     .dropdown-item.danger { color: var(--accent); }
 
     /* ===================== PDF SCROLL ===================== */
@@ -828,6 +829,9 @@
       margin-top: 8px;
     }
     .danger-btn:active { opacity: 0.7; }
+
+  /* Print content — hidden normally, shown only in @media print */
+  #_print-content { display: none; }
 
   @media print {
     @page { margin: 0; size: auto; }
@@ -1874,7 +1878,7 @@ function printAll() {
   if (pd) pd.remove();
   pd = document.createElement('div');
   pd.id = '_print-content';
-  pd.style.display = 'none';   // hidden normally; @media print shows it
+  // No inline display style — CSS rule hides it normally, @media print shows it
 
   const imgs = images.map((src, i) => {
     const img = document.createElement('img');
@@ -2004,6 +2008,17 @@ document.getElementById('btn-menu').addEventListener('click', e => {
   e.stopPropagation();
   document.getElementById('dropdown').classList.toggle('open');
 });
+// Touch press feedback on dropdown items
+document.getElementById('dropdown').addEventListener('touchstart', e => {
+  const item = e.target.closest('.dropdown-item');
+  if (item) item.classList.add('pressed');
+}, { passive: true });
+document.getElementById('dropdown').addEventListener('touchend', e => {
+  document.querySelectorAll('.dropdown-item.pressed').forEach(el => el.classList.remove('pressed'));
+}, { passive: true });
+document.getElementById('dropdown').addEventListener('touchcancel', e => {
+  document.querySelectorAll('.dropdown-item.pressed').forEach(el => el.classList.remove('pressed'));
+}, { passive: true });
 document.addEventListener('click', e => {
   if (!document.getElementById('dropdown').contains(e.target)) closeDropdown();
 });

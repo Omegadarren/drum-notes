@@ -358,6 +358,14 @@
       height: auto;
     }
 
+    /* Note style modal */
+    .note-style-row { display:flex; align-items:center; gap:14px; }
+    .note-size-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--fg); font-size:20px; width:40px; height:40px; cursor:pointer; touch-action:manipulation; flex-shrink:0; }
+    .note-size-val { font-size:18px; font-weight:600; min-width:48px; text-align:center; }
+    .note-color-grid { display:flex; flex-wrap:wrap; gap:10px; margin-top:4px; }
+    .note-color-swatch { width:36px; height:36px; border-radius:50%; border:3px solid transparent; cursor:pointer; touch-action:manipulation; flex-shrink:0; }
+    .note-color-swatch.active { border-color:#fff; box-shadow:0 0 0 2px var(--accent); }
+
     /* Annotation overlay — transparent to touch by default */
     .ann-layer {
       position: absolute;
@@ -368,7 +376,6 @@
     /* Individual annotation text */
     .ann-label {
       position: absolute;
-      color: #ff0000;
       font-family: Arial, sans-serif;
       font-size: 14pt;
       font-weight: bold;
@@ -1075,6 +1082,28 @@
   </div>
 </div>
 
+<!-- ==================== NOTE STYLE MODAL ==================== -->
+<div class="modal-bg" id="note-style-modal">
+  <div class="modal-box" style="gap:18px;">
+    <div class="modal-title">✎ Note Style</div>
+    <div>
+      <div class="field-label">Font size</div>
+      <div class="note-style-row">
+        <button class="note-size-btn" id="btn-note-size-down">−</button>
+        <div class="note-size-val" id="note-size-display">14pt</div>
+        <button class="note-size-btn" id="btn-note-size-up">+</button>
+      </div>
+    </div>
+    <div>
+      <div class="field-label">Note color</div>
+      <div class="note-color-grid" id="note-color-grid"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="btn-note-style-done">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="rename-song-modal">
   <div class="modal-box">
     <div class="modal-title">Rename Song ✏️</div>
@@ -1101,6 +1130,7 @@
 
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
+    <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
     <div class="dropdown-item danger" id="mi-back">← Back</div>
   </div>
@@ -1126,9 +1156,25 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ── Storage keys ─────────────────────────────────────────
-const STORE   = 'bandnotes_v1';
-const PROFILE = 'bandnotes_profile_v1';
-const SA_KEY  = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
+const STORE      = 'bandnotes_v1';
+const PROFILE    = 'bandnotes_profile_v1';
+const NOTE_PREFS = 'bandnotes_note_prefs_v1';
+const SA_KEY     = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
+
+const NOTE_COLORS = [
+  '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
+  '#00c7be', '#007aff', '#af52de', '#ff2d55',
+  '#ffffff', '#a0a0a0'
+];
+
+function loadNotePrefs() {
+  try { return JSON.parse(localStorage.getItem(NOTE_PREFS)) || {}; } catch { return {}; }
+}
+function saveNotePrefs(prefs) {
+  localStorage.setItem(NOTE_PREFS, JSON.stringify(prefs));
+}
+function getNoteColor()    { return loadNotePrefs().color    || '#ff3b30'; }
+function getNoteFontSize() { return loadNotePrefs().fontSize || 14; }
 
 // ── App state (no frameworks needed) ─────────────────────
 const app = {
@@ -1597,8 +1643,10 @@ function drawAnnotation(annLayer, ann) {
   const label     = document.createElement('span');
   label.className = 'ann-label';
   label.textContent = ann.text;
-  label.style.left  = (ann.xPct * 100) + '%';
-  label.style.top   = (ann.yPct * 100) + '%';
+  label.style.left     = (ann.xPct * 100) + '%';
+  label.style.top      = (ann.yPct * 100) + '%';
+  label.style.color    = getNoteColor();
+  label.style.fontSize = getNoteFontSize() + 'pt';
   label.title = 'Tap to edit/delete • Hold and drag to move';
 
   let dragging  = false;
@@ -1654,6 +1702,13 @@ function drawAnnotation(annLayer, ann) {
   });
 
   annLayer.appendChild(label);
+}
+
+function redrawAllAnnotations() {
+  app.pages.forEach(pg => {
+    pg.annLayer.innerHTML = '';
+  });
+  drawAllAnnotations();
 }
 
 // ─────────────────── Edit / Delete action toast ─────────
@@ -1728,6 +1783,54 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
 document.getElementById('mi-back').addEventListener('click', () => {
   closeDropdown();
   goBack();
+});
+
+// ─────────────────── Note Style modal ────────────────────
+document.getElementById('mi-note-style').addEventListener('click', () => {
+  closeDropdown();
+  const prefs = loadNotePrefs();
+  const size  = prefs.fontSize || 14;
+  const color = prefs.color    || NOTE_COLORS[0];
+
+  document.getElementById('note-size-display').textContent = size + 'pt';
+
+  // Build color grid
+  const grid = document.getElementById('note-color-grid');
+  grid.innerHTML = '';
+  NOTE_COLORS.forEach(c => {
+    const sw = document.createElement('button');
+    sw.className = 'note-color-swatch' + (c === color ? ' active' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.addEventListener('click', () => {
+      grid.querySelectorAll('.note-color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    grid.appendChild(sw);
+  });
+
+  document.getElementById('note-style-modal').classList.add('open');
+});
+
+document.getElementById('btn-note-size-down').addEventListener('click', () => {
+  const cur = parseInt(document.getElementById('note-size-display').textContent, 10);
+  const next = Math.max(8, cur - 2);
+  document.getElementById('note-size-display').textContent = next + 'pt';
+});
+document.getElementById('btn-note-size-up').addEventListener('click', () => {
+  const cur = parseInt(document.getElementById('note-size-display').textContent, 10);
+  const next = Math.min(36, cur + 2);
+  document.getElementById('note-size-display').textContent = next + 'pt';
+});
+
+document.getElementById('btn-note-style-done').addEventListener('click', () => {
+  const fontSize = parseInt(document.getElementById('note-size-display').textContent, 10);
+  const activeSwatch = document.querySelector('#note-color-grid .note-color-swatch.active');
+  const color = activeSwatch ? activeSwatch.style.background : NOTE_COLORS[0];
+  saveNotePrefs({ fontSize, color });
+  document.getElementById('note-style-modal').classList.remove('open');
+  redrawAllAnnotations();
+  hint('Note style updated!', 2000);
 });
 
 document.getElementById('mi-clear').addEventListener('click', () => {

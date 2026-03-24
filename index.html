@@ -1836,12 +1836,49 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
 
 document.getElementById('mi-print').addEventListener('click', () => {
   closeDropdown();
-  setTimeout(() => window.print(), 100);
+  printAll();
 });
 document.getElementById('mi-print-pdf').addEventListener('click', () => {
   closeDropdown();
   savePDF();
 });
+
+function compositePage(pg) {
+  const sess = currentSession();
+  const DPR  = window.devicePixelRatio || 1;
+  const tmp  = document.createElement('canvas');
+  tmp.width  = pg.canvas.width;
+  tmp.height = pg.canvas.height;
+  const ctx  = tmp.getContext('2d');
+  ctx.drawImage(pg.canvas, 0, 0);
+  if (sess) {
+    const pageAnns = sess.annotations.filter(ann => findPageFor(ann) === pg);
+    if (pageAnns.length) {
+      const fs = getNoteFontSize() * DPR;
+      ctx.font         = `bold ${fs}px Arial, sans-serif`;
+      ctx.fillStyle    = getNoteColor();
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor  = 'rgba(0,0,0,0.85)';
+      ctx.shadowBlur   = Math.max(2, fs * 0.12);
+      pageAnns.forEach(ann => {
+        ctx.fillText('● ' + ann.text, ann.xPct * tmp.width, ann.yPct * tmp.height);
+      });
+    }
+  }
+  return tmp.toDataURL('image/png');
+}
+
+function printAll() {
+  if (!app.pages.length) { hint('No pages loaded'); return; }
+  const images = app.pages.map(compositePage);
+  const win = window.open('', '_blank');
+  if (!win) { hint('Allow popups for this site to print'); return; }
+  const imgTags = images.map((src, i) =>
+    `<img src="${src}" style="display:block;width:100%;page-break-after:${i < images.length - 1 ? 'always' : 'avoid'};break-after:${i < images.length - 1 ? 'page' : 'avoid'};">`
+  ).join('');
+  win.document.write(`<!DOCTYPE html><html><head><style>*{margin:0;padding:0}@page{margin:0;size:auto}body{background:#000}</style></head><body>${imgTags}<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script></body></html>`);
+  win.document.close();
+}
 
 async function savePDF() {
   if (!app.pages.length) { hint('No pages loaded'); return; }

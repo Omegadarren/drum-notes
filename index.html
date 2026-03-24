@@ -713,6 +713,12 @@
     .sl-available-row:active { background:#1c1c1e; }
     .sl-add-btn { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:5px 12px; font-size:16px; font-weight:700; cursor:pointer; touch-action:manipulation; flex-shrink:0; }
 
+    /* Alpha filter bar */
+    .sl-alpha-bar { display:flex; flex-wrap:wrap; gap:4px; padding:6px 2px 4px; }
+    .sl-alpha-btn { background:none; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:13px; font-weight:600; padding:3px 6px; min-width:24px; cursor:pointer; touch-action:manipulation; line-height:1.4; }
+    .sl-alpha-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .sl-alpha-btn.clear-btn { color:var(--accent); border-color:var(--accent); padding:3px 8px; }
+
     /* Song divider in viewer */
     .song-divider { background:#1c1c1e; border-top:2px solid var(--border); border-bottom:2px solid var(--border); padding:10px 18px; font-size:16px; font-weight:600; color:var(--muted); letter-spacing:0.5px; }
 
@@ -1001,6 +1007,7 @@
         <div class="groups-empty" id="setlist-selected-empty" style="padding:14px;font-size:15px;">No songs yet</div>
       </div>
       <div class="field-label" style="margin-top:8px;">Song Library</div>
+      <div id="setlist-alpha-filter" class="sl-alpha-bar"></div>
       <div id="setlist-available-songs" style="border:1.5px solid var(--border);border-radius:12px;max-height:200px;overflow-y:auto;">
         <div class="groups-empty" style="padding:14px;font-size:15px;" id="setlist-library-empty">Loading…</div>
       </div>
@@ -2592,12 +2599,69 @@ document.getElementById('btn-rename-song-save').addEventListener('click', async 
 
 // ─────────────────── Setlist Builder ────────────────────
 let selectedSetlistSongs = [];  // [{ id, name }]
+let setlistLibrarySongs  = [];  // [{ id, name }]  — cached from Firestore
+let setlistAlphaFilter   = '';  // '' = no filter, 'A'–'Z' = filtered
+
+function initAlphaFilter() {
+  const bar = document.getElementById('setlist-alpha-filter');
+  bar.innerHTML = '';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+    const btn = document.createElement('button');
+    btn.className = 'sl-alpha-btn';
+    btn.textContent = letter;
+    btn.dataset.letter = letter;
+    if (letter === setlistAlphaFilter) btn.classList.add('active');
+    btn.addEventListener('click', e => { e.stopPropagation(); setAlphaFilter(letter); });
+    bar.appendChild(btn);
+  });
+  if (setlistAlphaFilter) {
+    const clr = document.createElement('button');
+    clr.className = 'sl-alpha-btn clear-btn';
+    clr.textContent = '✕ Clear';
+    clr.addEventListener('click', e => { e.stopPropagation(); setAlphaFilter(''); });
+    bar.appendChild(clr);
+  }
+}
+
+function setAlphaFilter(letter) {
+  setlistAlphaFilter = letter;
+  initAlphaFilter();
+  renderAvailableSongs();
+}
+
+function renderAvailableSongs() {
+  const availEl = document.getElementById('setlist-available-songs');
+  if (!setlistLibrarySongs.length) {
+    availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs in library yet. Add songs first via 📚 Song Library.</div>';
+    return;
+  }
+  const filtered = setlistAlphaFilter
+    ? setlistLibrarySongs.filter(s => s.name.toUpperCase().startsWith(setlistAlphaFilter))
+    : setlistLibrarySongs;
+  if (!filtered.length) {
+    availEl.innerHTML = `<div class="groups-empty" style="padding:14px;font-size:15px;">No songs starting with "${setlistAlphaFilter}"</div>`;
+    return;
+  }
+  availEl.innerHTML = '';
+  filtered.forEach(({ id, name }) => {
+    const row = document.createElement('div');
+    row.className = 'sl-available-row';
+    row.innerHTML = `<span>${esc(name)}</span><button class="sl-add-btn">＋</button>`;
+    row.querySelector('.sl-add-btn').addEventListener('click', evt => {
+      evt.stopPropagation();
+      addSongToSetlist(id, name);
+    });
+    availEl.appendChild(row);
+  });
+}
 
 async function openEditSetlistModal(setlistId, name, songIds) {
   selectedSetlistSongs = [];
+  setlistAlphaFilter = '';
   document.getElementById('create-setlist-title').textContent = 'Edit Setlist ✏️';
   document.getElementById('create-setlist-modal').dataset.setlistId = setlistId;
   document.getElementById('inp-create-setlist-name').value = name;
+  initAlphaFilter();
   if (songIds.length) {
     setLoading(true, 'Loading songs…');
     try {
@@ -2616,6 +2680,8 @@ async function openEditSetlistModal(setlistId, name, songIds) {
 
 function openCreateSetlistModal() {
   selectedSetlistSongs = [];
+  setlistAlphaFilter = '';
+  initAlphaFilter();
   document.getElementById('create-setlist-title').textContent = 'New Setlist 🎶';
   document.getElementById('create-setlist-modal').dataset.setlistId = '';
   document.getElementById('inp-create-setlist-name').value = '';
@@ -2628,25 +2694,14 @@ function openCreateSetlistModal() {
 async function loadSetlistBuilderLibrary() {
   const availEl = document.getElementById('setlist-available-songs');
   availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Loading…</div>';
+  setlistLibrarySongs = [];
   try {
     const snap = await db.collection('groups').doc(currentGroupId).collection('songs')
       .orderBy('name', 'asc').get();
-    if (snap.empty) {
-      availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs in library yet. Add songs first via 📚 Song Library.</div>';
-      return;
-    }
-    availEl.innerHTML = '';
     snap.forEach(doc => {
-      const song = doc.data();
-      const row  = document.createElement('div');
-      row.className = 'sl-available-row';
-      row.innerHTML = `<span>${esc(song.name)}</span><button class="sl-add-btn">＋</button>`;
-      row.querySelector('.sl-add-btn').addEventListener('click', e => {
-        e.stopPropagation();
-        addSongToSetlist(doc.id, song.name);
-      });
-      availEl.appendChild(row);
+      setlistLibrarySongs.push({ id: doc.id, name: doc.data().name });
     });
+    renderAvailableSongs();
   } catch (err) {
     availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Could not load songs.</div>';
     console.error(err);
@@ -2660,6 +2715,12 @@ function addSongToSetlist(songId, songName) {
   }
   selectedSetlistSongs.push({ id: songId, name: songName });
   renderSelectedSongs();
+  // Auto-clear the alpha filter after adding
+  if (setlistAlphaFilter) {
+    setlistAlphaFilter = '';
+    initAlphaFilter();
+    renderAvailableSongs();
+  }
 }
 
 function removeFromSetlist(songId) {

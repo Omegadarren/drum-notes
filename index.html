@@ -852,6 +852,7 @@
                             z-index: auto !important; width: 100% !important; }
     #_print-content img    { display: block; width: 100% !important; height: auto !important;
                              -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #_print-content img:not(:last-child) { page-break-after: always; break-after: page; }
   }
 
   </style>
@@ -1895,8 +1896,7 @@ function printAll() {
   const imgs = images.map((src, i) => {
     const img = document.createElement('img');
     img.src = src;
-    img.style.cssText = 'display:block;width:100%;' +
-      (i < images.length - 1 ? 'page-break-after:always;break-after:page;' : '');
+    img.style.cssText = 'display:block;width:100%;';
     pd.appendChild(img);
     return img;
   });

@@ -1790,31 +1790,29 @@ document.getElementById('mi-back').addEventListener('click', () => {
 document.getElementById('mi-note-style').addEventListener('click', e => {
   e.stopPropagation();
   closeDropdown();
-  setTimeout(() => {
-    const prefs = loadNotePrefs();
-    const size  = prefs.fontSize || 14;
-    const color = prefs.color    || NOTE_COLORS[0];
+  const prefs = loadNotePrefs();
+  const size  = prefs.fontSize || 14;
+  const color = prefs.color    || NOTE_COLORS[0];
 
-    document.getElementById('note-size-display').textContent = size + 'pt';
+  document.getElementById('note-size-display').textContent = size + 'pt';
 
-    // Build color grid
-    const grid = document.getElementById('note-color-grid');
-    grid.innerHTML = '';
-    NOTE_COLORS.forEach(c => {
-      const sw = document.createElement('button');
-      sw.className = 'note-color-swatch' + (c === color ? ' active' : '');
-      sw.style.background = c;
-      sw.title = c;
-      sw.addEventListener('click', ev => {
-        ev.stopPropagation();
-        grid.querySelectorAll('.note-color-swatch').forEach(s => s.classList.remove('active'));
-        sw.classList.add('active');
-      });
-      grid.appendChild(sw);
+  // Build color grid
+  const grid = document.getElementById('note-color-grid');
+  grid.innerHTML = '';
+  NOTE_COLORS.forEach(c => {
+    const sw = document.createElement('button');
+    sw.className = 'note-color-swatch' + (c === color ? ' active' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.addEventListener('click', ev => {
+      ev.stopPropagation();
+      grid.querySelectorAll('.note-color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
     });
+    grid.appendChild(sw);
+  });
 
-    document.getElementById('note-style-modal').classList.add('open');
-  }, 50);
+  document.getElementById('note-style-modal').classList.add('open');
 });
 
 document.getElementById('btn-note-size-down').addEventListener('click', () => {
@@ -1880,8 +1878,12 @@ document.getElementById('btn-menu').addEventListener('click', e => {
   e.stopPropagation();
   document.getElementById('dropdown').classList.toggle('open');
 });
-document.addEventListener('click',     closeDropdown);
-document.addEventListener('touchstart', closeDropdown, { passive: true });
+document.addEventListener('click', e => {
+  if (!document.getElementById('dropdown').contains(e.target)) closeDropdown();
+});
+document.addEventListener('touchstart', e => {
+  if (!document.getElementById('dropdown').contains(e.target)) closeDropdown();
+}, { passive: true });
 
 function closeDropdown() {
   document.getElementById('dropdown').classList.remove('open');

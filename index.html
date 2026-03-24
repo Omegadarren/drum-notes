@@ -2602,7 +2602,7 @@ async function loadSetlistBuilderLibrary() {
   availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Loading…</div>';
   try {
     const snap = await db.collection('groups').doc(currentGroupId).collection('songs')
-      .orderBy('uploadedAt', 'asc').get();
+      .orderBy('name', 'asc').get();
     if (snap.empty) {
       availEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs in library yet. Add songs first via 📚 Song Library.</div>';
       return;

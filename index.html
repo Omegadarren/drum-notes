@@ -830,15 +830,26 @@
     }
     .danger-btn:active { opacity: 0.7; }
 
-  /* Print content — hidden normally, shown only in @media print */
-  #_print-content { display: none; }
+  /* Print content — painted off-screen so iOS Safari includes it in print layout */
+  #_print-content {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%;
+    z-index: 9998;
+    background: #000;
+    display: none;
+  }
+  #_print-content.ready { display: block; }
 
   @media print {
     @page { margin: 0; size: auto; }
-    body > *                      { display: none !important; }
-    body > #_print-content        { display: block !important; }
-    #_print-content img           { display: block; width: 100% !important; height: auto !important;
-                                    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body > *           { display: none !important; }
+    #_print-content,
+    #_print-content.ready { display: block !important; position: static !important;
+                            top: auto !important; left: auto !important;
+                            z-index: auto !important; width: 100% !important; }
+    #_print-content img    { display: block; width: 100% !important; height: auto !important;
+                             -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 
   </style>
@@ -1878,7 +1889,6 @@ function printAll() {
   if (pd) pd.remove();
   pd = document.createElement('div');
   pd.id = '_print-content';
-  // No inline display style — CSS rule hides it normally, @media print shows it
 
   const imgs = images.map((src, i) => {
     const img = document.createElement('img');
@@ -1890,15 +1900,18 @@ function printAll() {
   });
   document.body.appendChild(pd);
 
-  // Wait for every image to fully decode before opening the print dialog.
-  // On iOS Safari / Kindle, window.print() called before decode shows only
-  // whichever images the browser happened to render in time.
   const decodeAll = imgs.map(img =>
     typeof img.decode === 'function' ? img.decode() : Promise.resolve()
   );
+
   Promise.all(decodeAll).then(() => {
-    window.print();
-    setTimeout(() => pd.remove(), 3000);
+    // Make visible so iOS Safari paints it into the render tree before we print.
+    pd.classList.add('ready');
+    // Two rAFs: first schedules paint, second confirms it has committed.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.print();
+      setTimeout(() => pd.remove(), 3000);
+    }));
   });
 }
 

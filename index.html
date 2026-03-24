@@ -736,6 +736,11 @@
     .setlist-rename-btn:active { background: #2a2a2c; }
     .setlist-rename-btn:disabled { opacity:0.35; cursor:not-allowed; pointer-events:none; }
     .setlist-locked-icon { font-size:18px; flex-shrink:0; padding:6px 8px; opacity:0.5; }
+
+    /* Song history modal */
+    .song-history-item { display:flex; align-items:center; gap:10px; padding:11px 16px; border-bottom:1px solid var(--border); font-size:16px; }
+    .song-history-item:last-child { border-bottom:none; }
+    .song-history-date { font-size:12px; color:var(--muted); margin-left:auto; white-space:nowrap; }
     .setlist-perform-btn { background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:16px; padding:6px 10px; cursor:pointer; flex-shrink:0; touch-action:manipulation; }
     .setlist-perform-btn.performed { color:#34c759; border-color:#34c759; background:rgba(52,199,89,0.10); }
     .setlist-perform-btn:not(.performed):active { background:#2a2a2c; }
@@ -1059,6 +1064,17 @@
 </div>
 
 <!-- ==================== RENAME SONG MODAL ==================== -->
+<!-- ==================== SONG HISTORY MODAL ==================== -->
+<div class="modal-bg" id="song-history-modal">
+  <div class="modal-box" style="max-height:85vh;overflow-y:auto;gap:14px;">
+    <div class="modal-title" id="song-history-title">Setlist History</div>
+    <div id="song-history-list" style="border:1.5px solid var(--border);border-radius:12px;overflow:hidden;"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="btn-song-history-close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="rename-song-modal">
   <div class="modal-box">
     <div class="modal-title">Rename Song ✏️</div>
@@ -2363,12 +2379,19 @@ async function loadSongLibrary(gid, isAdmin) {
       db.collection('groups').doc(gid).collection('songs').orderBy('name', 'asc').get(),
       db.collection('groups').doc(gid).collection('setlists').get()
     ]);
-    // Build play counts: # of performed setlists containing each songId
-    const playCounts = {};
+    // Build play counts + history map: performed setlists containing each songId
+    const playCounts  = {};
+    const playHistory = {};  // songId -> [{ name, date }]
     setlistSnap.forEach(sldoc => {
       const sl = sldoc.data();
       if (sl.performed && sl.songIds) {
-        sl.songIds.forEach(sid => { playCounts[sid] = (playCounts[sid] || 0) + 1; });
+        const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
+        const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+        sl.songIds.forEach(sid => {
+          playCounts[sid]  = (playCounts[sid]  || 0) + 1;
+          if (!playHistory[sid]) playHistory[sid] = [];
+          playHistory[sid].push({ name: sl.name, date: dateStr });
+        });
       }
     });
     if (snap.empty) {
@@ -2381,6 +2404,7 @@ async function loadSongLibrary(gid, isAdmin) {
     snap.forEach(doc => {
       const song  = doc.data();
       const count = playCounts[doc.id] || 0;
+      const history = playHistory[doc.id] || [];
       const row  = document.createElement('div');
       row.className = 'song-row';
       row.innerHTML = `
@@ -2389,6 +2413,7 @@ async function loadSongLibrary(gid, isAdmin) {
           <div class="song-row-name">${esc(song.name)}</div>
           <div class="song-row-meta">${count > 0 ? `🎤 Played ${count}×` : 'Tap to open'}</div>
         </div>
+        ${count > 0 ? `<button class="song-action-btn" data-action="history" title="View setlist history">🎤</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="rename" title="Rename">✏️</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="delete" title="Delete">🗑</button>` : ''}
         <div class="group-row-arrow">›</div>`;
@@ -2396,6 +2421,20 @@ async function loadSongLibrary(gid, isAdmin) {
       const openSong = () => openLibrarySong(doc.id, song);
       row.querySelector('.group-row-arrow').addEventListener('click', e => { e.stopPropagation(); openSong(); });
       row.addEventListener('click', openSong);
+
+      if (count > 0) {
+        row.querySelector('[data-action="history"]').addEventListener('click', e => {
+          e.stopPropagation();
+          const modal    = document.getElementById('song-history-modal');
+          const titleEl  = document.getElementById('song-history-title');
+          const listEl2  = document.getElementById('song-history-list');
+          titleEl.textContent = `🎤 "${song.name}" — Played ${count}×`;
+          listEl2.innerHTML = history.map(h =>
+            `<div class="song-history-item"><span>🎼 ${esc(h.name)}</span>${h.date ? `<span class="song-history-date">${esc(h.date)}</span>` : ''}</div>`
+          ).join('');
+          modal.classList.add('open');
+        });
+      }
 
       if (isAdmin) {
         row.querySelector('[data-action="rename"]').addEventListener('click', e => {
@@ -2569,6 +2608,9 @@ document.getElementById('btn-upload-song-confirm').addEventListener('click', asy
     setLoading(false);
     alert('Upload failed: ' + err.message);
   }
+});
+document.getElementById('btn-song-history-close').addEventListener('click', () => {
+  document.getElementById('song-history-modal').classList.remove('open');
 });
 document.getElementById('btn-rename-song-cancel').addEventListener('click', () => {
   document.getElementById('rename-song-modal').classList.remove('open');

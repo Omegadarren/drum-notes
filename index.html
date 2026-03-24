@@ -1046,26 +1046,24 @@
 
 <!-- ==================== UPLOAD SONG MODAL ==================== -->
 <div class="modal-bg" id="upload-song-modal">
-  <div class="modal-box">
-    <div class="modal-title">Add Song 🎵</div>
+  <div class="modal-box" style="max-height:90vh;overflow-y:auto;gap:14px;">
+    <div class="modal-title">Add Songs 🎵</div>
     <div>
-      <div class="field-label">Song name</div>
-      <input class="text-input" id="inp-song-name" type="text"
-             placeholder="e.g. Sweet Home Chicago" maxlength="80"
-             autocomplete="off" autocorrect="off" spellcheck="false">
-    </div>
-    <div>
-      <div class="field-label">PDF file</div>
+      <div class="field-label">PDF files <span style="color:var(--muted);font-weight:400;">— you can select multiple</span></div>
       <div class="upload-zone" id="upload-song-zone">
         <div class="upload-zone-icon">🎵</div>
-        <div class="upload-zone-hint">Tap to choose a PDF</div>
+        <div class="upload-zone-hint">Tap to choose PDF(s)</div>
         <div class="upload-zone-name" id="upload-song-filename"></div>
       </div>
-      <input id="song-pdf-input" type="file" accept="application/pdf">
+      <input id="song-pdf-input" type="file" accept="application/pdf" multiple>
+    </div>
+    <div id="pending-songs-list" style="display:none;">
+      <div class="field-label" style="margin-top:4px;">Song names <span style="color:var(--muted);font-weight:400;">— edit if needed</span></div>
+      <div id="pending-songs-items"></div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-upload-song-cancel">Cancel</button>
-      <button class="btn-primary" id="btn-upload-song-confirm">Upload →</button>
+      <button class="btn-primary" id="btn-upload-song-confirm">Upload All →</button>
     </div>
   </div>
 </div>
@@ -2470,8 +2468,7 @@ async function openLibrarySong(songId, song) {
 // ── Song Library — event handlers ────────────────────────
 document.getElementById('btn-song-library').addEventListener('click', () => {
   if (!currentGroupId) return;
-  const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(currentGroupId);
-  openSongLibrary(currentGroupId, isAdmin);
+  openSongLibrary(currentGroupId, true);  // this button is only visible to admins
 });
 document.getElementById('btn-song-library-member').addEventListener('click', () => {
   if (!currentGroupId) return;
@@ -2482,55 +2479,82 @@ document.getElementById('btn-song-library-back').addEventListener('click', () =>
   document.getElementById('group-detail-screen').classList.add('active');
 });
 
-let pendingSongFile = null;
+let pendingSongFiles = [];  // [{ file, name }]
 document.getElementById('btn-upload-song').addEventListener('click', () => {
-  pendingSongFile = null;
-  document.getElementById('inp-song-name').value = '';
+  pendingSongFiles = [];
   document.getElementById('upload-song-filename').textContent = '';
   document.getElementById('upload-song-zone').classList.remove('has-file');
   document.getElementById('song-pdf-input').value = '';
+  document.getElementById('pending-songs-list').style.display = 'none';
+  document.getElementById('pending-songs-items').innerHTML = '';
   document.getElementById('upload-song-modal').classList.add('open');
-  setTimeout(() => document.getElementById('inp-song-name').focus(), 120);
 });
 document.getElementById('upload-song-zone').addEventListener('click', () => {
   document.getElementById('song-pdf-input').click();
 });
 document.getElementById('song-pdf-input').addEventListener('change', e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  pendingSongFile = f;
-  document.getElementById('upload-song-filename').textContent = f.name;
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  pendingSongFiles = files.map(f => ({ file: f, name: f.name.replace(/\.pdf$/i, '') }));
+  const label = files.length === 1 ? files[0].name : `${files.length} files selected`;
+  document.getElementById('upload-song-filename').textContent = label;
   document.getElementById('upload-song-zone').classList.add('has-file');
+  // Build editable name list
+  const items = document.getElementById('pending-songs-items');
+  items.innerHTML = '';
+  pendingSongFiles.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+    const nameInp = document.createElement('input');
+    nameInp.type = 'text';
+    nameInp.className = 'text-input';
+    nameInp.value = entry.name;
+    nameInp.maxLength = 80;
+    nameInp.autocomplete = 'off';
+    nameInp.autocorrect = 'off';
+    nameInp.spellcheck = false;
+    nameInp.style.flex = '1';
+    nameInp.addEventListener('input', () => { pendingSongFiles[i].name = nameInp.value; });
+    row.appendChild(nameInp);
+    items.appendChild(row);
+  });
+  document.getElementById('pending-songs-list').style.display = '';
 });
 document.getElementById('btn-upload-song-cancel').addEventListener('click', () => {
   document.getElementById('upload-song-modal').classList.remove('open');
+  pendingSongFiles = [];
 });
 document.getElementById('btn-upload-song-confirm').addEventListener('click', async () => {
-  const name = document.getElementById('inp-song-name').value.trim();
-  if (!name)          { alert('Please enter a song name.'); return; }
-  if (!pendingSongFile){ alert('Please choose a PDF file.');  return; }
+  if (!pendingSongFiles.length) { alert('Please choose at least one PDF file.'); return; }
+  const bad = pendingSongFiles.find(e => !e.name.trim());
+  if (bad) { alert('Please enter a name for every song.'); return; }
   if (!currentGroupId) { return; }
   document.getElementById('upload-song-modal').classList.remove('open');
-  setLoading(true, 'Uploading song…');
+  let uploaded = 0;
   try {
-    const songId      = genId();
-    const storagePath = `groups/${currentGroupId}/songs/${songId}.pdf`;
-    const ref = storage.ref(storagePath);
-    await new Promise((resolve, reject) => {
-      const task  = ref.put(pendingSongFile);
-      const timer = setTimeout(() => { task.cancel(); reject(new Error('Upload timed out.')); }, 60000);
-      task.on('state_changed', null,
-        err => { clearTimeout(timer); reject(err); },
-        ()  => { clearTimeout(timer); resolve(); }
-      );
-    });
-    await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).set({
-      name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
-    });
+    for (const entry of pendingSongFiles) {
+      setLoading(true, `Uploading ${uploaded + 1} of ${pendingSongFiles.length}…`);
+      const name        = entry.name.trim();
+      const songId      = genId();
+      const storagePath = `groups/${currentGroupId}/songs/${songId}.pdf`;
+      const ref         = storage.ref(storagePath);
+      await new Promise((resolve, reject) => {
+        const task  = ref.put(entry.file);
+        const timer = setTimeout(() => { task.cancel(); reject(new Error('Upload timed out.')); }, 60000);
+        task.on('state_changed', null,
+          err => { clearTimeout(timer); reject(err); },
+          ()  => { clearTimeout(timer); resolve(); }
+        );
+      });
+      await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).set({
+        name, storagePath, uploadedBy: fbUid, uploadedAt: Date.now()
+      });
+      uploaded++;
+    }
     setLoading(false);
-    hint(`"${name}" added to library!`, 3000);
-    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(currentGroupId);
-    loadSongLibrary(currentGroupId, isAdmin);
+    hint(`${uploaded} song${uploaded !== 1 ? 's' : ''} added to library!`, 3000);
+    pendingSongFiles = [];
+    loadSongLibrary(currentGroupId, true);
   } catch (err) {
     setLoading(false);
     alert('Upload failed: ' + err.message);

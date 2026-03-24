@@ -1872,13 +1872,26 @@ function compositePage(pg) {
 function printAll() {
   if (!app.pages.length) { hint('No pages loaded'); return; }
   const images = app.pages.map(compositePage);
-  const win = window.open('', '_blank');
-  if (!win) { hint('Allow popups for this site to print'); return; }
   const imgTags = images.map((src, i) =>
     `<img src="${src}" style="display:block;width:100%;page-break-after:${i < images.length - 1 ? 'always' : 'avoid'};break-after:${i < images.length - 1 ? 'page' : 'avoid'};">`
   ).join('');
-  win.document.write(`<!DOCTYPE html><html><head><style>*{margin:0;padding:0}@page{margin:0;size:auto}body{background:#000}</style></head><body>${imgTags}<script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script></body></html>`);
-  win.document.close();
+  const html = `<!DOCTYPE html><html><head><style>*{margin:0;padding:0}@page{margin:0;size:auto}body{background:#000}</style></head><body>${imgTags}</body></html>`;
+
+  // Use an invisible iframe to avoid popup blocking on mobile browsers
+  let frm = document.getElementById('_print-frame');
+  if (frm) frm.remove();
+  frm = document.createElement('iframe');
+  frm.id = '_print-frame';
+  frm.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+  document.body.appendChild(frm);
+  frm.contentDocument.open();
+  frm.contentDocument.write(html);
+  frm.contentDocument.close();
+  frm.contentWindow.focus();
+  setTimeout(() => {
+    frm.contentWindow.print();
+    setTimeout(() => frm.remove(), 2000);
+  }, 300);
 }
 
 async function savePDF() {

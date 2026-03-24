@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <!-- Firebase v10 compat (no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -834,10 +835,11 @@
 
   @media print {
     #home, #loading, .modal-bg, .vhdr, #dropdown { display: none !important; }
-    #viewer { display: block !important; position: static !important; }
-    #pdf-scroll { overflow: visible !important; height: auto !important; }
-    body { background: #fff !important; }
-    canvas { display: block; max-width: 100%; page-break-after: auto; }
+    #viewer { display: block !important; position: static !important; height: auto !important; }
+    #pdf-scroll { overflow: visible !important; height: auto !important; flex: none !important; }
+    body { background: #fff !important; margin: 0; padding: 0; }
+    .page-wrap { break-after: page; page-break-after: always; }
+    canvas { display: block; width: 100% !important; height: auto !important; }
     .ann-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 
@@ -1837,8 +1839,62 @@ document.getElementById('mi-print').addEventListener('click', () => {
 });
 document.getElementById('mi-print-pdf').addEventListener('click', () => {
   closeDropdown();
-  setTimeout(() => window.print(), 100);
+  savePDF();
 });
+
+async function savePDF() {
+  if (!app.pages.length) { hint('No pages loaded'); return; }
+  if (!window.jspdf) { hint('PDF library not loaded yet, try again'); return; }
+  hint('Building PDF…');
+  const { jsPDF } = window.jspdf;
+  const sess = currentSession();
+  const DPR  = window.devicePixelRatio || 1;
+
+  // First page sets the initial document format
+  const first = app.pages[0].canvas;
+  const dW0 = Math.round(first.width / DPR);
+  const dH0 = Math.round(first.height / DPR);
+
+  const doc = new jsPDF({
+    unit: 'px',
+    format: [dW0, dH0],
+    orientation: dW0 > dH0 ? 'landscape' : 'portrait',
+    hotfixes: ['px_scaling'],
+  });
+
+  const fontSize = getNoteFontSize();
+  const noteColor = getNoteColor();
+
+  for (let i = 0; i < app.pages.length; i++) {
+    const pg = app.pages[i];
+    const dW = Math.round(pg.canvas.width  / DPR);
+    const dH = Math.round(pg.canvas.height / DPR);
+
+    if (i > 0) doc.addPage([dW, dH], dW > dH ? 'landscape' : 'portrait');
+
+    const imgData = pg.canvas.toDataURL('image/jpeg', 0.88);
+    doc.addImage(imgData, 'JPEG', 0, 0, dW, dH);
+
+    if (sess) {
+      const pageAnns = sess.annotations.filter(ann => findPageFor(ann) === pg);
+      if (pageAnns.length) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(fontSize);
+        doc.setTextColor(noteColor);
+        pageAnns.forEach(ann => {
+          const x = ann.xPct * dW;
+          const y = ann.yPct * dH;
+          doc.text('● ' + ann.text, x, y, { baseline: 'middle' });
+        });
+      }
+    }
+  }
+
+  const name = (sess && sess.name)
+    ? sess.name.replace(/[^\w\-. ]/g, '_')
+    : 'sheet';
+  doc.save(name + '.pdf');
+}
 
 document.getElementById('btn-note-style-cancel').addEventListener('click', () => {
   document.getElementById('note-style-modal').classList.remove('open');

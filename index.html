@@ -834,11 +834,12 @@
     .danger-btn:active { opacity: 0.7; }
 
   @media print {
+    @page { margin: 0; size: auto; }
     #home, #loading, .modal-bg, .vhdr, #dropdown { display: none !important; }
     html, body { height: auto !important; overflow: visible !important; background: #fff !important; margin: 0; padding: 0; }
     #viewer { display: block !important; position: static !important; height: auto !important; }
     #pdf-scroll { overflow: visible !important; height: auto !important; flex: none !important; }
-    .page-wrap { break-after: page; page-break-after: always; }
+    .page-wrap { border-bottom: none !important; break-inside: avoid; page-break-inside: avoid; break-after: auto; page-break-after: auto; }
     canvas { display: block; width: 100% !important; height: auto !important; }
     .ann-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }

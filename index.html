@@ -2361,7 +2361,7 @@ async function loadSongLibrary(gid, isAdmin) {
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   try {
     const snap = await db.collection('groups').doc(gid).collection('songs')
-      .orderBy('uploadedAt', 'asc').get();
+      .orderBy('name', 'asc').get();
     if (snap.empty) {
       listEl.innerHTML = `<div class="groups-empty">${isAdmin
         ? 'No songs yet. Tap ⬆ Add Song to upload the first one.'

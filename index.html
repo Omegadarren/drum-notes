@@ -832,6 +832,15 @@
     }
     .danger-btn:active { opacity: 0.7; }
 
+  @media print {
+    #home, #loading, .modal-bg, .vhdr, #dropdown { display: none !important; }
+    #viewer { display: block !important; position: static !important; }
+    #pdf-scroll { overflow: visible !important; height: auto !important; }
+    body { background: #fff !important; }
+    canvas { display: block; max-width: 100%; page-break-after: auto; }
+    .ann-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
   </style>
 </head>
 <body>
@@ -1097,6 +1106,13 @@
     <div>
       <div class="field-label">Note color</div>
       <div class="note-color-grid" id="note-color-grid"></div>
+    </div>
+    <div>
+      <div class="field-label">Print</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" id="btn-print-sheet" style="flex:1;">🖨️ Print</button>
+        <button class="btn-ghost" id="btn-print-pdf" style="flex:1;">📄 Print to PDF</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-note-style-cancel">Cancel</button>
@@ -1824,6 +1840,15 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
   const cur = parseInt(document.getElementById('note-size-display').textContent, 10);
   const next = Math.min(36, cur + 2);
   document.getElementById('note-size-display').textContent = next + 'pt';
+});
+
+document.getElementById('btn-print-sheet').addEventListener('click', () => {
+  document.getElementById('note-style-modal').classList.remove('open');
+  setTimeout(() => window.print(), 100);
+});
+document.getElementById('btn-print-pdf').addEventListener('click', () => {
+  document.getElementById('note-style-modal').classList.remove('open');
+  setTimeout(() => window.print(), 100);
 });
 
 document.getElementById('btn-note-style-cancel').addEventListener('click', () => {

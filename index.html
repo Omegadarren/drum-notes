@@ -2095,6 +2095,7 @@ async function loadGroupSetlists(gid) {
           <div class="setlist-row-meta">${metaText}</div>
         </div>
         ${isAdmin ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-songs="${esc(sl.songs||'')}">✏️</button>` : ''}
+        ${isAdmin ? `<button class="setlist-rename-btn" data-action="del" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Delete setlist">🗑</button>` : ''}
         <div class="group-row-arrow" title="Open setlist">›</div>
         ${tooltipHtml}`;
 
@@ -2106,11 +2107,31 @@ async function loadGroupSetlists(gid) {
       if (isAdmin) {
         row.querySelector('.setlist-rename-btn').addEventListener('click', e => {
           e.stopPropagation();
+          if (e.currentTarget.dataset.action === 'del') {
+            const name = e.currentTarget.dataset.name;
+            const id   = e.currentTarget.dataset.id;
+            if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+            setLoading(true, 'Deleting…');
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).delete()
+              .then(() => { setLoading(false); hint(`"${name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+              .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+            return;
+          }
           document.getElementById('inp-rename-setlist').value = e.currentTarget.dataset.name;
           document.getElementById('inp-rename-setlist-songs').value = e.currentTarget.dataset.songs || '';
           document.getElementById('rename-setlist-modal').dataset.setlistId = e.currentTarget.dataset.id;
           document.getElementById('rename-setlist-modal').classList.add('open');
           setTimeout(() => document.getElementById('inp-rename-setlist').select(), 120);
+        });
+        row.querySelector('[data-action="del"]').addEventListener('click', e => {
+          e.stopPropagation();
+          const name = e.currentTarget.dataset.name;
+          const id   = e.currentTarget.dataset.id;
+          if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+          setLoading(true, 'Deleting…');
+          db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).delete()
+            .then(() => { setLoading(false); hint(`"${name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+            .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
         });
       }
       row.addEventListener('click', () => {

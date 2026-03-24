@@ -843,6 +843,8 @@
 
   @media print {
     @page { margin: 0; size: auto; }
+    html, body { height: auto !important; overflow: visible !important;
+                 background: #000 !important; margin: 0 !important; padding: 0 !important; }
     body > *           { display: none !important; }
     #_print-content,
     #_print-content.ready { display: block !important; position: static !important;

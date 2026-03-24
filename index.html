@@ -502,6 +502,18 @@
       white-space: nowrap;
       touch-action: manipulation;
     }
+    .del-toast-copy {
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      padding: 8px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
 
     /* ===================== LOADING ===================== */
     #loading {
@@ -1037,6 +1049,7 @@ const app = {
   pdfDoc:      null,
   pages:       [],   // [{ wrap, canvas, annLayer, w, h }]
   pendingAnn:  null, // { wrap, input, annLayer, pageIdx, xPct, yPct }
+  copiedAnn:   null, // text of last copied annotation
 };
 
 // ─────────────────── Persistence ───────────────────────
@@ -1386,6 +1399,12 @@ function showAnnInput(annLayer, pageIdx, xPct, yPct) {
   app.pendingAnn = { wrap, input, annLayer, pageIdx, xPct, yPct };
   setChip('edit');
 
+  // Pre-fill if a note was copied
+  if (app.copiedAnn) {
+    input.value    = app.copiedAnn;
+    app.copiedAnn  = null;
+  }
+
   // Focus triggers iOS keyboard; scroll input into view after keyboard appears
   requestAnimationFrame(() => {
     input.focus();
@@ -1518,6 +1537,7 @@ function showDeleteConfirm(ann, labelEl) {
   toast.innerHTML = `
     <span class="del-toast-text">"<strong>${esc(ann.text)}</strong>"</span>
     <button class="del-toast-edit">✎ Edit</button>
+    <button class="del-toast-copy">📋 Copy</button>
     <button class="del-toast-yes">🗑 Delete</button>
     <button class="del-toast-no">✕</button>`;
   document.body.appendChild(toast);
@@ -1545,6 +1565,13 @@ function showDeleteConfirm(ann, labelEl) {
         app.pendingAnn.input.select();
       }
     });
+  });
+
+  toast.querySelector('.del-toast-copy').addEventListener('click', () => {
+    clearTimeout(autoClose);
+    toast.remove();
+    app.copiedAnn = ann.text;
+    hint('Note copied — double-tap anywhere to paste', 3000);
   });
 
   toast.querySelector('.del-toast-yes').addEventListener('click', () => {

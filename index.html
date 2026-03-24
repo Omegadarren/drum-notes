@@ -2079,7 +2079,8 @@ async function loadGroupSetlists(gid) {
       let tooltipHtml = '';
       if (sl.songIds && sl.songIds.length) {
         // New library-based format
-        metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}`;
+        metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}${sl.songs ? ' · 📝' : ''}`;
+        if (sl.songs) tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
       } else if (sl.songs) {
         // Legacy format with songs text
         metaText = `Uploaded ${d} · 📝 song list`;
@@ -2139,7 +2140,7 @@ async function loadGroupSetlists(gid) {
           const isOpen = row.classList.contains('tooltip-open');
           listEl.querySelectorAll('.setlist-row.tooltip-open').forEach(r => r.classList.remove('tooltip-open'));
           if (!isOpen) row.classList.add('tooltip-open');
-        } else if (!sl.songIds) {
+        } else {
           hint('No song list for this setlist', 2000);
         }
       });
@@ -2705,8 +2706,9 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
   try {
     const setlistId = genId();
     const songIds   = selectedSetlistSongs.map(s => s.id);
+    const songs     = selectedSetlistSongs.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
     await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
-      name, songIds, createdBy: fbUid, createdAt: Date.now()
+      name, songIds, songs, createdBy: fbUid, createdAt: Date.now()
     });
     setLoading(false);
     hint(`"${name}" saved!`, 3000);

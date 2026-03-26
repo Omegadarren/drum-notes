@@ -921,7 +921,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 1.9</div>
+  <div class="version-badge">V 2.0</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2424,21 +2424,35 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
     if (snap.empty) { setLoading(false); alert('Invite code not recognised. Check with your admin.'); return; }
     const gdoc    = snap.docs[0];
     const groupId = gdoc.id;
+    const gdata   = gdoc.data();
+
+    // Invite code is the admin's secret — if the stored adminUid doesn't match the
+    // current UID (e.g. localStorage was wiped and a new anonymous UID was issued),
+    // claim admin ownership back by updating Firestore.
+    const isOriginalAdmin = gdata.adminUid === fbUid;
+    const isLostAdmin     = !isOriginalAdmin; // entering invite code = you ARE the admin
+    if (isLostAdmin) {
+      await gdoc.ref.update({ adminUid: fbUid });
+    }
+
+    // Restore/add group to local list
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
-    if (ids.includes(groupId)) { setLoading(false); hint('You are already in this group.'); document.getElementById('join-group-modal').classList.remove('open'); return; }
+    if (!ids.includes(groupId)) ids.unshift(groupId);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+
+    // Always restore admin status locally when joining via invite code
+    const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+    if (!adminGroups.includes(groupId)) adminGroups.unshift(groupId);
+    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+
+    // Register as member under new UID
     await gdoc.ref.collection('members').doc(fbUid).set({
       name: getProfileName() || 'Unknown', joinedAt: Date.now()
     });
-    ids.unshift(groupId);
-    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
-    if (gdoc.data().adminUid === fbUid) {
-      const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
-      if (!adminGroups.includes(groupId)) adminGroups.unshift(groupId);
-      localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
-    }
+
     document.getElementById('join-group-modal').classList.remove('open');
     setLoading(false);
-    hint(`Joined "${gdoc.data().name}"!`, 3000);
+    hint(`${isLostAdmin ? 'Group restored' : 'Joined'}: "${gdata.name}"!`, 3000);
     loadMyGroups();
   } catch (err) {
     setLoading(false);

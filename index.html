@@ -871,16 +871,21 @@
     }
     .danger-btn:active { opacity: 0.7; }
 
-  /* Print content — painted off-screen so iOS Safari includes it in print layout */
+  /* Print content — rendered but invisible; iOS Safari still includes it in print layout */
   #_print-content {
     position: fixed;
     top: 0; left: 0;
     width: 100%;
-    z-index: 9998;
+    z-index: -1;
     background: #000;
     display: none;
+    opacity: 0;
+    pointer-events: none;
   }
   #_print-content.ready { display: block; }
+  @media print {
+    #_print-content.ready { opacity: 1 !important; }
+  }
 
   @media print {
     @page { margin: 0; size: auto; }
@@ -921,7 +926,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.2</div>
+  <div class="version-badge">V 2.3</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1545,9 +1550,11 @@ async function launchViewer(session) {
   scroll.scrollTop = 0;
 
   // ── Double-tap detection (once per viewer open) ───────
+  // Remove any previous listener before adding a new one to prevent accumulation
+  if (scroll._doubleTapHandler) scroll.removeEventListener('touchend', scroll._doubleTapHandler);
   let lastTime = 0;
   let lastXY   = null;
-  scroll.addEventListener('touchend', e => {
+  scroll._doubleTapHandler = e => {
     if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
     const t  = e.changedTouches[0];
     const now = Date.now();
@@ -1567,7 +1574,8 @@ async function launchViewer(session) {
     }
     lastTime = now;
     lastXY   = { x: t.clientX, y: t.clientY };
-  }, { passive: false });
+  };
+  scroll.addEventListener('touchend', scroll._doubleTapHandler, { passive: false });
   scroll.addEventListener('scroll', closeDropdown, { passive: true });
 
   try {
@@ -2039,6 +2047,7 @@ function compositePage(pg) {
 
 function printAll() {
   if (!app.pages.length) { hint('No pages loaded'); return; }
+  hint('Preparing print…', 3000);
   const images = app.pages.map(compositePage);
 
   let pd = document.getElementById('_print-content');
@@ -2046,7 +2055,7 @@ function printAll() {
   pd = document.createElement('div');
   pd.id = '_print-content';
 
-  const imgs = images.map((src, i) => {
+  const imgs = images.map((src) => {
     const img = document.createElement('img');
     img.src = src;
     img.style.cssText = 'display:block;width:100%;';
@@ -2060,12 +2069,12 @@ function printAll() {
   );
 
   Promise.all(decodeAll).then(() => {
-    // Make visible so iOS Safari paints it into the render tree before we print.
+    // Add ready class so @media print can show it (it stays visually hidden via opacity:0/z-index:-1)
     pd.classList.add('ready');
-    // Two rAFs: first schedules paint, second confirms it has committed.
+    // Two rAFs ensure the element is painted before print() is called
     requestAnimationFrame(() => requestAnimationFrame(() => {
       window.print();
-      setTimeout(() => pd.remove(), 3000);
+      setTimeout(() => { if (pd.parentNode) pd.parentNode.removeChild(pd); }, 4000);
     }));
   });
 }

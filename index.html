@@ -112,6 +112,19 @@
     }
     .btn-fullscreen:active { background: #2a2a2c; }
 
+    .btn-refresh {
+      font-size: 17px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      color: var(--muted);
+      cursor: pointer;
+      touch-action: manipulation;
+      line-height: 1;
+    }
+    .btn-refresh:active { background: #2a2a2c; }
+
     /* Import setlist button */
     .btn-import {
       background: transparent;
@@ -905,9 +918,10 @@
       <span id="profile-display">—</span>
     </div>
     <button class="profile-edit-btn" id="btn-edit-profile">Change</button>
+    <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 1.5</div>
+  <div class="version-badge">V 1.6</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -921,9 +935,6 @@
   <div class="private-hint">🔒 Your notes are private to this device</div>
   <div class="sessions-wrap" id="sessions-wrap"></div>
 </div>
-
-<!-- ==================== NEW SESSION MODAL ==================== -->
-<div class="modal-bg" id="modal">
 
 <!-- ==================== FULLSCREEN HINT MODAL ==================== -->
 <div class="modal-bg" id="fs-hint-modal">
@@ -943,6 +954,7 @@
   </div>
 </div>
 
+<!-- ==================== NEW SESSION MODAL ==================== -->
 <div class="modal-bg" id="modal">
   <div class="modal-box">
     <div class="modal-title">New Session</div>
@@ -1347,6 +1359,8 @@ document.getElementById('btn-profile-save').addEventListener('click', () => {
   updateProfileDisplay();
 });
 document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
+
+document.getElementById('btn-refresh').addEventListener('click', () => location.reload());
 
 // ── Fullscreen toggle ──────────────────────────────────────────────────────
 const fsAvailable = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
@@ -2259,8 +2273,12 @@ document.getElementById('btn-groups').addEventListener('click', async () => {
     await waitForAuth();
     loadMyGroups();
   } catch (err) {
-    alert('Could not connect to Firebase. Make sure Anonymous Auth is enabled in your Firebase project.');
+    // Always restore the start screen so the user is never stuck on black
     document.getElementById('groups-screen').classList.remove('active');
+    document.getElementById('start-screen').style.display = '';
+    hint('Could not connect — check your internet connection.', 4000);
+  }
+});
     document.getElementById('start-screen').style.display = '';
   }
 });

@@ -2598,6 +2598,7 @@ async function loadGroupSetlists(gid) {
     }
     listEl.innerHTML = '';
     const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
+    const backedUpIds = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + gid) || '[]'));
     snap.forEach(doc => {
       const sl = doc.data();
       // Cache metadata for offline use whenever we see it
@@ -2609,19 +2610,20 @@ async function loadGroupSetlists(gid) {
       const row = document.createElement('div');
       row.className = 'setlist-row';
 
+      const backedUpTag = backedUpIds.has(doc.id) ? ' · <span title="Local backup saved" style="opacity:0.75">💾</span>' : '';
       let metaText = '';
       let tooltipHtml = '';
       const performedTag = sl.performed ? ' · 🎤 Performed' : '';
       if (sl.songIds && sl.songIds.length) {
         // New library-based format
-        metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}${sl.songs ? ' · 📝' : ''}${performedTag}`;
+        metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}${sl.songs ? ' · 📝' : ''}${performedTag}${backedUpTag}`;
         if (sl.songs) tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
       } else if (sl.songs) {
         // Legacy format with songs text
-        metaText = `Uploaded ${d} · 📝 song list${performedTag}`;
+        metaText = `Uploaded ${d} · 📝 song list${performedTag}${backedUpTag}`;
         tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
       } else {
-        metaText = `Uploaded ${d}${performedTag}`;
+        metaText = `Uploaded ${d}${performedTag}${backedUpTag}`;
       }
 
       row.innerHTML = `
@@ -2799,6 +2801,12 @@ async function openGroupSetlist(setlistId, sl) {
 
       // Cache setlist metadata so we can redisplay it offline
       cacheSetlistMeta(currentGroupId, setlistId, sl.name, sl.songIds);
+      // Mark this setlist as fully backed up (all PDFs present)
+      try {
+        const bu = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + currentGroupId) || '[]'));
+        bu.add(setlistId);
+        localStorage.setItem('bn_backed_up_' + currentGroupId, JSON.stringify([...bu]));
+      } catch {}
 
       const session = {
         id:          genId(),

@@ -1683,22 +1683,36 @@ function drawAnnotation(annLayer, ann) {
   label.style.fontSize = getNoteFontSize() + 'pt';
   label.title = 'Tap to edit/delete • Hold and drag to move';
 
-  let dragging  = false;
-  let dragMoved = false;
+  let dragging       = false;
+  let dragReady      = false;  // true after 1-second hold
+  let dragMoved      = false;
+  let holdTimer      = null;
   let startClientX, startClientY, startLeft, startTop;
+
+  function cancelHold() {
+    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    dragReady = false;
+  }
 
   label.addEventListener('pointerdown', e => {
     e.stopPropagation();
     e.preventDefault();
-    dragging  = true;
+    dragging  = false;
+    dragReady = false;
     dragMoved = false;
     label.setPointerCapture(e.pointerId);
-    label.style.cursor = 'grabbing';
     const r  = annLayer.getBoundingClientRect();
     startClientX = e.clientX;
     startClientY = e.clientY;
     startLeft    = ann.xPct * r.width;
     startTop     = ann.yPct * r.height;
+    // Start 1-second hold timer before drag is allowed
+    holdTimer = setTimeout(() => {
+      holdTimer = null;
+      dragReady = true;
+      dragging  = true;
+      label.style.cursor = 'grabbing';
+    }, 1000);
   });
 
   label.addEventListener('pointermove', e => {
@@ -1715,22 +1729,26 @@ function drawAnnotation(annLayer, ann) {
   });
 
   label.addEventListener('pointerup', e => {
-    if (!dragging) return;
-    dragging = false;
+    cancelHold();
     label.style.cursor = '';
-    if (dragMoved) {
-      const r  = annLayer.getBoundingClientRect();
-      const dx = e.clientX - startClientX;
-      const dy = e.clientY - startClientY;
-      ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-      ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-      saveCurrentSession();
+    if (dragging) {
+      dragging = false;
+      if (dragMoved) {
+        const r  = annLayer.getBoundingClientRect();
+        const dx = e.clientX - startClientX;
+        const dy = e.clientY - startClientY;
+        ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+        ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+        saveCurrentSession();
+      }
     } else {
+      // Hold timer never fired — treat as a normal tap
       showDeleteConfirm(ann, label);
     }
   });
 
   label.addEventListener('pointercancel', () => {
+    cancelHold();
     dragging = false;
     label.style.cursor = '';
   });

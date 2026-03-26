@@ -921,7 +921,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.0</div>
+  <div class="version-badge">V 2.1</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1314,6 +1314,14 @@ function saveCurrentSession() {
     s.songIds.forEach(songId => {
       const anns = s.annotations.filter(a => a.songId === songId);
       try { localStorage.setItem(SA_KEY(s.groupId, songId), JSON.stringify(anns)); } catch {}
+      // Backup to Firestore so data survives localStorage wipes
+      if (fbUid) {
+        db.collection('groups').doc(s.groupId)
+          .collection('memberAnnotations').doc(fbUid)
+          .collection('songs').doc(songId)
+          .set({ annotations: anns, updatedAt: Date.now() })
+          .catch(() => {});
+      }
     });
   }
   saveStore();
@@ -2635,9 +2643,20 @@ async function openGroupSetlist(setlistId, sl) {
           binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
         const pdfData = 'data:application/pdf;base64,' + btoa(binary);
         songPdfs.push({ songId, songName: song.name, pdfData });
-        // Load saved per-song annotations from localStorage
+        // Load saved per-song annotations — localStorage first, fall back to Firestore
         try {
-          const anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
+          let anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
+          if (!anns.length && fbUid) {
+            try {
+              const fsDoc = await db.collection('groups').doc(currentGroupId)
+                .collection('memberAnnotations').doc(fbUid)
+                .collection('songs').doc(songId).get();
+              if (fsDoc.exists && fsDoc.data().annotations && fsDoc.data().annotations.length) {
+                anns = fsDoc.data().annotations;
+                localStorage.setItem(SA_KEY(currentGroupId, songId), JSON.stringify(anns));
+              }
+            } catch {}
+          }
           annotations = annotations.concat(anns);
         } catch {}
       }
@@ -2929,9 +2948,22 @@ async function openLibrarySong(songId, song) {
       binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
     const pdfData = 'data:application/pdf;base64,' + btoa(binary);
 
-    // Load any saved annotations for this song
+    // Load any saved annotations — localStorage first, fall back to Firestore
     let annotations = [];
-    try { annotations = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]'); } catch {}
+    try {
+      annotations = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
+      if (!annotations.length && fbUid) {
+        try {
+          const fsDoc = await db.collection('groups').doc(currentGroupId)
+            .collection('memberAnnotations').doc(fbUid)
+            .collection('songs').doc(songId).get();
+          if (fsDoc.exists && fsDoc.data().annotations && fsDoc.data().annotations.length) {
+            annotations = fsDoc.data().annotations;
+            localStorage.setItem(SA_KEY(currentGroupId, songId), JSON.stringify(annotations));
+          }
+        } catch {}
+      }
+    } catch {}
 
     const session = {
       id:          genId(),

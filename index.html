@@ -2695,10 +2695,10 @@ async function loadGroupSetlists(gid) {
     // Try to show cached setlists when Firestore is unreachable
     const cachedIds = JSON.parse(localStorage.getItem('bn_setlist_ids_' + gid) || '[]');
     if (!cachedIds.length) {
-      listEl.innerHTML = '<div class="groups-empty">Could not load setlists — no offline copy available.</div>';
+      listEl.innerHTML = '<div class="groups-empty">No WiFi — and no local backup found yet. Open once while online to enable offline access.</div>';
       return;
     }
-    listEl.innerHTML = '<div class="groups-empty" style="margin-bottom:8px">📴 Offline — showing cached setlists</div>';
+    listEl.innerHTML = '<div class="groups-empty" style="margin-bottom:8px">📶 No WiFi — opening local backup</div>';
     for (const id of cachedIds) {
       const cached = await getCachedSetlist(gid, id);
       if (!cached) continue;
@@ -2708,7 +2708,7 @@ async function loadGroupSetlists(gid) {
         <div class="setlist-row-icon">🎼</div>
         <div class="setlist-row-info">
           <div class="setlist-row-name">${esc(cached.name)}</div>
-          <div class="setlist-row-meta">${cached.songIds.length} song${cached.songIds.length !== 1 ? 's' : ''} · 📴 Cached</div>
+          <div class="setlist-row-meta">${cached.songIds.length} song${cached.songIds.length !== 1 ? 's' : ''} · � Local backup</div>
         </div>
         <div class="group-row-arrow" title="Open setlist">›</div>`;
       row.querySelector('.group-row-arrow').addEventListener('click', e => {
@@ -2718,7 +2718,7 @@ async function loadGroupSetlists(gid) {
       listEl.appendChild(row);
     }
     if (!listEl.querySelector('.setlist-row')) {
-      listEl.innerHTML = '<div class="groups-empty">Could not load setlists — no offline copy available.</div>';
+      listEl.innerHTML = '<div class="groups-empty">No WiFi — and no local backup found yet. Open once while online to enable offline access.</div>';
     }
   }
 }
@@ -2793,7 +2793,7 @@ async function openGroupSetlist(setlistId, sl) {
 
       if (!songPdfs.length) {
         setLoading(false);
-        alert('Could not load any songs from this setlist — no offline copy available either.');
+        alert('No WiFi — and no local backup found for this setlist. Open it once while online to save a local copy.');
         return;
       }
 
@@ -2815,7 +2815,7 @@ async function openGroupSetlist(setlistId, sl) {
       document.getElementById('group-detail-screen').classList.remove('active');
       await launchViewer(session);
       hint(usedCache
-        ? '📴 Offline — showing cached version'
+        ? '� No WiFi — opened from local backup'
         : 'Double-tap anywhere to add a note!', 4500);
     } catch (err) {
       alert('Could not load setlist: ' + err.message);
@@ -3096,7 +3096,7 @@ async function openLibrarySong(songId, song) {
     }
 
     if (!pdfData) {
-      alert('Could not open song — no offline copy available.');
+      alert('No WiFi — and no local backup found for this song. Open it once while online to save a local copy.');
       return;
     }
 
@@ -3132,7 +3132,7 @@ async function openLibrarySong(songId, song) {
     document.getElementById('song-library-screen').classList.remove('active');
     document.getElementById('group-detail-screen').classList.remove('active');
     await launchViewer(session);
-    hint(fromCache ? '📴 Offline — showing cached version' : 'Double-tap anywhere to add a note!', 4000);
+    hint(fromCache ? '� No WiFi — opened from local backup' : 'Double-tap anywhere to add a note!', 4000);
   } catch (err) {
     alert('Could not open song: ' + err.message);
   } finally {

@@ -921,7 +921,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 1.8</div>
+  <div class="version-badge">V 1.9</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1340,7 +1340,16 @@ function getProfileName() {
 }
 function updateProfileDisplay() {
   const name = getProfileName();
-  document.getElementById('profile-display').textContent = name || '(not set)';
+  const el = document.getElementById('profile-display');
+  if (name) {
+    el.textContent = name;
+    el.style.fontStyle = '';
+    el.style.color = '';
+  } else {
+    el.textContent = '(tap Change to set)';
+    el.style.fontStyle = 'italic';
+    el.style.color = 'var(--muted)';
+  }
 }
 function showProfileModal(required = false) {
   const inp = document.getElementById('inp-profile-name');
@@ -2289,9 +2298,25 @@ async function loadMyGroups() {
   const listEl = document.getElementById('my-groups-list');
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   try {
-    const myGroupIds = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
+    let myGroupIds = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
+
+    // Auto-recovery: if local list is empty, search Firebase for groups we own
+    if (!myGroupIds.length && fbUid) {
+      try {
+        const snap = await db.collection('groups').where('adminUid', '==', fbUid).get();
+        if (!snap.empty) {
+          snap.forEach(doc => { if (!myGroupIds.includes(doc.id)) myGroupIds.push(doc.id); });
+          // Restore to localStorage
+          localStorage.setItem('bandnotes_groups', JSON.stringify(myGroupIds));
+          const adminGroups = snap.docs.map(d => d.id);
+          localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+          hint('Your groups have been restored from the server.', 4000);
+        }
+      } catch (e) { /* recovery best-effort */ }
+    }
+
     if (!myGroupIds.length) {
-      listEl.innerHTML = '<div class="groups-empty">No groups yet. Create or join one below.</div>';
+      listEl.innerHTML = '<div class="groups-empty">No groups yet. Create or join one below.<br><br><small style="color:var(--muted)">If you were a member (not admin), tap "Join Group" and enter your invite code to rejoin.</small></div>';
       return;
     }
     listEl.innerHTML = '';

@@ -871,21 +871,18 @@
     }
     .danger-btn:active { opacity: 0.7; }
 
-  /* Print content — rendered but invisible; iOS Safari still includes it in print layout */
+  /* Print content — covers screen briefly while iOS Safari captures it for printing */
   #_print-content {
     position: fixed;
     top: 0; left: 0;
     width: 100%;
-    z-index: -1;
+    height: 100%;
+    z-index: 9998;
     background: #000;
     display: none;
-    opacity: 0;
-    pointer-events: none;
+    overflow-y: auto;
   }
   #_print-content.ready { display: block; }
-  @media print {
-    #_print-content.ready { opacity: 1 !important; }
-  }
 
   @media print {
     @page { margin: 0; size: auto; }
@@ -926,7 +923,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.3</div>
+  <div class="version-badge">V 2.4</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2012,7 +2009,11 @@ document.getElementById('mi-print').addEventListener('click', () => {
 });
 document.getElementById('mi-print-pdf').addEventListener('click', () => {
   closeDropdown();
-  savePDF();
+  // Open the output window NOW while the user gesture is still active;
+  // iOS Safari blocks window.open() from async callbacks.
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const pdfWin = isIOS ? window.open('', '_blank') : null;
+  savePDF(pdfWin);
 });
 
 function compositePage(pg) {
@@ -2051,7 +2052,7 @@ function printAll() {
   const images = app.pages.map(compositePage);
 
   let pd = document.getElementById('_print-content');
-  if (pd) pd.remove();
+  if (pd) pd.parentNode.removeChild(pd);
   pd = document.createElement('div');
   pd.id = '_print-content';
 
@@ -2064,22 +2065,26 @@ function printAll() {
   });
   document.body.appendChild(pd);
 
+  function cleanup() {
+    if (pd.parentNode) pd.parentNode.removeChild(pd);
+  }
+  window.addEventListener('afterprint', cleanup, { once: true });
+
   const decodeAll = imgs.map(img =>
     typeof img.decode === 'function' ? img.decode() : Promise.resolve()
   );
 
   Promise.all(decodeAll).then(() => {
-    // Add ready class so @media print can show it (it stays visually hidden via opacity:0/z-index:-1)
     pd.classList.add('ready');
-    // Two rAFs ensure the element is painted before print() is called
     requestAnimationFrame(() => requestAnimationFrame(() => {
       window.print();
-      setTimeout(() => { if (pd.parentNode) pd.parentNode.removeChild(pd); }, 4000);
+      // Fallback cleanup if afterprint doesn't fire (some iOS versions)
+      setTimeout(cleanup, 6000);
     }));
   });
 }
 
-async function savePDF() {
+async function savePDF(pdfWin) {
   if (!app.pages.length) { hint('No pages loaded'); return; }
   if (!window.jspdf) { hint('PDF library not loaded yet, try again'); return; }
   hint('Building PDF…');
@@ -2130,7 +2135,17 @@ async function savePDF() {
   const name = (sess && sess.name)
     ? sess.name.replace(/[^\w\-. ]/g, '_')
     : 'sheet';
-  doc.save(name + '.pdf');
+
+  if (pdfWin) {
+    // iOS Safari: load the blob URL into the pre-opened window
+    const blob = doc.output('blob');
+    const url  = URL.createObjectURL(blob);
+    pdfWin.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    hint('PDF opened — tap Share ⎋ to save', 4000);
+  } else {
+    doc.save(name + '.pdf');
+  }
 }
 
 document.getElementById('btn-note-style-cancel').addEventListener('click', () => {

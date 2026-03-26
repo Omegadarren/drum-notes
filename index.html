@@ -999,7 +999,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.9</div>
+  <div class="version-badge">V 3.0</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2882,11 +2882,11 @@ async function loadGroupSetlists(gid) {
         ${isAdmin ? `
         <button class="setlist-ctx-btn" title="Actions">···</button>
         <div class="setlist-ctx-menu">
-          <button data-action="perform">${sl.performed ? '🎤 Un-mark performed' : '🎤 Mark as performed'}</button>
-          ${!sl.performed ? `<button data-action="edit">✏️ Edit setlist</button>` : ''}
-          <button data-action="arch">📦 Archive</button>
+          <button data-action="perform">${sl.performed ? 'Un-mark performed' : 'Mark as performed'}</button>
+          ${!sl.performed ? `<button data-action="edit">Edit setlist</button>` : ''}
+          <button data-action="arch">Archive</button>
           <div class="setlist-ctx-divider"></div>
-          <button data-action="del" class="ctx-danger" ${sl.performed ? 'disabled' : ''}>🗑 Delete</button>
+          <button data-action="del" class="ctx-danger" ${sl.performed ? 'disabled' : ''}>Delete</button>
         </div>` : ''}
         <div class="group-row-arrow" title="Open setlist">›</div>
         ${tooltipHtml}`;
@@ -3005,9 +3005,9 @@ async function loadGroupSetlists(gid) {
           ${isAdmin ? `
           <button class="setlist-ctx-btn" title="Actions">···</button>
           <div class="setlist-ctx-menu">
-            <button data-action="restore">↩️ Restore</button>
+            <button data-action="restore">Restore</button>
             <div class="setlist-ctx-divider"></div>
-            <button data-action="del" class="ctx-danger">🗑 Delete</button>
+            <button data-action="del" class="ctx-danger">Delete</button>
           </div>` : ''}
           <div class="group-row-arrow" title="Open setlist">›</div>`;
 

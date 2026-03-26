@@ -923,7 +923,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.4</div>
+  <div class="version-badge">V 2.5</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1259,6 +1259,55 @@ const STORE      = 'bandnotes_v1';
 const PROFILE    = 'bandnotes_profile_v1';
 const NOTE_PREFS = 'bandnotes_note_prefs_v1';
 const SA_KEY     = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
+
+// ─────────────────── Offline PDF Cache (IndexedDB) ───────
+const IDB_NAME    = 'bandnotes_cache';
+const IDB_VERSION = 1;
+const IDB_STORE   = 'pdfs';   // key: "gid/songId", value: { songId, songName, pdfData, cachedAt }
+const IDB_META    = 'setlists'; // key: "gid/setlistId", value: { name, songIds, cachedAt }
+
+let _idb = null;
+function openIDB() {
+  if (_idb) return Promise.resolve(_idb);
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE))   db.createObjectStore(IDB_STORE);
+      if (!db.objectStoreNames.contains(IDB_META))    db.createObjectStore(IDB_META);
+    };
+    req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror   = () => reject(req.error);
+  });
+}
+function idbPut(storeName, key, value) {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).put(value, key);
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  })).catch(() => {}); // never crash on cache write failure
+}
+function idbGet(storeName, key) {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx  = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror   = () => reject(req.error);
+  })).catch(() => null);
+}
+async function cacheSongPdf(gid, songId, songName, pdfData) {
+  await idbPut(IDB_STORE, `${gid}/${songId}`, { songId, songName, pdfData, cachedAt: Date.now() });
+}
+async function getCachedSongPdf(gid, songId) {
+  return idbGet(IDB_STORE, `${gid}/${songId}`);
+}
+async function cacheSetlistMeta(gid, setlistId, name, songIds) {
+  await idbPut(IDB_META, `${gid}/${setlistId}`, { name, songIds, cachedAt: Date.now() });
+}
+async function getCachedSetlist(gid, setlistId) {
+  return idbGet(IDB_META, `${gid}/${setlistId}`);
+}
 
 const NOTE_COLORS = [
   '#ff3b30', '#ff9500', '#ffcc00', '#34c759',
@@ -2551,6 +2600,8 @@ async function loadGroupSetlists(gid) {
     const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
     snap.forEach(doc => {
       const sl = doc.data();
+      // Cache metadata for offline use whenever we see it
+      if (sl.songIds && sl.songIds.length) cacheSetlistMeta(gid, doc.id, sl.name, sl.songIds);
       // Support both new (createdAt) and legacy (uploadedAt) timestamps
       const ts = sl.createdAt || sl.uploadedAt || 0;
       const d  = new Date(ts).toLocaleDateString('en-US',
@@ -2637,9 +2688,38 @@ async function loadGroupSetlists(gid) {
       });
       listEl.appendChild(row);
     });
+    // Remember which setlist IDs we've seen so we can enumerate them offline
+    localStorage.setItem('bn_setlist_ids_' + gid, JSON.stringify(snap.docs.map(d => d.id)));
   } catch (err) {
-    listEl.innerHTML = '<div class="groups-empty">Could not load setlists.</div>';
     console.error(err);
+    // Try to show cached setlists when Firestore is unreachable
+    const cachedIds = JSON.parse(localStorage.getItem('bn_setlist_ids_' + gid) || '[]');
+    if (!cachedIds.length) {
+      listEl.innerHTML = '<div class="groups-empty">Could not load setlists — no offline copy available.</div>';
+      return;
+    }
+    listEl.innerHTML = '<div class="groups-empty" style="margin-bottom:8px">📴 Offline — showing cached setlists</div>';
+    for (const id of cachedIds) {
+      const cached = await getCachedSetlist(gid, id);
+      if (!cached) continue;
+      const row = document.createElement('div');
+      row.className = 'setlist-row';
+      row.innerHTML = `
+        <div class="setlist-row-icon">🎼</div>
+        <div class="setlist-row-info">
+          <div class="setlist-row-name">${esc(cached.name)}</div>
+          <div class="setlist-row-meta">${cached.songIds.length} song${cached.songIds.length !== 1 ? 's' : ''} · 📴 Cached</div>
+        </div>
+        <div class="group-row-arrow" title="Open setlist">›</div>`;
+      row.querySelector('.group-row-arrow').addEventListener('click', e => {
+        e.stopPropagation();
+        openGroupSetlist(id, { songIds: cached.songIds, name: cached.name });
+      });
+      listEl.appendChild(row);
+    }
+    if (!listEl.querySelector('.setlist-row')) {
+      listEl.innerHTML = '<div class="groups-empty">Could not load setlists — no offline copy available.</div>';
+    }
   }
 }
 
@@ -2650,27 +2730,50 @@ async function openGroupSetlist(setlistId, sl) {
     try {
       const songPdfs  = [];
       let   annotations = [];
+      let   usedCache   = false;
+
       for (const songId of sl.songIds) {
-        const songDoc = await db.collection('groups').doc(currentGroupId)
-          .collection('songs').doc(songId).get();
-        if (!songDoc.exists) continue;
-        const song = songDoc.data();
-        const url  = await storage.ref(song.storagePath).getDownloadURL();
-        const buf  = await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', url, true);
-          xhr.responseType = 'arraybuffer';
-          xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.send();
-        });
-        const bytes = new Uint8Array(buf);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i += 8192)
-          binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-        const pdfData = 'data:application/pdf;base64,' + btoa(binary);
-        songPdfs.push({ songId, songName: song.name, pdfData });
-        // Load saved per-song annotations — localStorage first, fall back to Firestore
+        let songName = null;
+        let pdfData  = null;
+
+        // Try live fetch first
+        try {
+          const songDoc = await db.collection('groups').doc(currentGroupId)
+            .collection('songs').doc(songId).get();
+          if (songDoc.exists) {
+            const song = songDoc.data();
+            songName = song.name;
+            const url  = await storage.ref(song.storagePath).getDownloadURL();
+            const buf  = await new Promise((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.open('GET', url, true);
+              xhr.responseType = 'arraybuffer';
+              xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+              xhr.onerror = () => reject(new Error('Network error'));
+              xhr.send();
+            });
+            const bytes = new Uint8Array(buf);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += 8192)
+              binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+            pdfData = 'data:application/pdf;base64,' + btoa(binary);
+            // Cache for offline use
+            cacheSongPdf(currentGroupId, songId, songName, pdfData);
+          }
+        } catch (fetchErr) {
+          // Live fetch failed — try offline cache
+          const cached = await getCachedSongPdf(currentGroupId, songId);
+          if (cached) {
+            pdfData  = cached.pdfData;
+            songName = cached.songName;
+            usedCache = true;
+          }
+        }
+
+        if (!pdfData) continue;
+        songPdfs.push({ songId, songName, pdfData });
+
+        // Load annotations — localStorage first, then Firestore
         try {
           let anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
           if (!anns.length && fbUid) {
@@ -2687,11 +2790,16 @@ async function openGroupSetlist(setlistId, sl) {
           annotations = annotations.concat(anns);
         } catch {}
       }
+
       if (!songPdfs.length) {
         setLoading(false);
-        alert('Could not load any songs from this setlist.');
+        alert('Could not load any songs from this setlist — no offline copy available either.');
         return;
       }
+
+      // Cache setlist metadata so we can redisplay it offline
+      cacheSetlistMeta(currentGroupId, setlistId, sl.name, sl.songIds);
+
       const session = {
         id:          genId(),
         name:        sl.name,
@@ -2706,7 +2814,9 @@ async function openGroupSetlist(setlistId, sl) {
       app.currentId = session.id;
       document.getElementById('group-detail-screen').classList.remove('active');
       await launchViewer(session);
-      hint('Double-tap anywhere to add a note!', 4500);
+      hint(usedCache
+        ? '📴 Offline — showing cached version'
+        : 'Double-tap anywhere to add a note!', 4500);
     } catch (err) {
       alert('Could not load setlist: ' + err.message);
     } finally {
@@ -2960,20 +3070,35 @@ async function loadSongLibrary(gid, isAdmin) {
 async function openLibrarySong(songId, song) {
   setLoading(true, 'Opening song…');
   try {
-    const url = await storage.ref(song.storagePath).getDownloadURL();
-    const buf = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.responseType = 'arraybuffer';
-      xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.send();
-    });
-    const bytes = new Uint8Array(buf);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 8192)
-      binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    const pdfData = 'data:application/pdf;base64,' + btoa(binary);
+    let pdfData   = null;
+    let fromCache = false;
+
+    // Try live fetch first, fall back to IndexedDB cache
+    try {
+      const url = await storage.ref(song.storagePath).getDownloadURL();
+      const buf = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.send();
+      });
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192)
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      pdfData = 'data:application/pdf;base64,' + btoa(binary);
+      cacheSongPdf(currentGroupId, songId, song.name, pdfData); // fire-and-forget cache update
+    } catch (fetchErr) {
+      const cached = await getCachedSongPdf(currentGroupId, songId);
+      if (cached) { pdfData = cached.pdfData; fromCache = true; }
+    }
+
+    if (!pdfData) {
+      alert('Could not open song — no offline copy available.');
+      return;
+    }
 
     // Load any saved annotations — localStorage first, fall back to Firestore
     let annotations = [];
@@ -3007,7 +3132,7 @@ async function openLibrarySong(songId, song) {
     document.getElementById('song-library-screen').classList.remove('active');
     document.getElementById('group-detail-screen').classList.remove('active');
     await launchViewer(session);
-    hint('Double-tap anywhere to add a note!', 4000);
+    hint(fromCache ? '📴 Offline — showing cached version' : 'Double-tap anywhere to add a note!', 4000);
   } catch (err) {
     alert('Could not open song: ' + err.message);
   } finally {

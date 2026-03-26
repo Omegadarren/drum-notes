@@ -830,6 +830,19 @@
     }
     .archive-toggle-btn:active { background: #1c1c1e; }
 
+    .backup-stale-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      gap: 12px;
+    }
+    .backup-stale-name { font-size: 15px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .backup-stale-age  { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+
     .invite-code-box {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -941,7 +954,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.7</div>
+  <div class="version-badge">V 2.8</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1255,6 +1268,22 @@
   <div id="pdf-scroll"></div>
 </div>
 
+<!-- ==================== STALE BACKUP MODAL ==================== -->
+<div class="modal-bg" id="stale-backup-modal">
+  <div class="modal-box" style="gap:20px;">
+    <div class="modal-title" style="font-size:22px;">📦 Old Backups</div>
+    <div style="font-size:15px;color:var(--muted);line-height:1.5;">
+      These local backups are over 30 days old. What would you like to do with them?
+    </div>
+    <div id="stale-backup-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn-primary" id="btn-stale-keep" style="font-size:16px;padding:13px;">💾 Keep permanently</button>
+      <button class="btn-ghost"   id="btn-stale-snooze" style="font-size:16px;padding:13px;">⏰ Remind me in 30 days</button>
+      <button class="danger-btn"  id="btn-stale-delete" style="font-size:16px;padding:13px;margin-top:0;">🗑 Delete backups</button>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== LOADING ==================== -->
 <div id="loading">
   <div class="spinner"></div>
@@ -1325,6 +1354,100 @@ async function cacheSetlistMeta(gid, setlistId, name, songIds) {
 }
 async function getCachedSetlist(gid, setlistId) {
   return idbGet(IDB_META, `${gid}/${setlistId}`);
+}
+function idbGetAll(storeName) {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx      = db.transaction(storeName, 'readonly');
+    const store   = tx.objectStore(storeName);
+    const keys    = [];
+    const values  = [];
+    const kr = store.getAllKeys();
+    const vr = store.getAll();
+    kr.onsuccess = () => keys.push(...kr.result);
+    vr.onsuccess = () => values.push(...vr.result);
+    tx.oncomplete = () => resolve(keys.map((k, i) => ({ key: k, value: values[i] })));
+    tx.onerror    = () => reject(tx.error);
+  })).catch(() => []);
+}
+function idbDelete(storeName, key) {
+  return openIDB().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).delete(key);
+    tx.oncomplete = resolve;
+    tx.onerror    = () => reject(tx.error);
+  })).catch(() => {});
+}
+
+// ── Stale backup check ────────────────────────────────────
+const BACKUP_TTL_MS    = 30 * 24 * 60 * 60 * 1000; // 30 days
+const BACKUP_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
+
+async function checkStaleBackups(gid) {
+  try {
+    const allMeta = await idbGetAll(IDB_META);
+    const now     = Date.now();
+    // Only look at entries for this group
+    const stale = allMeta.filter(({ key, value }) => {
+      if (!key.startsWith(gid + '/')) return false;
+      if (value.keepPermanently) return false;
+      if (value.snoozedUntil && value.snoozedUntil > now) return false;
+      return (now - (value.cachedAt || 0)) > BACKUP_TTL_MS;
+    });
+    if (!stale.length) return;
+
+    // Build list HTML
+    const listHtml = stale.map(({ key, value }) => {
+      const days = Math.floor((now - value.cachedAt) / 86400000);
+      return `<div class="backup-stale-item" data-key="${esc(key)}">
+        <span class="backup-stale-name">${esc(value.name)}</span>
+        <span class="backup-stale-age">${days} days old</span>
+      </div>`;
+    }).join('');
+
+    const modal  = document.getElementById('stale-backup-modal');
+    const listEl = document.getElementById('stale-backup-list');
+    listEl.innerHTML = listHtml;
+    modal.classList.add('open');
+
+    // Store stale entries for button handlers
+    modal._staleEntries = stale;
+  } catch (e) {
+    console.error('checkStaleBackups', e);
+  }
+}
+
+function closeStaleModal() {
+  document.getElementById('stale-backup-modal').classList.remove('open');
+}
+
+async function handleStaleAction(action) {
+  const modal   = document.getElementById('stale-backup-modal');
+  const entries = modal._staleEntries || [];
+  const now     = Date.now();
+  for (const { key, value } of entries) {
+    if (action === 'delete') {
+      await idbDelete(IDB_META, key);
+      // Also delete all associated PDFs from the pdfs store
+      const gid = key.split('/')[0];
+      const setlistId = key.slice(gid.length + 1);
+      const allSongIds = value.songIds || [];
+      for (const songId of allSongIds) {
+        await idbDelete(IDB_STORE, `${gid}/${songId}`);
+      }
+      // Remove from backed-up set
+      try {
+        const bu = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + gid) || '[]'));
+        bu.delete(setlistId);
+        localStorage.setItem('bn_backed_up_' + gid, JSON.stringify([...bu]));
+      } catch {}
+    } else if (action === 'snooze') {
+      await idbPut(IDB_META, key, { ...value, snoozedUntil: now + BACKUP_SNOOZE_MS });
+    } else if (action === 'keep') {
+      await idbPut(IDB_META, key, { ...value, keepPermanently: true });
+    }
+  }
+  closeStaleModal();
+  if (action === 'delete' && currentGroupId) loadGroupSetlists(currentGroupId);
 }
 
 const NOTE_COLORS = [
@@ -2797,6 +2920,8 @@ async function loadGroupSetlists(gid) {
 
     // Remember which setlist IDs we've seen so we can enumerate them offline
     localStorage.setItem('bn_setlist_ids_' + gid, JSON.stringify(snap.docs.map(d => d.id)));
+    // Check for stale backups (fire-and-forget — shows modal if any are > 30 days old)
+    checkStaleBackups(gid);
   } catch (err) {
     console.error(err);
     // Try to show cached setlists when Firestore is unreachable
@@ -3071,6 +3196,11 @@ document.getElementById('btn-leave-group').addEventListener('click', async () =>
     alert('Could not leave group: ' + err.message);
   }
 });
+
+// ─────────────────── Stale backup modal ─────────────────
+document.getElementById('btn-stale-keep').addEventListener('click',   () => handleStaleAction('keep'));
+document.getElementById('btn-stale-snooze').addEventListener('click', () => handleStaleAction('snooze'));
+document.getElementById('btn-stale-delete').addEventListener('click', () => handleStaleAction('delete'));
 
 // ─────────────────── Song Library ───────────────────────
 function openSongLibrary(gid, isAdmin) {

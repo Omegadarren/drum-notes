@@ -954,7 +954,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.8</div>
+  <div class="version-badge">V 2.9</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1050,7 +1050,10 @@
   <div class="ghdr">
     <div class="ghdr-back" id="btn-group-detail-back">‹</div>
     <div class="ghdr-title" id="group-detail-title">Group</div>
-    <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">✚ Setlist</button>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button class="ghdr-action" id="btn-default-folder" title="Download folder" style="padding:10px 13px;font-size:18px;line-height:1;">📁</button>
+      <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">✚ Setlist</button>
+    </div>
   </div>
   <div class="groups-scroll" id="group-detail-scroll">
     <div class="groups-section-label">Setlists</div>
@@ -1284,6 +1287,19 @@
   </div>
 </div>
 
+<!-- ==================== DEFAULT FOLDER MODAL ==================== -->
+<div class="modal-bg" id="default-folder-modal">
+  <div class="modal-box" style="gap:20px;">
+    <div class="modal-title" style="font-size:22px;">📁 Download Folder</div>
+    <div id="folder-status-text" style="font-size:15px;color:var(--muted);line-height:1.7;"></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn-primary" id="btn-choose-folder"       style="font-size:16px;padding:13px;display:none;">📂 Choose Folder…</button>
+      <button class="btn-ghost"   id="btn-clear-folder"        style="font-size:16px;padding:13px;display:none;">✕ Clear saved folder</button>
+      <button class="btn-ghost"   id="btn-close-folder-modal"  style="font-size:16px;padding:13px;">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== LOADING ==================== -->
 <div id="loading">
   <div class="spinner"></div>
@@ -1308,10 +1324,11 @@ const NOTE_PREFS = 'bandnotes_note_prefs_v1';
 const SA_KEY     = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
 
 // ─────────────────── Offline PDF Cache (IndexedDB) ───────
-const IDB_NAME    = 'bandnotes_cache';
-const IDB_VERSION = 1;
-const IDB_STORE   = 'pdfs';   // key: "gid/songId", value: { songId, songName, pdfData, cachedAt }
-const IDB_META    = 'setlists'; // key: "gid/setlistId", value: { name, songIds, cachedAt }
+const IDB_NAME     = 'bandnotes_cache';
+const IDB_VERSION  = 2;
+const IDB_STORE    = 'pdfs';      // key: "gid/songId", value: { songId, songName, pdfData, cachedAt }
+const IDB_META     = 'setlists';  // key: "gid/setlistId", value: { name, songIds, cachedAt }
+const IDB_SETTINGS = 'settings';  // key: string, value: any
 
 let _idb = null;
 function openIDB() {
@@ -1320,8 +1337,9 @@ function openIDB() {
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      if (!db.objectStoreNames.contains(IDB_STORE))   db.createObjectStore(IDB_STORE);
-      if (!db.objectStoreNames.contains(IDB_META))    db.createObjectStore(IDB_META);
+      if (!db.objectStoreNames.contains(IDB_STORE))    db.createObjectStore(IDB_STORE);
+      if (!db.objectStoreNames.contains(IDB_META))     db.createObjectStore(IDB_META);
+      if (!db.objectStoreNames.contains(IDB_SETTINGS)) db.createObjectStore(IDB_SETTINGS);
     };
     req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
     req.onerror   = () => reject(req.error);
@@ -1448,6 +1466,30 @@ async function handleStaleAction(action) {
   }
   closeStaleModal();
   if (action === 'delete' && currentGroupId) loadGroupSetlists(currentGroupId);
+}
+
+// ── Default download-folder (File System Access API) ─────
+const FOLDER_HANDLE_KEY = 'default_folder';
+let defaultFolderHandle = null;  // in-memory cache
+
+async function loadDefaultFolder() {
+  if (!('showDirectoryPicker' in window)) return;
+  try {
+    const record = await idbGet(IDB_SETTINGS, FOLDER_HANDLE_KEY);
+    if (!record) return;
+    defaultFolderHandle = record.handle;
+    // Re-verify permission without prompting; if not granted, clear the cache
+    const perm = await defaultFolderHandle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') defaultFolderHandle = null;
+  } catch (e) { defaultFolderHandle = null; }
+}
+async function saveDefaultFolder(handle) {
+  defaultFolderHandle = handle;
+  await idbPut(IDB_SETTINGS, FOLDER_HANDLE_KEY, { handle });
+}
+async function clearDefaultFolder() {
+  defaultFolderHandle = null;
+  await idbDelete(IDB_SETTINGS, FOLDER_HANDLE_KEY);
 }
 
 const NOTE_COLORS = [
@@ -2333,6 +2375,22 @@ async function savePDF(pdfWin) {
     pdfWin.location.href = url;
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     hint('PDF opened — tap Share ⎋ to save', 4000);
+  } else if (defaultFolderHandle) {
+    // Desktop Chrome/Edge: write directly to the stored default folder
+    let wroteToFolder = false;
+    try {
+      const perm = await defaultFolderHandle.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') {
+        const blob       = doc.output('blob');
+        const fileHandle = await defaultFolderHandle.getFileHandle(name + '.pdf', { create: true });
+        const writable   = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        hint(`💾 Saved to "${defaultFolderHandle.name}/"`, 3000);
+        wroteToFolder = true;
+      }
+    } catch (e) { console.warn('Folder save failed:', e); }
+    if (!wroteToFolder) doc.save(name + '.pdf');
   } else {
     doc.save(name + '.pdf');
   }
@@ -2457,6 +2515,7 @@ firebase.initializeApp(FB_CONFIG);
 const db      = firebase.firestore();
 const storage = firebase.storage();
 const auth    = firebase.auth();
+loadDefaultFolder();
 
 // Current user uid (anonymous, stable per device)
 let fbUid = null;
@@ -3201,6 +3260,60 @@ document.getElementById('btn-leave-group').addEventListener('click', async () =>
 document.getElementById('btn-stale-keep').addEventListener('click',   () => handleStaleAction('keep'));
 document.getElementById('btn-stale-snooze').addEventListener('click', () => handleStaleAction('snooze'));
 document.getElementById('btn-stale-delete').addEventListener('click', () => handleStaleAction('delete'));
+
+// ─────────────────── Default folder modal ───────────────
+const folderModal   = document.getElementById('default-folder-modal');
+const folderStatus  = document.getElementById('folder-status-text');
+const btnChoose     = document.getElementById('btn-choose-folder');
+const btnClear      = document.getElementById('btn-clear-folder');
+const apiSupported  = 'showDirectoryPicker' in window;
+
+function updateFolderModal() {
+  if (!apiSupported) {
+    folderStatus.innerHTML =
+      'On this browser or device, PDFs save to your browser\'s <b>Downloads</b> folder automatically.<br><br>' +
+      'To auto-save to a specific folder, open this app in <b>Chrome or Edge on a desktop computer</b>.';
+    btnChoose.style.display = 'none';
+    btnClear.style.display  = 'none';
+    return;
+  }
+  if (defaultFolderHandle) {
+    folderStatus.innerHTML = `PDFs will be saved directly to:<br><b>📂 ${esc(defaultFolderHandle.name)}/</b><br><br>You can change or clear this at any time.`;
+    btnChoose.textContent   = '📂 Change Folder…';
+    btnChoose.style.display = '';
+    btnClear.style.display  = '';
+  } else {
+    folderStatus.innerHTML =
+      'No default folder set. PDFs will download to your browser\'s default <b>Downloads</b> folder.<br><br>' +
+      'Choose a folder to auto-save PDFs there instead.';
+    btnChoose.textContent   = '📂 Choose Folder…';
+    btnChoose.style.display = '';
+    btnClear.style.display  = 'none';
+  }
+}
+
+document.getElementById('btn-default-folder').addEventListener('click', () => {
+  updateFolderModal();
+  folderModal.classList.add('open');
+});
+document.getElementById('btn-close-folder-modal').addEventListener('click', () => {
+  folderModal.classList.remove('open');
+});
+btnChoose.addEventListener('click', async () => {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await saveDefaultFolder(handle);
+    updateFolderModal();
+    hint(`📁 Default folder set: "${handle.name}"`, 3000);
+  } catch (e) {
+    if (e.name !== 'AbortError') hint('Could not set folder', 2500);
+  }
+});
+btnClear.addEventListener('click', async () => {
+  await clearDefaultFolder();
+  updateFolderModal();
+  hint('📁 Default folder cleared', 2500);
+});
 
 // ─────────────────── Song Library ───────────────────────
 function openSongLibrary(gid, isAdmin) {

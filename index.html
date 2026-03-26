@@ -1030,32 +1030,6 @@
   </div>
 </div>
 
-<!-- ==================== NEW SESSION MODAL ==================== -->
-<div class="modal-bg" id="modal">
-  <div class="modal-box">
-    <div class="modal-title">New Session</div>
-    <div>
-      <div class="field-label">Session name</div>
-      <input class="text-input" id="inp-name" type="text"
-             placeholder="e.g. Saturday Rehearsal"
-             autocomplete="off" autocorrect="off" spellcheck="false">
-    </div>
-    <div>
-      <div class="field-label">Sheet music (PDF)</div>
-      <div class="upload-zone" id="upload-zone">
-        <div class="upload-zone-icon">🎼</div>
-        <div class="upload-zone-hint">Tap to choose a PDF</div>
-        <div class="upload-zone-name" id="upload-name"></div>
-      </div>
-      <input id="pdf-input" type="file" accept="application/pdf">
-    </div>
-    <div class="modal-actions">
-      <button class="btn-ghost" id="btn-cancel">Cancel</button>
-      <button class="btn-primary" id="btn-open">Open →</button>
-    </div>
-  </div>
-</div>
-
 <!-- ==================== PROFILE MODAL ==================== -->
 <div class="modal-bg" id="profile-modal">
   <div class="modal-box">
@@ -1745,63 +1719,6 @@ function renderStart() {
     });
   });
 }
-
-// ─────────────────── Modal (private sessions) ────────────
-let pendingFile = null;
-
-// "My Private Sessions" — shows the new-session modal directly
-document.getElementById('btn-new').addEventListener('click', () => {
-  pendingFile = null;
-  document.getElementById('inp-name').value   = '';
-  document.getElementById('upload-name').textContent = '';
-  document.getElementById('upload-zone').classList.remove('has-file');
-  document.getElementById('pdf-input').value  = '';
-  document.getElementById('modal').classList.add('open');
-  setTimeout(() => document.getElementById('inp-name').focus(), 120);
-});
-
-document.getElementById('btn-cancel').addEventListener('click', () => {
-  document.getElementById('modal').classList.remove('open');
-});
-
-document.getElementById('upload-zone').addEventListener('click', () => {
-  document.getElementById('pdf-input').click();
-});
-
-document.getElementById('pdf-input').addEventListener('change', e => {
-  const f = e.target.files[0];
-  if (!f) return;
-  pendingFile = f;
-  document.getElementById('upload-name').textContent = f.name;
-  document.getElementById('upload-zone').classList.add('has-file');
-});
-
-document.getElementById('btn-open').addEventListener('click', async () => {
-  const name = document.getElementById('inp-name').value.trim();
-  if (!name)        { alert('Please enter a session name.'); return; }
-  if (!pendingFile) { alert('Please choose a PDF file.');    return; }
-
-  document.getElementById('modal').classList.remove('open');
-  setLoading(true, 'Loading PDF…');
-
-  const reader = new FileReader();
-  reader.onerror = () => { setLoading(false); alert('Could not read the file.'); };
-  reader.onload  = async ev => {
-    const session = {
-      id:          genId(),
-      name,
-      pdfData:     ev.target.result,   // base64 data URL
-      annotations: [],
-      createdAt:   Date.now(),
-    };
-    app.sessions.unshift(session);
-    app.currentId = session.id;
-    saveStore();
-    await launchViewer(session);
-    setLoading(false);
-  };
-  reader.readAsDataURL(pendingFile);
-});
 
 // ─────────────────── Open existing session ───────────────
 async function openSession(s) {

@@ -921,7 +921,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.1</div>
+  <div class="version-badge">V 2.2</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1556,6 +1556,9 @@ async function launchViewer(session) {
       const dx = t.clientX - lastXY.x;
       const dy = t.clientY - lastXY.y;
       if (Math.hypot(dx, dy) < 44) {
+        // Don't open a new note if the tap landed on an existing note label
+        const target = document.elementFromPoint(t.clientX, t.clientY);
+        if (target && target.closest('.ann-label')) return;
         e.preventDefault();
         closeDropdown();
         if (app.pendingAnn) commitAnn();

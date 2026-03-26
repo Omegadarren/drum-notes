@@ -780,6 +780,54 @@
     .setlist-rename-btn:disabled { opacity:0.35; cursor:not-allowed; pointer-events:none; }
     .setlist-locked-icon { font-size:18px; flex-shrink:0; padding:6px 8px; opacity:0.5; }
 
+    /* Setlist row context menu (⋯ button) */
+    .setlist-ctx-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 18px;
+      font-weight: bold;
+      padding: 5px 11px;
+      cursor: pointer;
+      flex-shrink: 0;
+      touch-action: manipulation;
+      line-height: 1;
+    }
+    .setlist-ctx-btn:active { background: #2a2a2c; }
+    .setlist-ctx-menu {
+      display: none;
+      position: absolute;
+      right: 48px;
+      top: calc(100% - 6px);
+      background: #1c1c1e;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 6px 0;
+      z-index: 100;
+      min-width: 200px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.65);
+    }
+    .setlist-row.ctx-open .setlist-ctx-menu { display: block; }
+    .setlist-ctx-menu button {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      padding: 12px 18px;
+      text-align: left;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .setlist-ctx-menu button:active { background: #2a2a2c; }
+    .setlist-ctx-menu button:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+    .setlist-ctx-menu button.ctx-danger { color: #ff3b30; }
+    .setlist-ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
     /* Song history modal */
     .song-history-item { display:flex; align-items:center; gap:10px; padding:11px 16px; border-bottom:1px solid var(--border); font-size:16px; }
     .song-history-item:last-child { border-bottom:none; }
@@ -2831,23 +2879,35 @@ async function loadGroupSetlists(gid) {
           <div class="setlist-row-name">${esc(sl.name)}</div>
           <div class="setlist-row-meta">${metaText}</div>
         </div>
-        ${isAdmin ? `<button class="setlist-perform-btn${sl.performed ? ' performed' : ''}" data-id="${doc.id}" title="${sl.performed ? 'Un-mark as performed' : 'Mark as performed'}">🎤</button>` : ''}
-        ${isAdmin && !sl.performed ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-song-ids="${esc(JSON.stringify(sl.songIds||[]))}">✏️</button>` : ''}
-        ${isAdmin && sl.performed ? `<span class="setlist-locked-icon" title="Un-mark as performed to edit">🔒</span>` : ''}
-        ${isAdmin ? `<button class="setlist-rename-btn" data-action="arch" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Archive setlist">📦</button>` : ''}
-        ${isAdmin ? `<button class="setlist-rename-btn" data-action="del" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Delete setlist" ${sl.performed ? 'disabled' : ''}>🗑</button>` : ''}
+        ${isAdmin ? `
+        <button class="setlist-ctx-btn" title="Actions">···</button>
+        <div class="setlist-ctx-menu">
+          <button data-action="perform">${sl.performed ? '🎤 Un-mark performed' : '🎤 Mark as performed'}</button>
+          ${!sl.performed ? `<button data-action="edit">✏️ Edit setlist</button>` : ''}
+          <button data-action="arch">📦 Archive</button>
+          <div class="setlist-ctx-divider"></div>
+          <button data-action="del" class="ctx-danger" ${sl.performed ? 'disabled' : ''}>🗑 Delete</button>
+        </div>` : ''}
         <div class="group-row-arrow" title="Open setlist">›</div>
         ${tooltipHtml}`;
 
       row.querySelector('.group-row-arrow').addEventListener('click', e => {
         e.stopPropagation();
+        row.classList.remove('ctx-open');
         row.classList.remove('tooltip-open');
         openGroupSetlist(doc.id, sl);
       });
       if (isAdmin) {
-        row.querySelector('.setlist-perform-btn').addEventListener('click', async e => {
+        row.querySelector('.setlist-ctx-btn').addEventListener('click', e => {
           e.stopPropagation();
-          const id = e.currentTarget.dataset.id;
+          const isOpen = row.classList.contains('ctx-open');
+          document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
+          if (!isOpen) row.classList.add('ctx-open');
+        });
+        row.querySelector('[data-action="perform"]').addEventListener('click', async e => {
+          e.stopPropagation();
+          row.classList.remove('ctx-open');
+          const id = doc.id;
           const nowPerformed = !sl.performed;
           if (nowPerformed && !confirm(`Mark "${sl.name}" as performed?\n\nThis logs each song's play count.`)) return;
           setLoading(true, nowPerformed ? 'Marking as performed…' : 'Updating…');
@@ -2861,41 +2921,44 @@ async function loadGroupSetlists(gid) {
             alert('Could not update: ' + err.message);
           }
         });
-        const renameBtn = row.querySelector('.setlist-rename-btn:not([data-action])');
-        if (renameBtn) {
-          renameBtn.addEventListener('click', e => {
+        const editBtn = row.querySelector('[data-action="edit"]');
+        if (editBtn) {
+          editBtn.addEventListener('click', e => {
             e.stopPropagation();
-            openEditSetlistModal(e.currentTarget.dataset.id, e.currentTarget.dataset.name, JSON.parse(e.currentTarget.dataset.songIds || '[]'));
+            row.classList.remove('ctx-open');
+            openEditSetlistModal(doc.id, sl.name, sl.songIds || []);
           });
         }
         row.querySelector('[data-action="arch"]').addEventListener('click', e => {
           e.stopPropagation();
-          const name = e.currentTarget.dataset.name;
-          const id   = e.currentTarget.dataset.id;
-          if (!confirm(`Archive "${name}"?\n\nIt will be hidden from the main list. You can restore it any time.`)) return;
+          row.classList.remove('ctx-open');
+          if (!confirm(`Archive "${sl.name}"?\n\nIt will be hidden from the main list. You can restore it any time.`)) return;
           setLoading(true, 'Archiving…');
-          db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({ archived: true })
-            .then(() => { setLoading(false); hint(`"${name}" archived. 📦`, 2500); loadGroupSetlists(currentGroupId); })
+          db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).update({ archived: true })
+            .then(() => { setLoading(false); hint(`"${sl.name}" archived. 📦`, 2500); loadGroupSetlists(currentGroupId); })
             .catch(err => { setLoading(false); alert('Could not archive: ' + err.message); });
         });
         row.querySelector('[data-action="del"]').addEventListener('click', e => {
           e.stopPropagation();
-          const name = e.currentTarget.dataset.name;
-          const id   = e.currentTarget.dataset.id;
-          if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+          row.classList.remove('ctx-open');
+          if (!confirm(`Delete "${sl.name}"?\n\nThis cannot be undone.`)) return;
           setLoading(true, 'Deleting…');
-          db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).delete()
-            .then(() => { setLoading(false); hint(`"${name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+          db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
+            .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
             .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
         });
       }
       row.addEventListener('click', () => {
+        if (row.classList.contains('ctx-open')) {
+          row.classList.remove('ctx-open');
+          return;
+        }
         if (sl.songs) {
           const isOpen = row.classList.contains('tooltip-open');
           listEl.querySelectorAll('.setlist-row.tooltip-open').forEach(r => r.classList.remove('tooltip-open'));
           if (!isOpen) row.classList.add('tooltip-open');
         } else {
-          hint('No song list for this setlist', 2000);
+          openGroupSetlist(doc.id, sl);
         }
       });
       listEl.appendChild(row);
@@ -2939,36 +3002,49 @@ async function loadGroupSetlists(gid) {
             <div class="setlist-row-name">${esc(sl.name)}</div>
             <div class="setlist-row-meta">${songCount}${d}${sl.performed ? ' · 🎤 Performed' : ''}</div>
           </div>
-          ${isAdmin ? `<button class="setlist-rename-btn" data-action="restore" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Restore setlist">↩️</button>` : ''}
-          ${isAdmin ? `<button class="setlist-rename-btn" data-action="del" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Delete setlist">🗑</button>` : ''}
+          ${isAdmin ? `
+          <button class="setlist-ctx-btn" title="Actions">···</button>
+          <div class="setlist-ctx-menu">
+            <button data-action="restore">↩️ Restore</button>
+            <div class="setlist-ctx-divider"></div>
+            <button data-action="del" class="ctx-danger">🗑 Delete</button>
+          </div>` : ''}
           <div class="group-row-arrow" title="Open setlist">›</div>`;
 
         row.querySelector('.group-row-arrow').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           openGroupSetlist(doc.id, sl);
         });
         if (isAdmin) {
+          row.querySelector('.setlist-ctx-btn').addEventListener('click', e => {
+            e.stopPropagation();
+            const isOpen = row.classList.contains('ctx-open');
+            document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
+            if (!isOpen) row.classList.add('ctx-open');
+          });
           row.querySelector('[data-action="restore"]').addEventListener('click', e => {
             e.stopPropagation();
-            const name = e.currentTarget.dataset.name;
-            const id   = e.currentTarget.dataset.id;
+            row.classList.remove('ctx-open');
             setLoading(true, 'Restoring…');
-            db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({ archived: false })
-              .then(() => { setLoading(false); hint(`"${name}" restored! ✅`, 2500); loadGroupSetlists(currentGroupId); })
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).update({ archived: false })
+              .then(() => { setLoading(false); hint(`"${sl.name}" restored! ✅`, 2500); loadGroupSetlists(currentGroupId); })
               .catch(err => { setLoading(false); alert('Could not restore: ' + err.message); });
           });
           row.querySelector('[data-action="del"]').addEventListener('click', e => {
             e.stopPropagation();
-            const name = e.currentTarget.dataset.name;
-            const id   = e.currentTarget.dataset.id;
-            if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+            row.classList.remove('ctx-open');
+            if (!confirm(`Delete "${sl.name}"?\n\nThis cannot be undone.`)) return;
             setLoading(true, 'Deleting…');
-            db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).delete()
-              .then(() => { setLoading(false); hint(`"${name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
+              .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
               .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
           });
         }
-        row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+        row.addEventListener('click', () => {
+          if (row.classList.contains('ctx-open')) { row.classList.remove('ctx-open'); return; }
+          openGroupSetlist(doc.id, sl);
+        });
         archiveRows.appendChild(row);
       }
     }
@@ -3250,6 +3326,11 @@ document.getElementById('btn-leave-group').addEventListener('click', async () =>
     setLoading(false);
     alert('Could not leave group: ' + err.message);
   }
+});
+
+// ─────────────────── Setlist row ctx menu global close ──
+document.addEventListener('click', () => {
+  document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
 });
 
 // ─────────────────── Stale backup modal ─────────────────

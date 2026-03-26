@@ -890,7 +890,7 @@
     </div>
     <button class="profile-edit-btn" id="btn-edit-profile">Change</button>
   </div>
-  <div class="version-badge">V 1.2</div>
+  <div class="version-badge">V 1.3</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1694,12 +1694,13 @@ function drawAnnotation(annLayer, ann) {
   label.style.top      = (ann.yPct * 100) + '%';
   label.style.color    = getNoteColor();
   label.style.fontSize = getNoteFontSize() + 'pt';
-  label.title = 'Tap to edit/delete • Hold and drag to move';
+  label.title = 'Double-tap to edit/delete • Hold and drag to move';
 
   let dragging       = false;
   let dragReady      = false;  // true after 1-second hold
   let dragMoved      = false;
   let holdTimer      = null;
+  let lastTapTime    = 0;
   let startClientX, startClientY, startLeft, startTop;
 
   function cancelHold() {
@@ -1755,8 +1756,14 @@ function drawAnnotation(annLayer, ann) {
         saveCurrentSession();
       }
     } else {
-      // Hold timer never fired — treat as a normal tap
-      showDeleteConfirm(ann, label);
+      // Hold timer never fired — treat as a tap; require double-tap to open menu
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        lastTapTime = 0;
+        showDeleteConfirm(ann, label);
+      } else {
+        lastTapTime = now;
+      }
     }
   });
 

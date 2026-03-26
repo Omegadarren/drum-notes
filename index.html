@@ -1932,7 +1932,8 @@ function showAnnInput(annLayer, pageIdx, xPct, yPct) {
       app.copiedAnn = null;
       input.select();
     }
-    setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+    const scrollTimer = setTimeout(() => wrap.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+    if (app.pendingAnn) app.pendingAnn.scrollTimer = scrollTimer;
   });
 
   // Done button — use pointerdown so it fires before blur
@@ -1951,14 +1952,18 @@ function showAnnInput(annLayer, pageIdx, xPct, yPct) {
 
 function commitAnn() {
   if (!app.pendingAnn) return;
-  const { wrap, input, annLayer, pageIdx, xPct, yPct } = app.pendingAnn;
+  const { wrap, input, annLayer, pageIdx, xPct, yPct, scrollTimer } = app.pendingAnn;
   const text = input.value.trim();
 
+  clearTimeout(scrollTimer);
   annLayer.removeChild(wrap);
   annLayer.style.pointerEvents = '';
   app.pendingAnn = null;
   setChip('scroll');
+  const scrollEl = document.getElementById('pdf-scroll');
+  const savedTop = scrollEl ? scrollEl.scrollTop : 0;
   input.blur();
+  if (scrollEl) requestAnimationFrame(() => { scrollEl.scrollTop = savedTop; });
 
   if (text) {
     const pg  = app.pages[pageIdx];
@@ -1975,7 +1980,8 @@ function commitAnn() {
 
 function cancelAnn() {
   if (!app.pendingAnn) return;
-  const { wrap, annLayer } = app.pendingAnn;
+  const { wrap, annLayer, scrollTimer } = app.pendingAnn;
+  clearTimeout(scrollTimer);
   annLayer.removeChild(wrap);
   annLayer.style.pointerEvents = '';
   app.pendingAnn = null;

@@ -812,6 +812,24 @@
     }
     .setlist-row.tooltip-open .songs-tooltip { display: block; }
 
+    .setlist-row.archived { opacity: 0.55; }
+    .setlist-row.archived .setlist-row-name { font-style: italic; }
+    .archive-toggle-btn {
+      width: 100%;
+      background: none;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      padding: 12px 18px;
+      text-align: left;
+      cursor: pointer;
+      touch-action: manipulation;
+      margin-top: 4px;
+      margin-bottom: 10px;
+    }
+    .archive-toggle-btn:active { background: #1c1c1e; }
+
     .invite-code-box {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -923,7 +941,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 2.6</div>
+  <div class="version-badge">V 2.7</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2593,21 +2611,25 @@ async function loadGroupSetlists(gid) {
   try {
     const snap = await db.collection('groups').doc(gid).collection('setlists')
       .orderBy('createdAt', 'desc').get();
-    if (snap.empty) {
-      listEl.innerHTML = '<div class="groups-empty">No setlists yet. Tap ✚ Setlist to create one.</div>';
-      return;
-    }
     listEl.innerHTML = '';
     const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
     const backedUpIds = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + gid) || '[]'));
-    snap.forEach(doc => {
+
+    // Split into active and archived
+    const activeDocs   = [];
+    const archivedDocs = [];
+    snap.forEach(doc => (doc.data().archived ? archivedDocs : activeDocs).push(doc));
+
+    if (activeDocs.length === 0 && archivedDocs.length === 0) {
+      listEl.innerHTML = '<div class="groups-empty">No setlists yet. Tap ✚ Setlist to create one.</div>';
+    }
+
+    // ── Render active setlists ──────────────────────────
+    for (const doc of activeDocs) {
       const sl = doc.data();
-      // Cache metadata for offline use whenever we see it
       if (sl.songIds && sl.songIds.length) cacheSetlistMeta(gid, doc.id, sl.name, sl.songIds);
-      // Support both new (createdAt) and legacy (uploadedAt) timestamps
       const ts = sl.createdAt || sl.uploadedAt || 0;
-      const d  = new Date(ts).toLocaleDateString('en-US',
-        { month: 'short', day: 'numeric', year: 'numeric' });
+      const d  = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const row = document.createElement('div');
       row.className = 'setlist-row';
 
@@ -2616,11 +2638,9 @@ async function loadGroupSetlists(gid) {
       let tooltipHtml = '';
       const performedTag = sl.performed ? ' · 🎤 Performed' : '';
       if (sl.songIds && sl.songIds.length) {
-        // New library-based format
         metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}${sl.songs ? ' · 📝' : ''}${performedTag}${backedUpTag}`;
         if (sl.songs) tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
       } else if (sl.songs) {
-        // Legacy format with songs text
         metaText = `Uploaded ${d} · 📝 song list${performedTag}${backedUpTag}`;
         tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
       } else {
@@ -2636,6 +2656,7 @@ async function loadGroupSetlists(gid) {
         ${isAdmin ? `<button class="setlist-perform-btn${sl.performed ? ' performed' : ''}" data-id="${doc.id}" title="${sl.performed ? 'Un-mark as performed' : 'Mark as performed'}">🎤</button>` : ''}
         ${isAdmin && !sl.performed ? `<button class="setlist-rename-btn" data-id="${doc.id}" data-name="${esc(sl.name)}" data-song-ids="${esc(JSON.stringify(sl.songIds||[]))}">✏️</button>` : ''}
         ${isAdmin && sl.performed ? `<span class="setlist-locked-icon" title="Un-mark as performed to edit">🔒</span>` : ''}
+        ${isAdmin ? `<button class="setlist-rename-btn" data-action="arch" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Archive setlist">📦</button>` : ''}
         ${isAdmin ? `<button class="setlist-rename-btn" data-action="del" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Delete setlist" ${sl.performed ? 'disabled' : ''}>🗑</button>` : ''}
         <div class="group-row-arrow" title="Open setlist">›</div>
         ${tooltipHtml}`;
@@ -2662,13 +2683,23 @@ async function loadGroupSetlists(gid) {
             alert('Could not update: ' + err.message);
           }
         });
-        const renameBtn = row.querySelector('.setlist-rename-btn:not([data-action="del"])');
+        const renameBtn = row.querySelector('.setlist-rename-btn:not([data-action])');
         if (renameBtn) {
           renameBtn.addEventListener('click', e => {
             e.stopPropagation();
             openEditSetlistModal(e.currentTarget.dataset.id, e.currentTarget.dataset.name, JSON.parse(e.currentTarget.dataset.songIds || '[]'));
           });
         }
+        row.querySelector('[data-action="arch"]').addEventListener('click', e => {
+          e.stopPropagation();
+          const name = e.currentTarget.dataset.name;
+          const id   = e.currentTarget.dataset.id;
+          if (!confirm(`Archive "${name}"?\n\nIt will be hidden from the main list. You can restore it any time.`)) return;
+          setLoading(true, 'Archiving…');
+          db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({ archived: true })
+            .then(() => { setLoading(false); hint(`"${name}" archived. 📦`, 2500); loadGroupSetlists(currentGroupId); })
+            .catch(err => { setLoading(false); alert('Could not archive: ' + err.message); });
+        });
         row.querySelector('[data-action="del"]').addEventListener('click', e => {
           e.stopPropagation();
           const name = e.currentTarget.dataset.name;
@@ -2690,7 +2721,80 @@ async function loadGroupSetlists(gid) {
         }
       });
       listEl.appendChild(row);
-    });
+    }
+
+    if (activeDocs.length === 0 && archivedDocs.length > 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'groups-empty';
+      emptyMsg.textContent = 'No active setlists — all have been archived.';
+      listEl.appendChild(emptyMsg);
+    }
+
+    // ── Render archived section ─────────────────────────
+    if (archivedDocs.length > 0) {
+      const label = `📦 ${archivedDocs.length} archived setlist${archivedDocs.length !== 1 ? 's' : ''}`;
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'archive-toggle-btn';
+      toggleBtn.textContent = label + ' · tap to view ›';
+      listEl.appendChild(toggleBtn);
+
+      const archiveRows = document.createElement('div');
+      archiveRows.style.display = 'none';
+      listEl.appendChild(archiveRows);
+
+      toggleBtn.addEventListener('click', () => {
+        const isOpen = archiveRows.style.display !== 'none';
+        archiveRows.style.display = isOpen ? 'none' : '';
+        toggleBtn.textContent = isOpen ? label + ' · tap to view ›' : label + ' · tap to hide ›';
+      });
+
+      for (const doc of archivedDocs) {
+        const sl  = doc.data();
+        const ts  = sl.createdAt || sl.uploadedAt || 0;
+        const d   = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const row = document.createElement('div');
+        row.className = 'setlist-row archived';
+        const songCount = sl.songIds ? `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ` : '';
+        row.innerHTML = `
+          <div class="setlist-row-icon">🎼</div>
+          <div class="setlist-row-info">
+            <div class="setlist-row-name">${esc(sl.name)}</div>
+            <div class="setlist-row-meta">${songCount}${d}${sl.performed ? ' · 🎤 Performed' : ''}</div>
+          </div>
+          ${isAdmin ? `<button class="setlist-rename-btn" data-action="restore" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Restore setlist">↩️</button>` : ''}
+          ${isAdmin ? `<button class="setlist-rename-btn" data-action="del" data-id="${doc.id}" data-name="${esc(sl.name)}" title="Delete setlist">🗑</button>` : ''}
+          <div class="group-row-arrow" title="Open setlist">›</div>`;
+
+        row.querySelector('.group-row-arrow').addEventListener('click', e => {
+          e.stopPropagation();
+          openGroupSetlist(doc.id, sl);
+        });
+        if (isAdmin) {
+          row.querySelector('[data-action="restore"]').addEventListener('click', e => {
+            e.stopPropagation();
+            const name = e.currentTarget.dataset.name;
+            const id   = e.currentTarget.dataset.id;
+            setLoading(true, 'Restoring…');
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({ archived: false })
+              .then(() => { setLoading(false); hint(`"${name}" restored! ✅`, 2500); loadGroupSetlists(currentGroupId); })
+              .catch(err => { setLoading(false); alert('Could not restore: ' + err.message); });
+          });
+          row.querySelector('[data-action="del"]').addEventListener('click', e => {
+            e.stopPropagation();
+            const name = e.currentTarget.dataset.name;
+            const id   = e.currentTarget.dataset.id;
+            if (!confirm(`Delete "${name}"?\n\nThis cannot be undone.`)) return;
+            setLoading(true, 'Deleting…');
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).delete()
+              .then(() => { setLoading(false); hint(`"${name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+              .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+          });
+        }
+        row.addEventListener('click', () => openGroupSetlist(doc.id, sl));
+        archiveRows.appendChild(row);
+      }
+    }
+
     // Remember which setlist IDs we've seen so we can enumerate them offline
     localStorage.setItem('bn_setlist_ids_' + gid, JSON.stringify(snap.docs.map(d => d.id)));
   } catch (err) {

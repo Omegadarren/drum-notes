@@ -2238,6 +2238,7 @@ function goBack() {
   document.getElementById('viewer').classList.remove('active');
   if (fromGroup && currentGroupId) {
     document.getElementById('group-detail-screen').classList.add('active');
+    loadGroupSetlists(currentGroupId);
   } else {
     document.getElementById('start-screen').style.display = '';
     renderStart();

@@ -1368,7 +1368,11 @@ async function getCachedSongPdf(gid, songId) {
   return idbGet(IDB_STORE, `${gid}/${songId}`);
 }
 async function cacheSetlistMeta(gid, setlistId, name, songIds) {
-  await idbPut(IDB_META, `${gid}/${setlistId}`, { name, songIds, cachedAt: Date.now() });
+  const existing = await getCachedSetlist(gid, setlistId);
+  const preserved = existing
+    ? { keepPermanently: existing.keepPermanently, snoozedUntil: existing.snoozedUntil }
+    : {};
+  await idbPut(IDB_META, `${gid}/${setlistId}`, { ...preserved, name, songIds, cachedAt: Date.now() });
 }
 async function getCachedSetlist(gid, setlistId) {
   return idbGet(IDB_META, `${gid}/${setlistId}`);

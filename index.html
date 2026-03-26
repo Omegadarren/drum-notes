@@ -1986,7 +1986,10 @@ function cancelAnn() {
   annLayer.style.pointerEvents = '';
   app.pendingAnn = null;
   setChip('scroll');
+  const scrollEl2 = document.getElementById('pdf-scroll');
+  const savedTop2 = scrollEl2 ? scrollEl2.scrollTop : 0;
   if (document.activeElement) document.activeElement.blur();
+  if (scrollEl2) requestAnimationFrame(() => { scrollEl2.scrollTop = savedTop2; });
 }
 
 // ─────────────────── Draw saved annotations ──────────────

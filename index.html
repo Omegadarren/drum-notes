@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -904,7 +907,7 @@
     <button class="profile-edit-btn" id="btn-edit-profile">Change</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 1.4</div>
+  <div class="version-badge">V 1.5</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -920,6 +923,26 @@
 </div>
 
 <!-- ==================== NEW SESSION MODAL ==================== -->
+<div class="modal-bg" id="modal">
+
+<!-- ==================== FULLSCREEN HINT MODAL ==================== -->
+<div class="modal-bg" id="fs-hint-modal">
+  <div class="modal-box" style="gap:18px;text-align:center;">
+    <div class="modal-title" style="font-size:22px;">Go Fullscreen on iPad</div>
+    <p style="color:var(--muted);font-size:16px;line-height:1.5;">
+      Safari on iPad doesn't allow web pages to go fullscreen directly.<br><br>
+      To hide the browser bar completely:<br><br>
+      <strong style="color:var(--text);">1.</strong> Tap the <strong style="color:var(--text);">Share button</strong> <span style="font-size:20px;">⎋</span><br>
+      <strong style="color:var(--text);">2.</strong> Tap <strong style="color:var(--text)">"Add to Home Screen"</strong><br>
+      <strong style="color:var(--text);">3.</strong> Open the app from your Home Screen<br><br>
+      BandNotes will then run like a native full-screen app.
+    </p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn-primary" id="btn-fs-hint-close">Got it</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal">
   <div class="modal-box">
     <div class="modal-title">New Session</div>
@@ -1326,24 +1349,37 @@ document.getElementById('btn-profile-save').addEventListener('click', () => {
 document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
 
 // ── Fullscreen toggle ──────────────────────────────────────────────────────
+const fsAvailable = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+// On iOS Safari the Fullscreen API is not available — detect standalone (Home Screen) mode
+const isStandalone = window.navigator.standalone === true;
+
 function toggleFullscreen() {
-  const el = document.documentElement;
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  if (fsAvailable) {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      if (el.requestFullscreen) el.requestFullscreen();
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+  } else if (!isStandalone) {
+    // iOS Safari — show Add to Home Screen instructions
+    document.getElementById('fs-hint-modal').classList.add('open');
   }
 }
 function updateFsButtons() {
-  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement) || isStandalone;
   document.querySelectorAll('.btn-fullscreen').forEach(b => b.textContent = isFs ? '⊡' : '⛶');
 }
 document.getElementById('btn-fs-start').addEventListener('click', toggleFullscreen);
 document.getElementById('btn-fs-viewer').addEventListener('click', toggleFullscreen);
+document.getElementById('btn-fs-hint-close').addEventListener('click', () =>
+  document.getElementById('fs-hint-modal').classList.remove('open'));
 document.addEventListener('fullscreenchange', updateFsButtons);
 document.addEventListener('webkitfullscreenchange', updateFsButtons);
+// If already in standalone mode, hide the fullscreen buttons entirely
+if (isStandalone) document.querySelectorAll('.btn-fullscreen').forEach(b => b.style.display = 'none');
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Close profile modal by tapping backdrop (only if not required)

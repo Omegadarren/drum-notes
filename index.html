@@ -1956,14 +1956,16 @@ function commitAnn() {
   const text = input.value.trim();
 
   clearTimeout(scrollTimer);
+  const scrollEl = document.getElementById('pdf-scroll');
+  const savedTop = scrollEl ? scrollEl.scrollTop : 0;
+  input.blur();                      // blur while still in DOM — controls keyboard dismissal
   annLayer.removeChild(wrap);
   annLayer.style.pointerEvents = '';
   app.pendingAnn = null;
   setChip('scroll');
-  const scrollEl = document.getElementById('pdf-scroll');
-  const savedTop = scrollEl ? scrollEl.scrollTop : 0;
-  input.blur();
-  if (scrollEl) requestAnimationFrame(() => { scrollEl.scrollTop = savedTop; });
+  const restoreScroll = () => { if (scrollEl) scrollEl.scrollTop = savedTop; };
+  requestAnimationFrame(restoreScroll);
+  setTimeout(restoreScroll, 150);    // backup: iOS keyboard dismissal fires asynchronously
 
   if (text) {
     const pg  = app.pages[pageIdx];
@@ -1980,16 +1982,18 @@ function commitAnn() {
 
 function cancelAnn() {
   if (!app.pendingAnn) return;
-  const { wrap, annLayer, scrollTimer } = app.pendingAnn;
+  const { wrap, input, annLayer, scrollTimer } = app.pendingAnn;
   clearTimeout(scrollTimer);
+  const scrollEl = document.getElementById('pdf-scroll');
+  const savedTop = scrollEl ? scrollEl.scrollTop : 0;
+  input.blur();                      // blur while still in DOM — controls keyboard dismissal
   annLayer.removeChild(wrap);
   annLayer.style.pointerEvents = '';
   app.pendingAnn = null;
   setChip('scroll');
-  const scrollEl2 = document.getElementById('pdf-scroll');
-  const savedTop2 = scrollEl2 ? scrollEl2.scrollTop : 0;
-  if (document.activeElement) document.activeElement.blur();
-  if (scrollEl2) requestAnimationFrame(() => { scrollEl2.scrollTop = savedTop2; });
+  const restoreScroll = () => { if (scrollEl) scrollEl.scrollTop = savedTop; };
+  requestAnimationFrame(restoreScroll);
+  setTimeout(restoreScroll, 150);    // backup: iOS keyboard dismissal fires asynchronously
 }
 
 // ─────────────────── Draw saved annotations ──────────────

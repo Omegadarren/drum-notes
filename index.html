@@ -1327,18 +1327,17 @@ document.getElementById('btn-edit-profile').addEventListener('click', () => show
 
 // ── Fullscreen toggle ──────────────────────────────────────────────────────
 function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen
-      ? (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement)
-      : null);
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
   } else {
-    (document.exitFullscreen || document.webkitExitFullscreen
-      ? (document.exitFullscreen || document.webkitExitFullscreen).call(document)
-      : null);
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
   }
 }
 function updateFsButtons() {
-  const isFs = !!document.fullscreenElement;
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
   document.querySelectorAll('.btn-fullscreen').forEach(b => b.textContent = isFs ? '⊡' : '⛶');
 }
 document.getElementById('btn-fs-start').addEventListener('click', toggleFullscreen);

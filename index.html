@@ -473,7 +473,7 @@
       position: absolute;
       inset: 0;
       pointer-events: auto;
-      touch-action: none;
+      touch-action: pan-y;
       cursor: default;
     }
     .lasso-layer.lassoing {
@@ -1059,7 +1059,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.6</div>
+  <div class="version-badge">V 3.7</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2101,24 +2101,17 @@ function updateSelCount() {
 function initLassoLayer(pg) {
   const { lassoLayer, annLayer } = pg;
   const lassoRect = lassoLayer.querySelector('.lasso-rect');
-  const scrollEl  = document.getElementById('pdf-scroll');
   let active = false, lassoing = false;
   let startX = 0, startY = 0;
-  let lastMoveY = 0;
 
   lassoLayer.addEventListener('pointerdown', e => {
-    // Let ann-label pointerdown events through (they have their own handlers)
     if (e.target.closest('.ann-label')) return;
-    // Don't start lasso from the ann-input
     if (e.target.closest('.ann-input-wrap')) return;
-    active       = false;  // will become true after we capture
-    lassoing     = false;
-    lassoLayer.setPointerCapture(e.pointerId);
-    active       = true;
-    lastMoveY     = e.clientY;
-    const r      = lassoLayer.getBoundingClientRect();
-    startX       = e.clientX - r.left;
-    startY       = e.clientY - r.top;
+    active   = true;
+    lassoing = false;
+    const r  = lassoLayer.getBoundingClientRect();
+    startX   = e.clientX - r.left;
+    startY   = e.clientY - r.top;
     lassoRect.style.left   = startX + 'px';
     lassoRect.style.top    = startY + 'px';
     lassoRect.style.width  = '0px';
@@ -2134,15 +2127,11 @@ function initLassoLayer(pg) {
     const dy = cy - startY;
 
     if (!lassoing) {
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) {
-        // Primarily vertical — scroll incrementally (1:1 with finger)
-        if (scrollEl) scrollEl.scrollTop -= (e.clientY - lastMoveY);
-        lastMoveY = e.clientY;
-        return;
-      }
       if (Math.abs(dx) < 40) return; // wait for decisive horizontal movement
-      // Horizontal intent confirmed — start the lasso box
+      // Horizontal intent confirmed — capture pointer and start box
+      // iOS won't cancel here because it already saw horizontal movement
       lassoing = true;
+      lassoLayer.setPointerCapture(e.pointerId);
       lassoLayer.classList.add('lassoing');
       lassoRect.style.display = 'block';
     }

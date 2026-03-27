@@ -1317,7 +1317,7 @@
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
-    <div class="dropdown-item" id="mi-select-notes">☑&nbsp; Select &amp; move notes</div>
+    <div class="dropdown-item" id="mi-select-notes">☑&nbsp; Select &amp; move notes…</div>
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
@@ -2046,7 +2046,7 @@ function enterSelectMode() {
   annSelectBar = document.createElement('div');
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
-    '<span id="sel-count">0 selected</span>' +
+    '<span id="sel-count">Tap a note to select it</span>' +
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
@@ -2059,7 +2059,12 @@ function exitSelectMode() {
 }
 function updateSelCount() {
   const el = document.getElementById('sel-count');
-  if (el) el.textContent = selectedAnnIds.size + ' selected';
+  if (!el) return;
+  if (selectedAnnIds.size === 0) {
+    el.textContent = 'Tap a note to select it';
+  } else {
+    el.textContent = selectedAnnIds.size + ' selected — drag any to move all';
+  }
 }
 
 // ─────────────────── Draw saved annotations ──────────────
@@ -2080,26 +2085,21 @@ function drawAnnotation(annLayer, ann) {
   label.style.top      = (ann.yPct * 100) + '%';
   label.style.color    = getNoteColor();
   label.style.fontSize = getNoteFontSize() + 'pt';
-  label.title = 'Double-tap to edit/delete • Hold and drag to move';
-  label._ann  = ann;  // back-reference for multi-select save
+  label.title = 'Double-tap to edit/delete • Drag to move';
+  label._ann  = ann;
 
-  let dragging       = false;
-  let dragReady      = false;  // true after 1-second hold
-  let dragMoved      = false;
-  let holdTimer      = null;
-  let lastTapTime    = 0;
+  let dragging = false;
+  let dragMoved = false;
+  let lastTapTime = 0;
   let startClientX, startClientY, startLeft, startTop;
 
-  function cancelHold() {
-    if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
-    dragReady = false;
-  }
+  // Tell iOS not to treat this touch as a scroll — must be non-passive
+  label.addEventListener('touchstart', e => { e.preventDefault(); }, { passive: false });
 
   label.addEventListener('pointerdown', e => {
     e.stopPropagation();
     e.preventDefault();
-    dragging  = false;
-    dragReady = false;
+    dragging  = true;
     dragMoved = false;
     label.setPointerCapture(e.pointerId);
     const r  = annLayer.getBoundingClientRect();
@@ -2107,29 +2107,15 @@ function drawAnnotation(annLayer, ann) {
     startClientY = e.clientY;
     startLeft    = ann.xPct * r.width;
     startTop     = ann.yPct * r.height;
-
-    if (selectMode) {
-      // No hold needed in select mode; snapshot start positions for group drag
-      dragReady = true;
-      dragging  = true;
-      if (selectedAnnIds.has(ann.id)) {
-        app.pages.forEach(pg => {
-          pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
-            lbl.dataset.startX = parseFloat(lbl.style.left) / 100;
-            lbl.dataset.startY = parseFloat(lbl.style.top)  / 100;
-          });
+    label.style.cursor = 'grabbing';
+    if (selectMode && selectedAnnIds.has(ann.id)) {
+      // Snapshot start positions of all selected labels for group drag
+      app.pages.forEach(pg => {
+        pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+          lbl.dataset.startX = parseFloat(lbl.style.left) / 100;
+          lbl.dataset.startY = parseFloat(lbl.style.top)  / 100;
         });
-      }
-    } else {
-      // Lock scroll container so iOS doesn't hijack the vertical gesture
-      const scrollEl = document.getElementById('pdf-scroll');
-      if (scrollEl) scrollEl.style.touchAction = 'none';
-      holdTimer = setTimeout(() => {
-        holdTimer = null;
-        dragReady = true;
-        dragging  = true;
-        label.style.cursor = 'grabbing';
-      }, 1000);
+      });
     }
   });
 
@@ -2160,39 +2146,36 @@ function drawAnnotation(annLayer, ann) {
   });
 
   label.addEventListener('pointerup', e => {
-    cancelHold();
     label.style.cursor = '';
-    const scrollEl = document.getElementById('pdf-scroll');
-    if (scrollEl) scrollEl.style.touchAction = '';
-
-    if (dragging) {
-      dragging = false;
-      if (dragMoved) {
-        const r    = annLayer.getBoundingClientRect();
-        const dx   = e.clientX - startClientX;
-        const dy   = e.clientY - startClientY;
-        if (selectMode && selectedAnnIds.has(ann.id)) {
-          // Save all selected annotations' new positions
-          const dxPct = dx / r.width;
-          const dyPct = dy / r.height;
-          app.pages.forEach(pg => {
-            pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
-              const ox = parseFloat(lbl.dataset.startX);
-              const oy = parseFloat(lbl.dataset.startY);
-              if (lbl._ann) {
-                lbl._ann.xPct = Math.max(0, Math.min(1, ox + dxPct));
-                lbl._ann.yPct = Math.max(0, Math.min(1, oy + dyPct));
-              }
-            });
+    if (!dragging) return;
+    dragging = false;
+    if (dragMoved) {
+      // ── Drag: save new position(s) ─────────────────────
+      const r   = annLayer.getBoundingClientRect();
+      const dx  = e.clientX - startClientX;
+      const dy  = e.clientY - startClientY;
+      if (selectMode && selectedAnnIds.has(ann.id)) {
+        const dxPct = dx / r.width;
+        const dyPct = dy / r.height;
+        app.pages.forEach(pg => {
+          pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+            const ox = parseFloat(lbl.dataset.startX);
+            const oy = parseFloat(lbl.dataset.startY);
+            if (lbl._ann) {
+              lbl._ann.xPct = Math.max(0, Math.min(1, ox + dxPct));
+              lbl._ann.yPct = Math.max(0, Math.min(1, oy + dyPct));
+            }
           });
-          saveCurrentSession();
-        } else {
-          ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-          ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-          saveCurrentSession();
-        }
-      } else if (selectMode) {
-        // Tap (no drag) in select mode: toggle selection
+        });
+        saveCurrentSession();
+      } else {
+        ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+        ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+        saveCurrentSession();
+      }
+    } else {
+      // ── Tap (no significant movement) ──────────────────
+      if (selectMode) {
         if (selectedAnnIds.has(ann.id)) {
           selectedAnnIds.delete(ann.id);
           label.classList.remove('ann-selected');
@@ -2201,35 +2184,23 @@ function drawAnnotation(annLayer, ann) {
           label.classList.add('ann-selected');
         }
         updateSelCount();
-      }
-    } else if (selectMode) {
-      // Hold timer never fired but we're in select mode: toggle selection
-      if (selectedAnnIds.has(ann.id)) {
-        selectedAnnIds.delete(ann.id);
-        label.classList.remove('ann-selected');
       } else {
-        selectedAnnIds.add(ann.id);
-        label.classList.add('ann-selected');
-      }
-      updateSelCount();
-    } else {
-      // Normal mode: double-tap to edit/delete
-      const now = Date.now();
-      if (now - lastTapTime < 300) {
-        lastTapTime = 0;
-        showDeleteConfirm(ann, label);
-      } else {
-        lastTapTime = now;
+        // Normal mode: double-tap to edit/delete
+        const now = Date.now();
+        if (now - lastTapTime < 300) {
+          lastTapTime = 0;
+          showDeleteConfirm(ann, label);
+        } else {
+          lastTapTime = now;
+        }
       }
     }
   });
 
   label.addEventListener('pointercancel', () => {
-    cancelHold();
     dragging = false;
+    dragMoved = false;
     label.style.cursor = '';
-    const scrollEl = document.getElementById('pdf-scroll');
-    if (scrollEl) scrollEl.style.touchAction = '';
   });
 
   annLayer.appendChild(label);

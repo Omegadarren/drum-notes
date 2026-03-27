@@ -472,8 +472,11 @@
     .lasso-layer {
       position: absolute;
       inset: 0;
-      pointer-events: none;
-      touch-action: pan-y;
+      pointer-events: auto;
+      touch-action: none;
+      cursor: default;
+    }
+    .lasso-layer.lassoing {
       cursor: crosshair;
     }
     .lasso-rect {
@@ -1056,7 +1059,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.3</div>
+  <div class="version-badge">V 3.4</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2071,7 +2074,6 @@ function enterSelectMode() {
   if (selectMode) return;
   selectMode = true;
   selectedAnnIds.clear();
-  app.pages.forEach(pg => { pg.lassoLayer.style.pointerEvents = 'auto'; });
   annSelectBar = document.createElement('div');
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
@@ -2083,7 +2085,6 @@ function enterSelectMode() {
 function exitSelectMode() {
   selectMode = false;
   selectedAnnIds.clear();
-  app.pages.forEach(pg => { pg.lassoLayer.style.pointerEvents = ''; });
   document.querySelectorAll('.ann-label.ann-selected').forEach(el => el.classList.remove('ann-selected'));
   if (annSelectBar) { annSelectBar.remove(); annSelectBar = null; }
 }
@@ -2099,16 +2100,24 @@ function updateSelCount() {
 function initLassoLayer(pg) {
   const { lassoLayer, annLayer } = pg;
   const lassoRect = lassoLayer.querySelector('.lasso-rect');
+  const scrollEl  = document.getElementById('pdf-scroll');
   let active = false, lassoing = false;
   let startX = 0, startY = 0;
+  let lastScrollTop = 0;
 
   lassoLayer.addEventListener('pointerdown', e => {
-    if (!selectMode) return;
-    active   = true;
-    lassoing = false;
-    const r  = lassoLayer.getBoundingClientRect();
-    startX   = e.clientX - r.left;
-    startY   = e.clientY - r.top;
+    // Let ann-label pointerdown events through (they have their own handlers)
+    if (e.target.closest('.ann-label')) return;
+    // Don't start lasso from the ann-input
+    if (e.target.closest('.ann-input-wrap')) return;
+    active       = false;  // will become true after we capture
+    lassoing     = false;
+    lassoLayer.setPointerCapture(e.pointerId);
+    active       = true;
+    lastScrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    const r      = lassoLayer.getBoundingClientRect();
+    startX       = e.clientX - r.left;
+    startY       = e.clientY - r.top;
     lassoRect.style.left   = startX + 'px';
     lassoRect.style.top    = startY + 'px';
     lassoRect.style.width  = '0px';
@@ -2122,12 +2131,20 @@ function initLassoLayer(pg) {
     const cy = e.clientY - r.top;
     const dx = cx - startX;
     const dy = cy - startY;
+
     if (!lassoing) {
-      if (Math.abs(dx) < 12) return;   // wait for meaningful horizontal movement
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) {
+        // Primarily vertical — scroll the page manually and cancel lasso
+        if (scrollEl) scrollEl.scrollTop = lastScrollTop - dy;
+        return;
+      }
+      if (Math.abs(dx) < 12) return; // wait for decisive horizontal movement
+      // Horizontal intent confirmed — start the lasso box
       lassoing = true;
-      lassoLayer.setPointerCapture(e.pointerId);
+      lassoLayer.classList.add('lassoing');
       lassoRect.style.display = 'block';
     }
+
     const x = Math.min(startX, cx);
     const y = Math.min(startY, cy);
     lassoRect.style.left   = x + 'px';
@@ -2139,8 +2156,13 @@ function initLassoLayer(pg) {
   lassoLayer.addEventListener('pointerup', e => {
     if (!active) return;
     active = false;
+    lassoLayer.classList.remove('lassoing');
     lassoRect.style.display = 'none';
-    if (!lassoing) return;
+    if (!lassoing) {
+      // Treat as a tap through to the page (double-tap for note input)
+      // We can't re-dispatch, but the double-tap handler on scroll fires on touchend anyway
+      return;
+    }
     lassoing = false;
     const r  = lassoLayer.getBoundingClientRect();
     const cx = e.clientX - r.left;
@@ -2150,7 +2172,8 @@ function initLassoLayer(pg) {
     const x2 = Math.max(startX, cx);
     const y2 = Math.max(startY, cy);
     if (x2 - x1 < 10) return;
-    // Select all notes whose centre falls within the drawn box
+    // Select all notes whose centre falls inside the box
+    let found = 0;
     annLayer.querySelectorAll('.ann-label').forEach(lbl => {
       const lb = lbl.getBoundingClientRect();
       const lx = lb.left + lb.width  / 2 - r.left;
@@ -2158,14 +2181,19 @@ function initLassoLayer(pg) {
       if (lx >= x1 && lx <= x2 && ly >= y1 && ly <= y2) {
         if (lbl._ann) { selectedAnnIds.add(lbl._ann.id); }
         lbl.classList.add('ann-selected');
+        found++;
       }
     });
-    updateSelCount();
+    if (found > 0) {
+      if (!selectMode) enterSelectMode();
+      updateSelCount();
+    }
   });
 
   lassoLayer.addEventListener('pointercancel', () => {
     active   = false;
     lassoing = false;
+    lassoLayer.classList.remove('lassoing');
     lassoRect.style.display = 'none';
   });
 }

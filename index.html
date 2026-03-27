@@ -1059,7 +1059,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.4</div>
+  <div class="version-badge">V 3.5</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2073,7 +2073,7 @@ let annSelectBar = null;
 function enterSelectMode() {
   if (selectMode) return;
   selectMode = true;
-  selectedAnnIds.clear();
+  // NOTE: do NOT clear selectedAnnIds here — lasso may have pre-populated it
   annSelectBar = document.createElement('div');
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
@@ -2081,6 +2081,7 @@ function enterSelectMode() {
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
+  updateSelCount();
 }
 function exitSelectMode() {
   selectMode = false;
@@ -2103,7 +2104,7 @@ function initLassoLayer(pg) {
   const scrollEl  = document.getElementById('pdf-scroll');
   let active = false, lassoing = false;
   let startX = 0, startY = 0;
-  let lastScrollTop = 0;
+  let lastMoveY = 0;
 
   lassoLayer.addEventListener('pointerdown', e => {
     // Let ann-label pointerdown events through (they have their own handlers)
@@ -2114,7 +2115,7 @@ function initLassoLayer(pg) {
     lassoing     = false;
     lassoLayer.setPointerCapture(e.pointerId);
     active       = true;
-    lastScrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    lastMoveY     = e.clientY;
     const r      = lassoLayer.getBoundingClientRect();
     startX       = e.clientX - r.left;
     startY       = e.clientY - r.top;
@@ -2134,8 +2135,9 @@ function initLassoLayer(pg) {
 
     if (!lassoing) {
       if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) {
-        // Primarily vertical — scroll the page manually and cancel lasso
-        if (scrollEl) scrollEl.scrollTop = lastScrollTop - dy;
+        // Primarily vertical — scroll incrementally (1:1 with finger)
+        if (scrollEl) scrollEl.scrollTop -= (e.clientY - lastMoveY);
+        lastMoveY = e.clientY;
         return;
       }
       if (Math.abs(dx) < 12) return; // wait for decisive horizontal movement

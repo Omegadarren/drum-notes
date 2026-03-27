@@ -2487,6 +2487,11 @@ firebase.initializeApp(FB_CONFIG);
 const db      = firebase.firestore();
 const storage = firebase.storage();
 const auth    = firebase.auth();
+// Hide folder button on browsers that don't support the FileSystem Access API
+if (!('showDirectoryPicker' in window)) {
+  const fb = document.getElementById('btn-default-folder');
+  if (fb) fb.style.display = 'none';
+}
 loadDefaultFolder();
 
 // Current user uid (anonymous, stable per device)

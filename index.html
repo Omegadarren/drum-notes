@@ -441,6 +441,43 @@
       top: -1px;
     }
 
+    /* Multi-select mode */
+    .ann-label.ann-selected {
+      outline: 2px solid var(--accent);
+      border-radius: 3px;
+      background: rgba(255, 80, 30, 0.18);
+    }
+    .ann-select-bar {
+      position: fixed;
+      bottom: 68px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 9px 18px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      z-index: 200;
+      font-size: 15px;
+      color: var(--text);
+      white-space: nowrap;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5);
+      touch-action: manipulation;
+    }
+    .ann-select-bar button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 7px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
     /* Inline annotation input + buttons */
     .ann-input-wrap {
       position: absolute;
@@ -1280,6 +1317,7 @@
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
+    <div class="dropdown-item" id="mi-select-notes">☑&nbsp; Select &amp; move notes</div>
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
@@ -1996,6 +2034,34 @@ function cancelAnn() {
   setTimeout(restoreScroll, 150);    // backup: iOS keyboard dismissal fires asynchronously
 }
 
+// ─────────────────── Multi-select state ─────────────────
+let selectMode = false;
+const selectedAnnIds = new Set();
+let annSelectBar = null;
+
+function enterSelectMode() {
+  if (selectMode) return;
+  selectMode = true;
+  selectedAnnIds.clear();
+  annSelectBar = document.createElement('div');
+  annSelectBar.className = 'ann-select-bar';
+  annSelectBar.innerHTML =
+    '<span id="sel-count">0 selected</span>' +
+    '<button id="btn-sel-done">Done</button>';
+  document.getElementById('viewer').appendChild(annSelectBar);
+  document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
+}
+function exitSelectMode() {
+  selectMode = false;
+  selectedAnnIds.clear();
+  document.querySelectorAll('.ann-label.ann-selected').forEach(el => el.classList.remove('ann-selected'));
+  if (annSelectBar) { annSelectBar.remove(); annSelectBar = null; }
+}
+function updateSelCount() {
+  const el = document.getElementById('sel-count');
+  if (el) el.textContent = selectedAnnIds.size + ' selected';
+}
+
 // ─────────────────── Draw saved annotations ──────────────
 function drawAllAnnotations() {
   const sess = currentSession();
@@ -2015,6 +2081,7 @@ function drawAnnotation(annLayer, ann) {
   label.style.color    = getNoteColor();
   label.style.fontSize = getNoteFontSize() + 'pt';
   label.title = 'Double-tap to edit/delete • Hold and drag to move';
+  label._ann  = ann;  // back-reference for multi-select save
 
   let dragging       = false;
   let dragReady      = false;  // true after 1-second hold
@@ -2040,43 +2107,113 @@ function drawAnnotation(annLayer, ann) {
     startClientY = e.clientY;
     startLeft    = ann.xPct * r.width;
     startTop     = ann.yPct * r.height;
-    // Start 1-second hold timer before drag is allowed
-    holdTimer = setTimeout(() => {
-      holdTimer = null;
+
+    if (selectMode) {
+      // No hold needed in select mode; snapshot start positions for group drag
       dragReady = true;
       dragging  = true;
-      label.style.cursor = 'grabbing';
-    }, 1000);
+      if (selectedAnnIds.has(ann.id)) {
+        app.pages.forEach(pg => {
+          pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+            lbl.dataset.startX = parseFloat(lbl.style.left) / 100;
+            lbl.dataset.startY = parseFloat(lbl.style.top)  / 100;
+          });
+        });
+      }
+    } else {
+      // Lock scroll container so iOS doesn't hijack the vertical gesture
+      const scrollEl = document.getElementById('pdf-scroll');
+      if (scrollEl) scrollEl.style.touchAction = 'none';
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        dragReady = true;
+        dragging  = true;
+        label.style.cursor = 'grabbing';
+      }, 1000);
+    }
   });
 
   label.addEventListener('pointermove', e => {
     if (!dragging) return;
     const dx = e.clientX - startClientX;
     const dy = e.clientY - startClientY;
-    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) dragMoved = true;
-    if (!dragMoved) return;
-    const r      = annLayer.getBoundingClientRect();
-    const newX   = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-    const newY   = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-    label.style.left = (newX * 100) + '%';
-    label.style.top  = (newY * 100) + '%';
+    if (!dragMoved && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    dragMoved = true;
+    const r = annLayer.getBoundingClientRect();
+    if (selectMode && selectedAnnIds.has(ann.id)) {
+      const dxPct = dx / r.width;
+      const dyPct = dy / r.height;
+      app.pages.forEach(pg => {
+        pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+          const ox = parseFloat(lbl.dataset.startX);
+          const oy = parseFloat(lbl.dataset.startY);
+          lbl.style.left = (Math.max(0, Math.min(1, ox + dxPct)) * 100) + '%';
+          lbl.style.top  = (Math.max(0, Math.min(1, oy + dyPct)) * 100) + '%';
+        });
+      });
+    } else {
+      const newX = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+      const newY = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+      label.style.left = (newX * 100) + '%';
+      label.style.top  = (newY * 100) + '%';
+    }
   });
 
   label.addEventListener('pointerup', e => {
     cancelHold();
     label.style.cursor = '';
+    const scrollEl = document.getElementById('pdf-scroll');
+    if (scrollEl) scrollEl.style.touchAction = '';
+
     if (dragging) {
       dragging = false;
       if (dragMoved) {
-        const r  = annLayer.getBoundingClientRect();
-        const dx = e.clientX - startClientX;
-        const dy = e.clientY - startClientY;
-        ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-        ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-        saveCurrentSession();
+        const r    = annLayer.getBoundingClientRect();
+        const dx   = e.clientX - startClientX;
+        const dy   = e.clientY - startClientY;
+        if (selectMode && selectedAnnIds.has(ann.id)) {
+          // Save all selected annotations' new positions
+          const dxPct = dx / r.width;
+          const dyPct = dy / r.height;
+          app.pages.forEach(pg => {
+            pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+              const ox = parseFloat(lbl.dataset.startX);
+              const oy = parseFloat(lbl.dataset.startY);
+              if (lbl._ann) {
+                lbl._ann.xPct = Math.max(0, Math.min(1, ox + dxPct));
+                lbl._ann.yPct = Math.max(0, Math.min(1, oy + dyPct));
+              }
+            });
+          });
+          saveCurrentSession();
+        } else {
+          ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+          ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+          saveCurrentSession();
+        }
+      } else if (selectMode) {
+        // Tap (no drag) in select mode: toggle selection
+        if (selectedAnnIds.has(ann.id)) {
+          selectedAnnIds.delete(ann.id);
+          label.classList.remove('ann-selected');
+        } else {
+          selectedAnnIds.add(ann.id);
+          label.classList.add('ann-selected');
+        }
+        updateSelCount();
       }
+    } else if (selectMode) {
+      // Hold timer never fired but we're in select mode: toggle selection
+      if (selectedAnnIds.has(ann.id)) {
+        selectedAnnIds.delete(ann.id);
+        label.classList.remove('ann-selected');
+      } else {
+        selectedAnnIds.add(ann.id);
+        label.classList.add('ann-selected');
+      }
+      updateSelCount();
     } else {
-      // Hold timer never fired — treat as a tap; require double-tap to open menu
+      // Normal mode: double-tap to edit/delete
       const now = Date.now();
       if (now - lastTapTime < 300) {
         lastTapTime = 0;
@@ -2091,6 +2228,8 @@ function drawAnnotation(annLayer, ann) {
     cancelHold();
     dragging = false;
     label.style.cursor = '';
+    const scrollEl = document.getElementById('pdf-scroll');
+    if (scrollEl) scrollEl.style.touchAction = '';
   });
 
   annLayer.appendChild(label);
@@ -2173,6 +2312,11 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
 });
 
 // ─────────────────── Note Style modal ────────────────────
+document.getElementById('mi-select-notes').addEventListener('click', () => {
+  closeDropdown();
+  enterSelectMode();
+});
+
 document.getElementById('mi-note-style').addEventListener('click', e => {
   e.stopPropagation();
   closeDropdown();
@@ -2394,6 +2538,7 @@ document.getElementById('mi-clear').addEventListener('click', () => {
 
 function goBack() {
   if (app.pendingAnn) cancelAnn();
+  exitSelectMode();
   saveCurrentSession();
   const sess = currentSession();
   const fromGroup = sess && (sess.groupSetlistId || sess.groupId);

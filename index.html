@@ -1059,7 +1059,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.5</div>
+  <div class="version-badge">V 3.6</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2140,7 +2140,7 @@ function initLassoLayer(pg) {
         lastMoveY = e.clientY;
         return;
       }
-      if (Math.abs(dx) < 12) return; // wait for decisive horizontal movement
+      if (Math.abs(dx) < 40) return; // wait for decisive horizontal movement
       // Horizontal intent confirmed — start the lasso box
       lassoing = true;
       lassoLayer.classList.add('lassoing');

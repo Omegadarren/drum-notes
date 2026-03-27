@@ -468,6 +468,24 @@
       box-shadow: 0 4px 20px rgba(0,0,0,.5);
       touch-action: manipulation;
     }
+    /* Rubber-band lasso selection layer */
+    .lasso-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      touch-action: pan-y;
+      cursor: crosshair;
+    }
+    .lasso-rect {
+      position: absolute;
+      border: 2px dashed var(--accent);
+      background: rgba(255, 80, 30, 0.10);
+      pointer-events: none;
+      display: none;
+      border-radius: 3px;
+      box-sizing: border-box;
+    }
+
     .ann-select-bar button {
       background: var(--accent);
       color: #fff;
@@ -1038,7 +1056,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.2</div>
+  <div class="version-badge">V 3.3</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1877,13 +1895,20 @@ async function renderPages(scroll, pdfDoc, songId, songName, showDivider) {
     const annLayer     = document.createElement('div');
     annLayer.className = 'ann-layer';
 
+    const lassoLayer  = document.createElement('div');
+    lassoLayer.className = 'lasso-layer';
+    const lassoRect   = document.createElement('div');
+    lassoRect.className = 'lasso-rect';
+    lassoLayer.appendChild(lassoRect);
+
     wrap.appendChild(canvas);
+    wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
     scroll.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
     app.pages.push({
-      wrap, canvas, annLayer,
+      wrap, canvas, annLayer, lassoLayer,
       w: vp.width / DPR, h: vp.height / DPR,
       songId: songId || null,
       songPageIndex: p - 1,
@@ -1891,6 +1916,7 @@ async function renderPages(scroll, pdfDoc, songId, songName, showDivider) {
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    initLassoLayer(app.pages[app.pages.length - 1]);
   }
 }
 
@@ -2045,10 +2071,11 @@ function enterSelectMode() {
   if (selectMode) return;
   selectMode = true;
   selectedAnnIds.clear();
+  app.pages.forEach(pg => { pg.lassoLayer.style.pointerEvents = 'auto'; });
   annSelectBar = document.createElement('div');
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
-    '<span id="sel-count">Tap a note to select it</span>' +
+    '<span id="sel-count">Draw a box or tap notes to select</span>' +
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
@@ -2056,6 +2083,7 @@ function enterSelectMode() {
 function exitSelectMode() {
   selectMode = false;
   selectedAnnIds.clear();
+  app.pages.forEach(pg => { pg.lassoLayer.style.pointerEvents = ''; });
   document.querySelectorAll('.ann-label.ann-selected').forEach(el => el.classList.remove('ann-selected'));
   if (annSelectBar) { annSelectBar.remove(); annSelectBar = null; }
 }
@@ -2063,10 +2091,83 @@ function updateSelCount() {
   const el = document.getElementById('sel-count');
   if (!el) return;
   if (selectedAnnIds.size === 0) {
-    el.textContent = 'Tap a note to select it';
+    el.textContent = 'Draw a box or tap notes to select';
   } else {
-    el.textContent = selectedAnnIds.size + ' selected — drag any to move all';
+    el.textContent = selectedAnnIds.size + ' selected — hold any to move all';
   }
+}
+function initLassoLayer(pg) {
+  const { lassoLayer, annLayer } = pg;
+  const lassoRect = lassoLayer.querySelector('.lasso-rect');
+  let active = false, lassoing = false;
+  let startX = 0, startY = 0;
+
+  lassoLayer.addEventListener('pointerdown', e => {
+    if (!selectMode) return;
+    active   = true;
+    lassoing = false;
+    const r  = lassoLayer.getBoundingClientRect();
+    startX   = e.clientX - r.left;
+    startY   = e.clientY - r.top;
+    lassoRect.style.left   = startX + 'px';
+    lassoRect.style.top    = startY + 'px';
+    lassoRect.style.width  = '0px';
+    lassoRect.style.height = '0px';
+  });
+
+  lassoLayer.addEventListener('pointermove', e => {
+    if (!active) return;
+    const r  = lassoLayer.getBoundingClientRect();
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const dx = cx - startX;
+    const dy = cy - startY;
+    if (!lassoing) {
+      if (Math.abs(dx) < 12) return;   // wait for meaningful horizontal movement
+      lassoing = true;
+      lassoLayer.setPointerCapture(e.pointerId);
+      lassoRect.style.display = 'block';
+    }
+    const x = Math.min(startX, cx);
+    const y = Math.min(startY, cy);
+    lassoRect.style.left   = x + 'px';
+    lassoRect.style.top    = y + 'px';
+    lassoRect.style.width  = Math.abs(dx) + 'px';
+    lassoRect.style.height = Math.abs(dy) + 'px';
+  });
+
+  lassoLayer.addEventListener('pointerup', e => {
+    if (!active) return;
+    active = false;
+    lassoRect.style.display = 'none';
+    if (!lassoing) return;
+    lassoing = false;
+    const r  = lassoLayer.getBoundingClientRect();
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const x1 = Math.min(startX, cx);
+    const y1 = Math.min(startY, cy);
+    const x2 = Math.max(startX, cx);
+    const y2 = Math.max(startY, cy);
+    if (x2 - x1 < 10) return;
+    // Select all notes whose centre falls within the drawn box
+    annLayer.querySelectorAll('.ann-label').forEach(lbl => {
+      const lb = lbl.getBoundingClientRect();
+      const lx = lb.left + lb.width  / 2 - r.left;
+      const ly = lb.top  + lb.height / 2 - r.top;
+      if (lx >= x1 && lx <= x2 && ly >= y1 && ly <= y2) {
+        if (lbl._ann) { selectedAnnIds.add(lbl._ann.id); }
+        lbl.classList.add('ann-selected');
+      }
+    });
+    updateSelCount();
+  });
+
+  lassoLayer.addEventListener('pointercancel', () => {
+    active   = false;
+    lassoing = false;
+    lassoRect.style.display = 'none';
+  });
 }
 
 // ─────────────────── Draw saved annotations ──────────────

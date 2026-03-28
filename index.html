@@ -1282,7 +1282,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.23</div>
+  <div class="version-badge">V 3.24</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3804,24 +3804,29 @@ async function showPlayedSongs(gid) {
     const songMap = {};
     songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
 
-    const performed = [];
-    setlistSnap.forEach(d => { if (d.data().performed) performed.push(d); });
-    performed.sort((a, b) => {
+    const allSetlists = [];
+    setlistSnap.forEach(d => { if (!d.data().archived) allSetlists.push(d); });
+    allSetlists.sort((a, b) => {
       const ta = a.data().createdAt || a.data().uploadedAt || 0;
       const tb = b.data().createdAt || b.data().uploadedAt || 0;
       return ta - tb;
     });
 
-    if (!performed.length) {
-      listEl.innerHTML = '<div class="groups-empty">No performed setlists yet.</div>';
+    if (!allSetlists.length) {
+      listEl.innerHTML = '<div class="groups-empty">No setlists yet.</div>';
       return;
     }
+    const hasPerformed = allSetlists.some(d => d.data().performed);
     let html = '';
-    performed.forEach(sldoc => {
+    if (!hasPerformed) {
+      html += '<div class="groups-empty" style="padding:12px 4px 8px;font-size:13px;text-align:left;">No setlists have been marked as performed yet. Tap ··· on a setlist to mark it. Showing all setlists:</div>';
+    }
+    allSetlists.forEach(sldoc => {
       const sl = sldoc.data();
       const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
       const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-      html += `<div class="ps-setlist-hdr">${esc(sl.name)}<span class="ps-setlist-date">${dateStr}</span></div>`;
+      const perfTag = sl.performed ? ' <span style="font-size:12px;font-weight:500;color:#34c759;">🎤</span>' : '';
+      html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
       if (sl.songIds && sl.songIds.length) {
         sl.songIds.forEach(sid => {
           html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`;
@@ -4251,7 +4256,7 @@ async function loadSongLibrary(gid, isAdmin) {
       listEl.appendChild(row);
     });
   } catch (err) {
-    listEl.innerHTML = '<div class="groups-empty">Could not load songs.</div>';
+    listEl.innerHTML = `<div class="groups-empty">Could not load songs.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small></div>`;
     console.error(err);
   }
 }

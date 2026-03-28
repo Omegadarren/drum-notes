@@ -1154,7 +1154,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.17</div>
+  <div class="version-badge">V 3.18</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2830,6 +2830,7 @@ const FB_CONFIG = {
 };
 firebase.initializeApp(FB_CONFIG);
 const db      = firebase.firestore();
+db.enablePersistence({ synchronizeTabs: false }).catch(() => {});
 const storage = firebase.storage();
 const auth    = firebase.auth();
 // Hide folder button on browsers that don't support the FileSystem Access API
@@ -2927,25 +2928,39 @@ async function loadMyGroups() {
       return;
     }
     listEl.innerHTML = '';
+    const groupCache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
     for (const gid of myGroupIds) {
+      let g, isAdmin;
       try {
         const gdoc = await db.collection('groups').doc(gid).get();
         if (!gdoc.exists) continue;
-        const g = gdoc.data();
-        const isAdmin = g.adminUid === fbUid;
-        const row = document.createElement('div');
-        row.className = 'group-row';
-        row.innerHTML = `
-          <div class="group-row-icon">🎸</div>
-          <div class="group-row-info">
-            <div class="group-row-name">${esc(g.name)}</div>
-            <div class="group-row-meta">${isAdmin ? '👑 Admin' : 'Member'}</div>
-          </div>
-          ${isAdmin ? '<span class="group-row-badge">ADMIN</span>' : ''}
-          <div class="group-row-arrow">›</div>`;
-        row.addEventListener('click', () => openGroupDetail(gid, g));
-        listEl.appendChild(row);
-      } catch (e) { /* skip unavailable */ }
+        g = gdoc.data();
+        const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+        isAdmin = g.adminUid === fbUid || adminGroups.includes(gid);
+        // Cache group details for offline use
+        groupCache[gid] = { name: g.name, adminUid: g.adminUid, inviteCode: g.inviteCode, isAdmin };
+        localStorage.setItem('bandnotes_group_cache', JSON.stringify(groupCache));
+      } catch (e) {
+        // Offline fallback — use cached details
+        if (groupCache[gid]) {
+          g = groupCache[gid];
+          isAdmin = groupCache[gid].isAdmin;
+        } else {
+          continue;
+        }
+      }
+      const row = document.createElement('div');
+      row.className = 'group-row';
+      row.innerHTML = `
+        <div class="group-row-icon">🎸</div>
+        <div class="group-row-info">
+          <div class="group-row-name">${esc(g.name)}</div>
+          <div class="group-row-meta">${isAdmin ? '👑 Admin' : 'Member'}</div>
+        </div>
+        ${isAdmin ? '<span class="group-row-badge">ADMIN</span>' : ''}
+        <div class="group-row-arrow">›</div>`;
+      row.addEventListener('click', () => openGroupDetail(gid, g));
+      listEl.appendChild(row);
     }
     if (!listEl.children.length) {
       listEl.innerHTML = '<div class="groups-empty">No groups yet.</div>';

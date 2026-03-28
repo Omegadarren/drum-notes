@@ -1088,7 +1088,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.11</div>
+  <div class="version-badge">V 3.12</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4103,6 +4103,14 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
 // ─────────────────── Init ────────────────────────────────
 loadStore();
 renderStart();
+
+// ─────────────────── Service Worker (offline) ────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .catch(err => console.warn('SW registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>

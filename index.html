@@ -379,16 +379,50 @@
     .dropdown-item.pressed { background: #2a2a2c; }
     .dropdown-item.danger { color: var(--accent); }
 
-    /* ===================== PDF SCROLL ===================== */
+    /* ===================== PDF SCROLL / SLIDE HOST ===================== */
     #pdf-scroll {
       flex: 1;
+      overflow: hidden;
+      position: relative;
+      background: #0a0a0a;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #slide-track {
+      display: flex;
+      height: 100%;
+      will-change: transform;
+    }
+
+    .song-slide {
+      flex: 0 0 100%;
+      width: 100%;
       overflow-y: scroll;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
-      background: #0a0a0a;
-      user-select: none;
-      -webkit-user-select: none;
+    }
+
+    /* Slide navigation buttons in viewer header */
+    .btn-slide-nav {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 4px 10px;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex-shrink: 0;
+    }
+    .btn-slide-nav:active { background: #333; }
+    .btn-slide-nav:disabled { opacity: 0.3; }
+    .slide-counter {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .page-wrap {
@@ -1059,7 +1093,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.7</div>
+  <div class="version-badge">V 3.8</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1332,6 +1366,9 @@
   <div class="vhdr">
     <div class="vhdr-back" id="btn-back">‹</div>
     <div class="vhdr-title" id="view-title">—</div>
+    <button class="btn-slide-nav" id="btn-slide-prev" style="display:none" disabled>◀</button>
+    <span class="slide-counter" id="slide-counter" style="display:none"></span>
+    <button class="btn-slide-nav" id="btn-slide-next" style="display:none" disabled>▶</button>
     <div class="vhdr-chip" id="mode-chip">Scroll</div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
@@ -1597,6 +1634,8 @@ const app = {
   pages:       [],   // [{ wrap, canvas, annLayer, w, h, songId, songPageIndex }]
   pendingAnn:  null, // { wrap, input, annLayer, pageIdx, xPct, yPct }
   copiedAnn:   null, // text of last copied annotation
+  slides:      [],   // [{ el, songName }] — one per song in a setlist
+  slideIdx:    0,    // currently visible slide index
 };
 
 // ─────────────────── Persistence ───────────────────────
@@ -1793,60 +1832,42 @@ async function openSession(s) {
 async function launchViewer(session) {
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('viewer').classList.add('active');
-  document.getElementById('view-title').textContent = session.name;
 
   app.pages      = [];
   app.pendingAnn = null;
+  app.slides     = [];
+  app.slideIdx   = 0;
   setChip('scroll');
 
-  const scroll = document.getElementById('pdf-scroll');
-  scroll.innerHTML = '';
-  scroll.scrollTop = 0;
+  const pdfScroll = document.getElementById('pdf-scroll');
+  pdfScroll.innerHTML = '';
 
-  // ── Double-tap detection (once per viewer open) ───────
-  // Remove any previous listener before adding a new one to prevent accumulation
-  if (scroll._doubleTapHandler) scroll.removeEventListener('touchend', scroll._doubleTapHandler);
-  let lastTime = 0;
-  let lastXY   = null;
-  scroll._doubleTapHandler = e => {
-    if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
-    const t  = e.changedTouches[0];
-    const now = Date.now();
-    const dt  = now - lastTime;
-    if (dt > 30 && dt < 370 && lastXY) {
-      const dx = t.clientX - lastXY.x;
-      const dy = t.clientY - lastXY.y;
-      if (Math.hypot(dx, dy) < 44) {
-        // Don't open a new note if the tap landed on an existing note label
-        const target = document.elementFromPoint(t.clientX, t.clientY);
-        if (target && target.closest('.ann-label')) return;
-        e.preventDefault();
-        closeDropdown();
-        if (app.pendingAnn) commitAnn();
-        doubleTapAt(t.clientX, t.clientY);
-      }
-    }
-    lastTime = now;
-    lastXY   = { x: t.clientX, y: t.clientY };
-  };
-  scroll.addEventListener('touchend', scroll._doubleTapHandler, { passive: false });
-  scroll.addEventListener('scroll', closeDropdown, { passive: true });
+  // Build the horizontal slide track
+  const track = document.createElement('div');
+  track.id = 'slide-track';
+  pdfScroll.appendChild(track);
+
+  setupSwipeGesture(pdfScroll, track);
 
   try {
     if (session.songPdfs && session.songPdfs.length) {
-      // Multi-song setlist: render each PDF in sequence
-      const multi = session.songPdfs.length > 1;
+      // Multi-song setlist: one slide per song
       for (const sp of session.songPdfs) {
+        const slide = createSongSlide(track);
         const bytes  = dataUrlToBytes(sp.pdfData);
         const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        await renderPages(scroll, pdfDoc, sp.songId, sp.songName, multi);
+        await renderPages(slide, pdfDoc, sp.songId);
+        app.slides.push({ el: slide, songName: sp.songName });
       }
     } else {
       // Legacy single-PDF session
+      const slide = createSongSlide(track);
       const bytes = dataUrlToBytes(session.pdfData);
       app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
-      await renderPages(scroll, app.pdfDoc, null, null, false);
+      await renderPages(slide, app.pdfDoc, null);
+      app.slides.push({ el: slide, songName: session.name });
     }
+    updateSlideNav();
     drawAllAnnotations();
     hint('Double-tap anywhere to add a note  ·  Tap a note to delete it', 4500);
   } catch (err) {
@@ -1864,17 +1885,164 @@ function dataUrlToBytes(dataUrl) {
   return arr;
 }
 
-// ─────────────────── Render PDF pages ────────────────────
-async function renderPages(scroll, pdfDoc, songId, songName, showDivider) {
-  const W   = scroll.clientWidth || window.innerWidth;
-  const DPR = window.devicePixelRatio || 1;   // iPad Pro = 2
+// ─────────────────── Create a song slide ─────────────────
+function createSongSlide(track) {
+  const slide = document.createElement('div');
+  slide.className = 'song-slide';
 
-  if (showDivider && songName) {
-    const divider = document.createElement('div');
-    divider.className = 'song-divider';
-    divider.textContent = songName;
-    scroll.appendChild(divider);
+  // Per-slide double-tap detection for annotations
+  let lastTime = 0;
+  let lastXY   = null;
+  slide.addEventListener('touchend', e => {
+    if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
+    const t   = e.changedTouches[0];
+    const now = Date.now();
+    const dt  = now - lastTime;
+    if (dt > 30 && dt < 370 && lastXY) {
+      const dx = t.clientX - lastXY.x;
+      const dy = t.clientY - lastXY.y;
+      if (Math.hypot(dx, dy) < 44) {
+        const target = document.elementFromPoint(t.clientX, t.clientY);
+        if (target && target.closest('.ann-label')) return;
+        e.preventDefault();
+        closeDropdown();
+        if (app.pendingAnn) commitAnn();
+        doubleTapAt(t.clientX, t.clientY);
+      }
+    }
+    lastTime = now;
+    lastXY   = { x: t.clientX, y: t.clientY };
+  }, { passive: false });
+
+  slide.addEventListener('scroll', closeDropdown, { passive: true });
+
+  track.appendChild(slide);
+  return slide;
+}
+
+// ─────────────────── Swipe gesture between songs ─────────
+function setupSwipeGesture(pdfScroll, track) {
+  // Clean up any previous handlers
+  if (pdfScroll._swipeHandlers) {
+    const h = pdfScroll._swipeHandlers;
+    pdfScroll.removeEventListener('touchstart', h.start);
+    pdfScroll.removeEventListener('touchmove',  h.move);
+    pdfScroll.removeEventListener('touchend',   h.end);
+    pdfScroll.removeEventListener('touchcancel', h.cancel);
   }
+
+  let startX = 0, startY = 0, dirLocked = null, dragging = false, baseOffset = 0;
+
+  const onStart = e => {
+    if (e.touches.length !== 1) return;
+    const t  = e.touches[0];
+    startX   = t.clientX;
+    startY   = t.clientY;
+    dirLocked = null;
+    dragging  = false;
+    baseOffset = -app.slideIdx * pdfScroll.clientWidth;
+    track.style.transition = 'none';
+  };
+
+  const onMove = e => {
+    if (e.touches.length !== 1) return;
+    const t  = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+
+    if (!dirLocked) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      dirLocked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (dirLocked !== 'x') return;
+
+    dragging = true;
+    e.preventDefault();
+
+    // Resist at first and last slide
+    const max = app.slides.length - 1;
+    let offset = baseOffset + dx;
+    if ((app.slideIdx === 0 && dx > 0) || (app.slideIdx === max && dx < 0)) {
+      offset = baseOffset + dx * 0.2;
+    }
+    track.style.transform = `translateX(${offset}px)`;
+  };
+
+  const onEnd = e => {
+    if (!dragging) return;
+    dragging  = false;
+    const dx  = e.changedTouches[0].clientX - startX;
+    const threshold = Math.min(80, pdfScroll.clientWidth * 0.3);
+    let newIdx = app.slideIdx;
+    if (dx < -threshold && app.slideIdx < app.slides.length - 1) newIdx++;
+    else if (dx > threshold && app.slideIdx > 0) newIdx--;
+
+    if (newIdx !== app.slideIdx) app._swipeJustFired = true;
+    goToSlide(newIdx);
+  };
+
+  const onCancel = () => {
+    if (dragging) goToSlide(app.slideIdx);  // snap back
+    dragging = false;
+  };
+
+  pdfScroll.addEventListener('touchstart',  onStart,  { passive: true });
+  pdfScroll.addEventListener('touchmove',   onMove,   { passive: false });
+  pdfScroll.addEventListener('touchend',    onEnd,    { passive: true });
+  pdfScroll.addEventListener('touchcancel', onCancel, { passive: true });
+  pdfScroll._swipeHandlers = { start: onStart, move: onMove, end: onEnd, cancel: onCancel };
+}
+
+// ─────────────────── Navigate to a slide ─────────────────
+function goToSlide(idx) {
+  if (!app.slides || idx < 0 || idx >= app.slides.length) return;
+  app.slideIdx = idx;
+  const pdfScroll = document.getElementById('pdf-scroll');
+  const track     = document.getElementById('slide-track');
+  if (!track) return;
+  track.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+  track.style.transform  = `translateX(${-idx * pdfScroll.clientWidth}px)`;
+  updateSlideNav();
+}
+
+// ─────────────────── Update song nav in header ───────────
+function updateSlideNav() {
+  const total   = app.slides ? app.slides.length : 0;
+  const counter = document.getElementById('slide-counter');
+  const prevBtn = document.getElementById('btn-slide-prev');
+  const nextBtn = document.getElementById('btn-slide-next');
+
+  if (!counter) return;
+
+  if (total <= 1) {
+    // Single song — hide nav, show setlist/session name as title
+    counter.style.display = 'none';
+    if (prevBtn) prevBtn.style.display = 'none';
+    if (nextBtn) nextBtn.style.display = 'none';
+    if (total === 1 && app.slides[0]) {
+      document.getElementById('view-title').textContent = app.slides[0].songName || '';
+    }
+    return;
+  }
+
+  counter.style.display = '';
+  counter.textContent   = `${app.slideIdx + 1} / ${total}`;
+  if (prevBtn) {
+    prevBtn.style.display = '';
+    prevBtn.disabled = app.slideIdx === 0;
+  }
+  if (nextBtn) {
+    nextBtn.style.display = '';
+    nextBtn.disabled = app.slideIdx === total - 1;
+  }
+  // Show current song name in title
+  document.getElementById('view-title').textContent = app.slides[app.slideIdx].songName || '';
+}
+
+// ─────────────────── Render PDF pages ────────────────────
+async function renderPages(container, pdfDoc, songId) {
+  const W   = container.clientWidth || window.innerWidth;
+  const DPR = window.devicePixelRatio || 1;   // iPad Pro = 2
 
   for (let p = 1; p <= pdfDoc.numPages; p++) {
     const page  = await pdfDoc.getPage(p);
@@ -1907,7 +2075,7 @@ async function renderPages(scroll, pdfDoc, songId, songName, showDivider) {
     wrap.appendChild(canvas);
     wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
-    scroll.appendChild(wrap);
+    container.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
     app.pages.push({
@@ -2025,7 +2193,7 @@ function commitAnn() {
   const text = input.value.trim();
 
   clearTimeout(scrollTimer);
-  const scrollEl = document.getElementById('pdf-scroll');
+  const scrollEl = annLayer.closest('.song-slide');
   const savedTop = scrollEl ? scrollEl.scrollTop : 0;
   input.blur();                      // blur while still in DOM — controls keyboard dismissal
   annLayer.removeChild(wrap);
@@ -2053,7 +2221,7 @@ function cancelAnn() {
   if (!app.pendingAnn) return;
   const { wrap, input, annLayer, scrollTimer } = app.pendingAnn;
   clearTimeout(scrollTimer);
-  const scrollEl = document.getElementById('pdf-scroll');
+  const scrollEl = annLayer.closest('.song-slide');
   const savedTop = scrollEl ? scrollEl.scrollTop : 0;
   input.blur();                      // blur while still in DOM — controls keyboard dismissal
   annLayer.removeChild(wrap);
@@ -2155,6 +2323,8 @@ function initLassoLayer(pg) {
       return;
     }
     lassoing = false;
+    // If a swipe just completed, discard the lasso selection
+    if (app._swipeJustFired) { app._swipeJustFired = false; return; }
     const r  = lassoLayer.getBoundingClientRect();
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
@@ -2413,6 +2583,9 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
   goBack();
 });
 
+document.getElementById('btn-slide-prev').addEventListener('click', () => goToSlide(app.slideIdx - 1));
+document.getElementById('btn-slide-next').addEventListener('click', () => goToSlide(app.slideIdx + 1));
+
 // ─────────────────── Note Style modal ────────────────────
 document.getElementById('mi-select-notes').addEventListener('click', () => {
   closeDropdown();
@@ -2651,6 +2824,8 @@ function goBack() {
   app.currentId = null;
   app.pdfDoc    = null;
   app.pages     = [];
+  app.slides    = [];
+  app.slideIdx  = 0;
   document.querySelectorAll('.del-toast').forEach(el => el.remove());
   document.getElementById('pdf-scroll').innerHTML = '';
   document.getElementById('viewer').classList.remove('active');

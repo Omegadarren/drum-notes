@@ -1122,7 +1122,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.13</div>
+  <div class="version-badge">V 3.14</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2132,8 +2132,10 @@ function findPageFor(ann) {
 
 // ─────────────────── Find page, show annotation input ────
 function doubleTapAt(cx, cy) {
+  const currentSlide = app.slides && app.slides[app.slideIdx] ? app.slides[app.slideIdx].el : null;
   for (let i = 0; i < app.pages.length; i++) {
     const { wrap, annLayer, w, h } = app.pages[i];
+    if (currentSlide && !currentSlide.contains(wrap)) continue;
     const r = wrap.getBoundingClientRect();
     if (cy >= r.top && cy <= r.bottom) {
       const x = Math.max(0, cx - r.left);

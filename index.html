@@ -1154,7 +1154,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.18</div>
+  <div class="version-badge">V 3.19</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3392,32 +3392,38 @@ async function openGroupSetlist(setlistId, sl) {
         let songName = null;
         let pdfData  = null;
 
-        // Try live fetch first
-        try {
-          const songDoc = await db.collection('groups').doc(currentGroupId)
-            .collection('songs').doc(songId).get();
-          if (songDoc.exists) {
-            const song = songDoc.data();
-            songName = song.name;
-            const url  = await storage.ref(song.storagePath).getDownloadURL();
-            const buf  = await new Promise((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open('GET', url, true);
-              xhr.responseType = 'arraybuffer';
-              xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
-              xhr.onerror = () => reject(new Error('Network error'));
-              xhr.send();
-            });
-            const bytes = new Uint8Array(buf);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i += 8192)
-              binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-            pdfData = 'data:application/pdf;base64,' + btoa(binary);
-            // Cache for offline use
-            cacheSongPdf(currentGroupId, songId, songName, pdfData);
+        // Try live fetch first (skip if offline — go straight to cache)
+        if (navigator.onLine) {
+          try {
+            const songDoc = await db.collection('groups').doc(currentGroupId)
+              .collection('songs').doc(songId).get();
+            if (songDoc.exists) {
+              const song = songDoc.data();
+              songName = song.name;
+              const url  = await storage.ref(song.storagePath).getDownloadURL();
+              const buf  = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.responseType = 'arraybuffer';
+                xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+                xhr.onerror = () => reject(new Error('Network error'));
+                xhr.send();
+              });
+              const bytes = new Uint8Array(buf);
+              let binary = '';
+              for (let i = 0; i < bytes.length; i += 8192)
+                binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+              pdfData = 'data:application/pdf;base64,' + btoa(binary);
+              // Cache for offline use
+              cacheSongPdf(currentGroupId, songId, songName, pdfData);
+            }
+          } catch (fetchErr) {
+            // Live fetch failed — fall through to cache below
           }
-        } catch (fetchErr) {
-          // Live fetch failed — try offline cache
+        }
+
+        // Offline or live fetch failed — use cached PDF
+        if (!pdfData) {
           const cached = await getCachedSongPdf(currentGroupId, songId);
           if (cached) {
             pdfData  = cached.pdfData;

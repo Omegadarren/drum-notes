@@ -957,6 +957,65 @@
     .song-row-actions { display:flex; gap:8px; flex-shrink:0; }
     .song-action-btn { background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:16px; padding:6px 10px; cursor:pointer; touch-action:manipulation; }
 
+    /* ===================== PLAYED SONGS MODAL ===================== */
+    #played-songs-modal .modal-box {
+      max-height: 80vh;
+      gap: 0;
+      padding-bottom: 16px;
+    }
+    .ps-modal-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .ps-close-btn {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+      padding: 6px 12px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .ps-close-btn:active { opacity: 0.6; }
+    #played-songs-list {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-top: 4px;
+    }
+    .ps-setlist-hdr {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      padding: 16px 0 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ps-setlist-hdr:first-child { padding-top: 8px; }
+    .ps-setlist-date {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      flex-shrink: 0;
+      margin-left: 10px;
+    }
+    .ps-song-item {
+      font-size: 15px;
+      color: var(--muted);
+      padding: 7px 4px 7px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .ps-song-item::before { content: '▸ '; font-size: 11px; opacity: 0.5; }
+    .ps-empty-label { font-size: 14px; color: var(--muted); padding: 4px 14px 12px; font-style: italic; }
+
     /* Setlist builder song rows */
     .sl-selected-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); }
     .sl-selected-row:last-child { border-bottom:none; }
@@ -1222,7 +1281,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.21</div>
+  <div class="version-badge">V 3.22</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1296,6 +1355,7 @@
     </div>
   </div>
   <div class="groups-scroll" id="group-detail-scroll">
+    <button id="btn-played-songs" class="ghdr-action" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:20px;display:flex;align-items:center;gap:8px;">🎤 <span style="flex:1;text-align:left;">Played Songs</span><span style="font-size:20px;opacity:0.6;">›</span></button>
     <div class="groups-section-label">Setlists</div>
     <div id="group-setlists-list"><div class="groups-empty">Loading…</div></div>
     <div id="group-admin-section" style="display:none;">
@@ -1336,7 +1396,19 @@
   </div>
 </div>
 
+<!-- ==================== PLAYED SONGS MODAL ==================== -->
+<div class="modal-bg" id="played-songs-modal">
+  <div class="modal-box">
+    <div class="ps-modal-hdr">
+      <div class="modal-title" style="font-size:22px;">🎤 Played Songs</div>
+      <button class="ps-close-btn" id="btn-played-songs-close">✕</button>
+    </div>
+    <div id="played-songs-list"></div>
+  </div>
+</div>
+
 <!-- ==================== CREATE GROUP MODAL ==================== -->
+<div class="modal-bg" id="create-group-modal">
 <div class="modal-bg" id="create-group-modal">
   <div class="modal-box">
     <div class="modal-title">Create Group 🎸</div>
@@ -3719,6 +3791,46 @@ async function loadGroupSetlists(gid) {
   }
 }
 
+async function showPlayedSongs(gid) {
+  const modal  = document.getElementById('played-songs-modal');
+  const listEl = document.getElementById('played-songs-list');
+  listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
+  modal.classList.add('open');
+  try {
+    const [songSnap, setlistSnap] = await Promise.all([
+      db.collection('groups').doc(gid).collection('songs').get(),
+      db.collection('groups').doc(gid).collection('setlists').orderBy('createdAt', 'asc').get()
+    ]);
+    const songMap = {};
+    songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
+
+    const performed = [];
+    setlistSnap.forEach(d => { if (d.data().performed) performed.push(d); });
+
+    if (!performed.length) {
+      listEl.innerHTML = '<div class="groups-empty">No performed setlists yet.</div>';
+      return;
+    }
+    let html = '';
+    performed.forEach(sldoc => {
+      const sl = sldoc.data();
+      const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
+      const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      html += `<div class="ps-setlist-hdr">${esc(sl.name)}<span class="ps-setlist-date">${dateStr}</span></div>`;
+      if (sl.songIds && sl.songIds.length) {
+        sl.songIds.forEach(sid => {
+          html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`;
+        });
+      } else {
+        html += `<div class="ps-empty-label">No song list recorded</div>`;
+      }
+    });
+    listEl.innerHTML = html;
+  } catch (err) {
+    listEl.innerHTML = `<div class="groups-empty">Could not load: ${esc(err.message)}</div>`;
+  }
+}
+
 async function openGroupSetlist(setlistId, sl) {
   // ── New format: songIds array ──────────────────────────
   if (sl.songIds && sl.songIds.length) {
@@ -4224,6 +4336,15 @@ document.getElementById('btn-song-library-member').addEventListener('click', () 
 document.getElementById('btn-song-library-back').addEventListener('click', () => {
   document.getElementById('song-library-screen').classList.remove('active');
   document.getElementById('group-detail-screen').classList.add('active');
+});
+
+// ── Played Songs — event handlers ────────────────────────
+document.getElementById('btn-played-songs').addEventListener('click', () => {
+  if (!currentGroupId) return;
+  showPlayedSongs(currentGroupId);
+});
+document.getElementById('btn-played-songs-close').addEventListener('click', () => {
+  document.getElementById('played-songs-modal').classList.remove('open');
 });
 
 let pendingSongFiles = [];  // [{ file, name }]

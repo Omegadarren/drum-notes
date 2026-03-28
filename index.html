@@ -478,62 +478,7 @@
     }
 
     /* Multi-select mode */
-    .ann-label.ann-selected {
-      outline: 2px solid var(--accent);
-      border-radius: 3px;
-      background: rgba(255, 80, 30, 0.18);
-    }
-    .ann-select-bar {
-      position: fixed;
-      bottom: 68px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--surface);
-      border: 1px solid var(--accent);
-      border-radius: 12px;
-      padding: 9px 18px;
-      display: flex;
-      gap: 14px;
-      align-items: center;
-      z-index: 200;
-      font-size: 15px;
-      color: var(--text);
-      white-space: nowrap;
-      box-shadow: 0 4px 20px rgba(0,0,0,.5);
-      touch-action: manipulation;
-    }
-    /* Rubber-band lasso selection layer */
-    .lasso-layer {
-      position: absolute;
-      inset: 0;
-      pointer-events: auto;
-      touch-action: pan-y;
-      cursor: default;
-    }
-    .lasso-layer.lassoing {
-      cursor: crosshair;
-    }
-    .lasso-rect {
-      position: absolute;
-      border: 2px dashed var(--accent);
-      background: rgba(255, 80, 30, 0.10);
-      pointer-events: none;
-      display: none;
-      border-radius: 3px;
-      box-sizing: border-box;
-    }
 
-    .ann-select-bar button {
-      background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 7px 16px;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
 
     /* Inline annotation input + buttons */
     .ann-input-wrap {
@@ -1093,7 +1038,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.8</div>
+  <div class="version-badge">V 3.9</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1377,7 +1322,6 @@
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
-    <div class="dropdown-item" id="mi-select-notes">☑&nbsp; Select &amp; move notes…</div>
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
@@ -1977,7 +1921,6 @@ function setupSwipeGesture(pdfScroll, track) {
     if (dx < -threshold && app.slideIdx < app.slides.length - 1) newIdx++;
     else if (dx > threshold && app.slideIdx > 0) newIdx--;
 
-    if (newIdx !== app.slideIdx) app._swipeJustFired = true;
     goToSlide(newIdx);
   };
 
@@ -2066,20 +2009,13 @@ async function renderPages(container, pdfDoc, songId) {
     const annLayer     = document.createElement('div');
     annLayer.className = 'ann-layer';
 
-    const lassoLayer  = document.createElement('div');
-    lassoLayer.className = 'lasso-layer';
-    const lassoRect   = document.createElement('div');
-    lassoRect.className = 'lasso-rect';
-    lassoLayer.appendChild(lassoRect);
-
     wrap.appendChild(canvas);
-    wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
     container.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
     app.pages.push({
-      wrap, canvas, annLayer, lassoLayer,
+      wrap, canvas, annLayer,
       w: vp.width / DPR, h: vp.height / DPR,
       songId: songId || null,
       songPageIndex: p - 1,
@@ -2087,7 +2023,6 @@ async function renderPages(container, pdfDoc, songId) {
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    initLassoLayer(app.pages[app.pages.length - 1]);
   }
 }
 
@@ -2234,130 +2169,7 @@ function cancelAnn() {
 }
 
 // ─────────────────── Multi-select state ─────────────────
-let selectMode = false;
-const selectedAnnIds = new Set();
-let annSelectBar = null;
 
-function enterSelectMode() {
-  if (selectMode) return;
-  selectMode = true;
-  // NOTE: do NOT clear selectedAnnIds here — lasso may have pre-populated it
-  annSelectBar = document.createElement('div');
-  annSelectBar.className = 'ann-select-bar';
-  annSelectBar.innerHTML =
-    '<span id="sel-count">Draw a box or tap notes to select</span>' +
-    '<button id="btn-sel-done">Done</button>';
-  document.getElementById('viewer').appendChild(annSelectBar);
-  document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
-  updateSelCount();
-}
-function exitSelectMode() {
-  selectMode = false;
-  selectedAnnIds.clear();
-  document.querySelectorAll('.ann-label.ann-selected').forEach(el => el.classList.remove('ann-selected'));
-  if (annSelectBar) { annSelectBar.remove(); annSelectBar = null; }
-}
-function updateSelCount() {
-  const el = document.getElementById('sel-count');
-  if (!el) return;
-  if (selectedAnnIds.size === 0) {
-    el.textContent = 'Draw a box or tap notes to select';
-  } else {
-    el.textContent = selectedAnnIds.size + ' selected — hold any to move all';
-  }
-}
-function initLassoLayer(pg) {
-  const { lassoLayer, annLayer } = pg;
-  const lassoRect = lassoLayer.querySelector('.lasso-rect');
-  let active = false, lassoing = false;
-  let startX = 0, startY = 0;
-
-  lassoLayer.addEventListener('pointerdown', e => {
-    if (e.target.closest('.ann-label')) return;
-    if (e.target.closest('.ann-input-wrap')) return;
-    active   = true;
-    lassoing = false;
-    const r  = lassoLayer.getBoundingClientRect();
-    startX   = e.clientX - r.left;
-    startY   = e.clientY - r.top;
-    lassoRect.style.left   = startX + 'px';
-    lassoRect.style.top    = startY + 'px';
-    lassoRect.style.width  = '0px';
-    lassoRect.style.height = '0px';
-  });
-
-  lassoLayer.addEventListener('pointermove', e => {
-    if (!active) return;
-    const r  = lassoLayer.getBoundingClientRect();
-    const cx = e.clientX - r.left;
-    const cy = e.clientY - r.top;
-    const dx = cx - startX;
-    const dy = cy - startY;
-
-    if (!lassoing) {
-      if (Math.abs(dx) < 40) return; // wait for decisive horizontal movement
-      // Horizontal intent confirmed — capture pointer and start box
-      // iOS won't cancel here because it already saw horizontal movement
-      lassoing = true;
-      lassoLayer.setPointerCapture(e.pointerId);
-      lassoLayer.classList.add('lassoing');
-      lassoRect.style.display = 'block';
-    }
-
-    const x = Math.min(startX, cx);
-    const y = Math.min(startY, cy);
-    lassoRect.style.left   = x + 'px';
-    lassoRect.style.top    = y + 'px';
-    lassoRect.style.width  = Math.abs(dx) + 'px';
-    lassoRect.style.height = Math.abs(dy) + 'px';
-  });
-
-  lassoLayer.addEventListener('pointerup', e => {
-    if (!active) return;
-    active = false;
-    lassoLayer.classList.remove('lassoing');
-    lassoRect.style.display = 'none';
-    if (!lassoing) {
-      // Treat as a tap through to the page (double-tap for note input)
-      // We can't re-dispatch, but the double-tap handler on scroll fires on touchend anyway
-      return;
-    }
-    lassoing = false;
-    // If a swipe just completed, discard the lasso selection
-    if (app._swipeJustFired) { app._swipeJustFired = false; return; }
-    const r  = lassoLayer.getBoundingClientRect();
-    const cx = e.clientX - r.left;
-    const cy = e.clientY - r.top;
-    const x1 = Math.min(startX, cx);
-    const y1 = Math.min(startY, cy);
-    const x2 = Math.max(startX, cx);
-    const y2 = Math.max(startY, cy);
-    if (x2 - x1 < 10) return;
-    // Select all notes whose centre falls inside the box
-    let found = 0;
-    annLayer.querySelectorAll('.ann-label').forEach(lbl => {
-      const lb = lbl.getBoundingClientRect();
-      const lx = lb.left + lb.width  / 2 - r.left;
-      const ly = lb.top  + lb.height / 2 - r.top;
-      if (lx >= x1 && lx <= x2 && ly >= y1 && ly <= y2) {
-        if (lbl._ann) { selectedAnnIds.add(lbl._ann.id); }
-        lbl.classList.add('ann-selected');
-        found++;
-      }
-    });
-    if (found > 0) {
-      if (!selectMode) enterSelectMode();
-      updateSelCount();
-    }
-  });
-
-  lassoLayer.addEventListener('pointercancel', () => {
-    active   = false;
-    lassoing = false;
-    lassoLayer.classList.remove('lassoing');
-    lassoRect.style.display = 'none';
-  });
-}
 
 // ─────────────────── Draw saved annotations ──────────────
 function drawAllAnnotations() {
@@ -2404,15 +2216,6 @@ function drawAnnotation(annLayer, ann) {
       dragging  = true;
       try { label.setPointerCapture(capturedPointerId); } catch(_) {}
       label.style.cursor = 'grabbing';
-      if (selectMode && selectedAnnIds.has(ann.id)) {
-        // Snapshot start positions of all selected labels for group drag
-        app.pages.forEach(pg => {
-          pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
-            lbl.dataset.startX = parseFloat(lbl.style.left) / 100;
-            lbl.dataset.startY = parseFloat(lbl.style.top)  / 100;
-          });
-        });
-      }
     }, 1000);
   });
 
@@ -2423,23 +2226,10 @@ function drawAnnotation(annLayer, ann) {
     if (!dragMoved && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
     dragMoved = true;
     const r = annLayer.getBoundingClientRect();
-    if (selectMode && selectedAnnIds.has(ann.id)) {
-      const dxPct = dx / r.width;
-      const dyPct = dy / r.height;
-      app.pages.forEach(pg => {
-        pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
-          const ox = parseFloat(lbl.dataset.startX);
-          const oy = parseFloat(lbl.dataset.startY);
-          lbl.style.left = (Math.max(0, Math.min(1, ox + dxPct)) * 100) + '%';
-          lbl.style.top  = (Math.max(0, Math.min(1, oy + dyPct)) * 100) + '%';
-        });
-      });
-    } else {
-      const newX = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-      const newY = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-      label.style.left = (newX * 100) + '%';
-      label.style.top  = (newY * 100) + '%';
-    }
+    const newX = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+    const newY = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+    label.style.left = (newX * 100) + '%';
+    label.style.top  = (newY * 100) + '%';
   });
 
   label.addEventListener('pointerup', e => {
@@ -2453,45 +2243,17 @@ function drawAnnotation(annLayer, ann) {
       const r   = annLayer.getBoundingClientRect();
       const dx  = e.clientX - startClientX;
       const dy  = e.clientY - startClientY;
-      if (selectMode && selectedAnnIds.has(ann.id)) {
-        const dxPct = dx / r.width;
-        const dyPct = dy / r.height;
-        app.pages.forEach(pg => {
-          pg.annLayer.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
-            const ox = parseFloat(lbl.dataset.startX);
-            const oy = parseFloat(lbl.dataset.startY);
-            if (lbl._ann) {
-              lbl._ann.xPct = Math.max(0, Math.min(1, ox + dxPct));
-              lbl._ann.yPct = Math.max(0, Math.min(1, oy + dyPct));
-            }
-          });
-        });
-        saveCurrentSession();
-      } else {
-        ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
-        ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
-        saveCurrentSession();
-      }
+      ann.xPct = Math.max(0, Math.min(1, (startLeft + dx) / r.width));
+      ann.yPct = Math.max(0, Math.min(1, (startTop  + dy) / r.height));
+      saveCurrentSession();
     } else {
-      // ── Tap (no significant movement) ──────────────────
-      if (selectMode) {
-        if (selectedAnnIds.has(ann.id)) {
-          selectedAnnIds.delete(ann.id);
-          label.classList.remove('ann-selected');
-        } else {
-          selectedAnnIds.add(ann.id);
-          label.classList.add('ann-selected');
-        }
-        updateSelCount();
+      // ── Tap (no significant movement) — double-tap to edit/delete
+      const now = Date.now();
+      if (now - lastTapTime < 300) {
+        lastTapTime = 0;
+        showDeleteConfirm(ann, label);
       } else {
-        // Normal mode: double-tap to edit/delete
-        const now = Date.now();
-        if (now - lastTapTime < 300) {
-          lastTapTime = 0;
-          showDeleteConfirm(ann, label);
-        } else {
-          lastTapTime = now;
-        }
+        lastTapTime = now;
       }
     }
   });
@@ -2587,11 +2349,6 @@ document.getElementById('btn-slide-prev').addEventListener('click', () => goToSl
 document.getElementById('btn-slide-next').addEventListener('click', () => goToSlide(app.slideIdx + 1));
 
 // ─────────────────── Note Style modal ────────────────────
-document.getElementById('mi-select-notes').addEventListener('click', () => {
-  closeDropdown();
-  enterSelectMode();
-});
-
 document.getElementById('mi-note-style').addEventListener('click', e => {
   e.stopPropagation();
   closeDropdown();
@@ -2813,7 +2570,6 @@ document.getElementById('mi-clear').addEventListener('click', () => {
 
 function goBack() {
   if (app.pendingAnn) cancelAnn();
-  exitSelectMode();
   saveCurrentSession();
   const sess = currentSession();
   const fromGroup = sess && (sess.groupSetlistId || sess.groupId);

@@ -424,6 +424,56 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
+    .btn-jump-to {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 4px 10px;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .btn-jump-to:active { background: #333; }
+    .jump-dropdown {
+      position: absolute;
+      top: calc(var(--hdr) + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 100;
+      min-width: 200px;
+      max-width: 88vw;
+      max-height: 60vh;
+      overflow-y: auto;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    .jump-dropdown.open { display: block; }
+    .jump-item {
+      padding: 14px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .jump-item:last-child { border-bottom: none; }
+    .jump-item:active, .jump-item.active { background: #2a2a2c; }
+    .jump-item.current { color: var(--accent); }
+    .jump-item-num {
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 22px;
+      flex-shrink: 0;
+    }
 
     .page-wrap {
       position: relative;
@@ -1038,7 +1088,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.10</div>
+  <div class="version-badge">V 3.11</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1314,6 +1364,8 @@
     <button class="btn-slide-nav" id="btn-slide-prev" style="display:none" disabled>◀</button>
     <span class="slide-counter" id="slide-counter" style="display:none"></span>
     <button class="btn-slide-nav" id="btn-slide-next" style="display:none" disabled>▶</button>
+    <button class="btn-jump-to" id="btn-jump-to" style="display:none">Jump to ▾</button>
+    <div class="jump-dropdown" id="jump-dropdown"></div>
     <div class="vhdr-chip" id="mode-chip">Scroll</div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
@@ -1967,6 +2019,8 @@ function updateSlideNav() {
     counter.style.display = 'none';
     if (prevBtn) prevBtn.style.display = 'none';
     if (nextBtn) nextBtn.style.display = 'none';
+    const jumpBtnS = document.getElementById('btn-jump-to');
+    if (jumpBtnS) jumpBtnS.style.display = 'none';
     if (total === 1 && app.slides[0]) {
       document.getElementById('view-title').textContent = app.slides[0].songName || '';
     }
@@ -1983,6 +2037,9 @@ function updateSlideNav() {
     nextBtn.style.display = '';
     nextBtn.disabled = app.slideIdx === total - 1;
   }
+  const jumpBtn = document.getElementById('btn-jump-to');
+  if (jumpBtn) jumpBtn.style.display = '';
+  buildJumpMenu();
   // Show current song name in title
   document.getElementById('view-title').textContent = app.slides[app.slideIdx].songName || '';
 }
@@ -2352,6 +2409,43 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
 
 document.getElementById('btn-slide-prev').addEventListener('click', () => goToSlide(app.slideIdx - 1));
 document.getElementById('btn-slide-next').addEventListener('click', () => goToSlide(app.slideIdx + 1));
+
+document.getElementById('btn-jump-to').addEventListener('click', e => {
+  e.stopPropagation();
+  buildJumpMenu();
+  document.getElementById('jump-dropdown').classList.toggle('open');
+});
+
+function buildJumpMenu() {
+  const menu = document.getElementById('jump-dropdown');
+  if (!menu || !app.slides) return;
+  menu.innerHTML = '';
+  app.slides.forEach((slide, i) => {
+    const item = document.createElement('div');
+    item.className = 'jump-item' + (i === app.slideIdx ? ' current' : '');
+    item.innerHTML = `<span class="jump-item-num">${i + 1}</span>${esc(slide.songName || 'Song ' + (i + 1))}`;
+    item.addEventListener('click', () => {
+      document.getElementById('jump-dropdown').classList.remove('open');
+      goToSlide(i);
+    });
+    menu.appendChild(item);
+  });
+}
+
+document.addEventListener('click', e => {
+  const menu = document.getElementById('jump-dropdown');
+  if (menu && !document.getElementById('btn-jump-to').contains(e.target)) {
+    menu.classList.remove('open');
+  }
+});
+document.addEventListener('touchstart', e => {
+  const menu = document.getElementById('jump-dropdown');
+  if (menu && menu.classList.contains('open') &&
+      !document.getElementById('btn-jump-to').contains(e.target) &&
+      !menu.contains(e.target)) {
+    menu.classList.remove('open');
+  }
+}, { passive: true });
 
 // ─────────────────── Note Style modal ────────────────────
 document.getElementById('mi-note-style').addEventListener('click', e => {

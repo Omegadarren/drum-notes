@@ -41,6 +41,34 @@
       overflow: hidden;
     }
 
+    /* ===================== DESKTOP WARNING BANNER ===================== */
+    #desktop-warning {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 9999;
+      background: #7c3700;
+      color: #ffe0b2;
+      font-size: 14px;
+      padding: 10px 44px 10px 18px;
+      line-height: 1.4;
+      border-bottom: 1px solid #a04800;
+    }
+    #desktop-warning.show { display: block; }
+    #desktop-warning-close {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #ffe0b2;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+    }
+
     /* ===================== START SCREEN ===================== */
     #start-screen {
       height: 100vh;
@@ -1076,6 +1104,12 @@
 </head>
 <body>
 
+<!-- ==================== DESKTOP WARNING ==================== -->
+<div id="desktop-warning">
+  ⚠️ BandNotes is designed for tablets and smartphones. Some features (swiping, touch annotations) won’t work on a desktop.
+  <button id="desktop-warning-close" title="Dismiss">×</button>
+</div>
+
 <!-- ==================== START SCREEN ==================== -->
 <div id="start-screen">
   <!-- Profile bar -->
@@ -1088,7 +1122,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.12</div>
+  <div class="version-badge">V 3.13</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4103,6 +4137,20 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
 // ─────────────────── Init ────────────────────────────────
 loadStore();
 renderStart();
+
+// ─────────────────── Desktop warning ───────────────────
+(function() {
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+    || navigator.maxTouchPoints > 1;
+  if (!isMobile) {
+    const banner = document.getElementById('desktop-warning');
+    if (banner) {
+      banner.classList.add('show');
+      document.getElementById('desktop-warning-close')
+        .addEventListener('click', () => banner.classList.remove('show'));
+    }
+  }
+})();
 
 // ─────────────────── Service Worker (offline) ────────────
 if ('serviceWorker' in navigator) {

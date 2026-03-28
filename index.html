@@ -960,6 +960,7 @@
     /* ===================== PLAYED SONGS MODAL ===================== */
     #played-songs-modal .modal-box {
       max-height: 80vh;
+      min-height: 260px;
       gap: 0;
       padding-bottom: 16px;
     }
@@ -1281,7 +1282,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.22</div>
+  <div class="version-badge">V 3.23</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1355,7 +1356,6 @@
     </div>
   </div>
   <div class="groups-scroll" id="group-detail-scroll">
-    <button id="btn-played-songs" class="ghdr-action" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:20px;display:flex;align-items:center;gap:8px;">🎤 <span style="flex:1;text-align:left;">Played Songs</span><span style="font-size:20px;opacity:0.6;">›</span></button>
     <div class="groups-section-label">Setlists</div>
     <div id="group-setlists-list"><div class="groups-empty">Loading…</div></div>
     <div id="group-admin-section" style="display:none;">
@@ -1408,7 +1408,6 @@
 </div>
 
 <!-- ==================== CREATE GROUP MODAL ==================== -->
-<div class="modal-bg" id="create-group-modal">
 <div class="modal-bg" id="create-group-modal">
   <div class="modal-box">
     <div class="modal-title">Create Group 🎸</div>
@@ -1480,6 +1479,7 @@
   <div class="ghdr">
     <div class="ghdr-back" id="btn-song-library-back">‹</div>
     <div class="ghdr-title" id="song-library-title">Song Library</div>
+    <button class="ghdr-action" id="btn-played-songs">🎤 Played</button>
     <button class="ghdr-action" id="btn-upload-song" style="display:none;">⬆ Add Song</button>
   </div>
   <div class="groups-scroll">
@@ -3799,13 +3799,18 @@ async function showPlayedSongs(gid) {
   try {
     const [songSnap, setlistSnap] = await Promise.all([
       db.collection('groups').doc(gid).collection('songs').get(),
-      db.collection('groups').doc(gid).collection('setlists').orderBy('createdAt', 'asc').get()
+      db.collection('groups').doc(gid).collection('setlists').get()
     ]);
     const songMap = {};
     songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
 
     const performed = [];
     setlistSnap.forEach(d => { if (d.data().performed) performed.push(d); });
+    performed.sort((a, b) => {
+      const ta = a.data().createdAt || a.data().uploadedAt || 0;
+      const tb = b.data().createdAt || b.data().uploadedAt || 0;
+      return ta - tb;
+    });
 
     if (!performed.length) {
       listEl.innerHTML = '<div class="groups-empty">No performed setlists yet.</div>';

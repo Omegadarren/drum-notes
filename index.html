@@ -614,25 +614,43 @@
       border-top: 1px solid var(--border);
       display: flex;
       align-items: center;
-      padding: 12px 16px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
-      gap: 12px;
+      padding: 10px 12px;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+      gap: 8px;
     }
     #sel-count {
       flex: 1;
-      font-size: 14px;
+      font-size: 13px;
       color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
+    .sel-action-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--fg);
+      font-size: 17px;
+      width: 40px; height: 36px;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex-shrink: 0;
+      display: none;
+    }
+    .sel-action-btn.visible { display: block; }
+    .sel-action-btn.danger  { color: var(--accent); }
     #btn-sel-done {
       background: var(--accent);
       color: #fff;
       border: none;
       border-radius: 8px;
-      padding: 8px 18px;
+      padding: 8px 14px;
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
       touch-action: manipulation;
+      flex-shrink: 0;
     }
 
     /* Inline annotation input + buttons */
@@ -1204,7 +1222,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.20</div>
+  <div class="version-badge">V 3.21</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2404,9 +2422,17 @@ function enterSelectMode() {
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
     '<span id="sel-count">Draw a box to select notes</span>' +
+    '<button class="sel-action-btn" id="btn-sel-align-l" title="Align left">←</button>' +
+    '<button class="sel-action-btn" id="btn-sel-align-r" title="Align right">→</button>' +
+    '<button class="sel-action-btn" id="btn-sel-copy"    title="Copy texts">📋</button>' +
+    '<button class="sel-action-btn danger" id="btn-sel-delete" title="Delete selected">🗑</button>' +
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
+  document.getElementById('btn-sel-align-l').addEventListener('click', () => alignSelected('left'));
+  document.getElementById('btn-sel-align-r').addEventListener('click', () => alignSelected('right'));
+  document.getElementById('btn-sel-copy').addEventListener('click', copySelected);
+  document.getElementById('btn-sel-delete').addEventListener('click', deleteSelected);
   updateSelCount();
 }
 
@@ -2422,61 +2448,167 @@ function exitSelectMode() {
 function updateSelCount() {
   const el = document.getElementById('sel-count');
   if (!el) return;
-  el.textContent = selectedAnnIds.size === 0
-    ? 'Draw a box to select notes'
-    : `${selectedAnnIds.size} selected · tap to deselect`;
+  const n = selectedAnnIds.size;
+  el.textContent = n === 0 ? 'Draw a box to select notes' : `${n} note${n !== 1 ? 's' : ''} selected`;
+  // Show/hide action buttons
+  document.querySelectorAll('.sel-action-btn').forEach(btn => {
+    btn.classList.toggle('visible', n > 0);
+  });
+}
+
+// ─────────────────── Selection actions ───────────────────
+function copySelected() {
+  const sess = currentSession();
+  if (!sess) return;
+  const texts = sess.annotations
+    .filter(a => selectedAnnIds.has(a.id))
+    .map(a => a.text);
+  if (!texts.length) return;
+  navigator.clipboard.writeText(texts.join('\n')).then(() => {
+    hint(`Copied ${texts.length} note${texts.length !== 1 ? 's' : ''} to clipboard`, 2500);
+  }).catch(() => hint('Could not access clipboard', 2500));
+}
+
+function deleteSelected() {
+  if (!selectedAnnIds.size) return;
+  if (!confirm(`Delete ${selectedAnnIds.size} selected note${selectedAnnIds.size !== 1 ? 's' : ''}?`)) return;
+  const sess = currentSession();
+  if (!sess) return;
+  sess.annotations = sess.annotations.filter(a => !selectedAnnIds.has(a.id));
+  selectedAnnIds.clear();
+  saveCurrentSession();
+  exitSelectMode();
+  redrawAllAnnotations();
+}
+
+function alignSelected(dir) {
+  const sess = currentSession();
+  if (!sess || selectedAnnIds.size < 2) return;
+  const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
+  const target = dir === 'left'
+    ? Math.min(...selected.map(a => a.xPct))
+    : Math.max(...selected.map(a => a.xPct));
+  selected.forEach(a => { a.xPct = target; });
+  saveCurrentSession();
+  redrawAllAnnotations();
+  // Re-apply selection highlight after redraw
+  document.querySelectorAll('.ann-label').forEach(lbl => {
+    if (lbl._ann && selectedAnnIds.has(lbl._ann.id)) lbl.classList.add('ann-selected');
+  });
+  updateSelCount();
 }
 
 // ─────────────────── Lasso drawing (per page) ────────────
 function initLassoLayer(pg) {
   const { lassoLayer, annLayer } = pg;
   const lassoRect = lassoLayer.querySelector('.lasso-rect');
+
+  // ── Lasso draw state ───────────────────────────────────
   let active = false;
   let startX = 0, startY = 0;
 
+  // ── Group drag state ───────────────────────────────────
+  let groupDrag = false;
+  let gStartX = 0, gStartY = 0, gMoved = false;
+  let gSnapshots = {};   // annId → { xPct, yPct }
+
   lassoLayer.addEventListener('pointerdown', e => {
-    // If tapping an existing annotation label — toggle its selection
-    const lbl = document.elementFromPoint(e.clientX, e.clientY);
-    if (lbl && lbl.closest('.ann-label')) {
-      const ann = lbl.closest('.ann-label')._ann;
-      if (ann) {
-        if (selectedAnnIds.has(ann.id)) {
-          selectedAnnIds.delete(ann.id);
-          lbl.closest('.ann-label').classList.remove('ann-selected');
-        } else {
-          selectedAnnIds.add(ann.id);
-          lbl.closest('.ann-label').classList.add('ann-selected');
+    // Check if the tap landed on an annotation label
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const lbl = hit && hit.closest('.ann-label');
+
+    if (lbl && lbl._ann) {
+      const ann = lbl._ann;
+      if (selectedAnnIds.has(ann.id)) {
+        // Start group drag of all selected notes
+        groupDrag = true;
+        gMoved    = false;
+        gStartX   = e.clientX;
+        gStartY   = e.clientY;
+        lassoLayer.setPointerCapture(e.pointerId);
+        gSnapshots = {};
+        const sess = currentSession();
+        if (sess) {
+          sess.annotations.forEach(a => {
+            if (selectedAnnIds.has(a.id)) gSnapshots[a.id] = { xPct: a.xPct, yPct: a.yPct };
+          });
         }
+      } else {
+        // Tap unselected label → select it
+        selectedAnnIds.add(ann.id);
+        lbl.classList.add('ann-selected');
         updateSelCount();
       }
       return;
     }
+
+    // No label hit — start lasso draw
     active = true;
     lassoLayer.setPointerCapture(e.pointerId);
-    const r  = lassoLayer.getBoundingClientRect();
-    startX   = e.clientX - r.left;
-    startY   = e.clientY - r.top;
-    lassoRect.style.left   = startX + 'px';
-    lassoRect.style.top    = startY + 'px';
-    lassoRect.style.width  = '0px';
-    lassoRect.style.height = '0px';
+    const r = lassoLayer.getBoundingClientRect();
+    startX = e.clientX - r.left;
+    startY = e.clientY - r.top;
+    lassoRect.style.left    = startX + 'px';
+    lassoRect.style.top     = startY + 'px';
+    lassoRect.style.width   = '0px';
+    lassoRect.style.height  = '0px';
     lassoRect.style.display = 'block';
   });
 
   lassoLayer.addEventListener('pointermove', e => {
+    if (groupDrag) {
+      const dx = e.clientX - gStartX;
+      const dy = e.clientY - gStartY;
+      if (!gMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      gMoved = true;
+      const r = lassoLayer.getBoundingClientRect();
+      const dxPct = dx / r.width;
+      const dyPct = dy / r.height;
+      document.querySelectorAll('.ann-label.ann-selected').forEach(lbl => {
+        if (lbl._ann && gSnapshots[lbl._ann.id]) {
+          const s = gSnapshots[lbl._ann.id];
+          lbl.style.left = (Math.max(0, Math.min(1, s.xPct + dxPct)) * 100) + '%';
+          lbl.style.top  = (Math.max(0, Math.min(1, s.yPct + dyPct)) * 100) + '%';
+        }
+      });
+      return;
+    }
     if (!active) return;
     const r  = lassoLayer.getBoundingClientRect();
     const cx = e.clientX - r.left;
     const cy = e.clientY - r.top;
-    const x  = Math.min(startX, cx);
-    const y  = Math.min(startY, cy);
-    lassoRect.style.left   = x + 'px';
-    lassoRect.style.top    = y + 'px';
+    lassoRect.style.left   = Math.min(startX, cx) + 'px';
+    lassoRect.style.top    = Math.min(startY, cy) + 'px';
     lassoRect.style.width  = Math.abs(cx - startX) + 'px';
     lassoRect.style.height = Math.abs(cy - startY) + 'px';
   });
 
   lassoLayer.addEventListener('pointerup', e => {
+    if (groupDrag) {
+      groupDrag = false;
+      if (gMoved) {
+        const r = lassoLayer.getBoundingClientRect();
+        const dxPct = (e.clientX - gStartX) / r.width;
+        const dyPct = (e.clientY - gStartY) / r.height;
+        const sess  = currentSession();
+        if (sess) {
+          sess.annotations.forEach(a => {
+            if (selectedAnnIds.has(a.id) && gSnapshots[a.id]) {
+              const s = gSnapshots[a.id];
+              a.xPct = Math.max(0, Math.min(1, s.xPct + dxPct));
+              a.yPct = Math.max(0, Math.min(1, s.yPct + dyPct));
+            }
+          });
+          saveCurrentSession();
+          redrawAllAnnotations();
+          // Re-apply selection highlight after redraw
+          document.querySelectorAll('.ann-label').forEach(lbl => {
+            if (lbl._ann && selectedAnnIds.has(lbl._ann.id)) lbl.classList.add('ann-selected');
+          });
+        }
+      }
+      return;
+    }
     if (!active) return;
     active = false;
     lassoRect.style.display = 'none';
@@ -2487,7 +2619,7 @@ function initLassoLayer(pg) {
     const y1 = Math.min(startY, cy);
     const x2 = Math.max(startX, cx);
     const y2 = Math.max(startY, cy);
-    if (x2 - x1 < 8 && y2 - y1 < 8) return; // too small — not a drag
+    if (x2 - x1 < 8 && y2 - y1 < 8) return; // too small — treat as tap
     annLayer.querySelectorAll('.ann-label').forEach(lbl => {
       const lb = lbl.getBoundingClientRect();
       const lx = lb.left + lb.width  / 2 - r.left;
@@ -2501,7 +2633,8 @@ function initLassoLayer(pg) {
   });
 
   lassoLayer.addEventListener('pointercancel', () => {
-    active = false;
+    active     = false;
+    groupDrag  = false;
     lassoRect.style.display = 'none';
   });
 }
@@ -2526,6 +2659,7 @@ function drawAnnotation(annLayer, ann) {
   label.style.fontSize = getNoteFontSize() + 'pt';
   label.title = 'Hold to drag • Double-tap to edit/delete';
   label._ann  = ann;
+  if (selectMode && selectedAnnIds.has(ann.id)) label.classList.add('ann-selected');
 
   let dragging   = false;
   let dragReady  = false;

@@ -582,8 +582,58 @@
       top: -1px;
     }
 
-    /* Multi-select mode */
-
+    /* ── Lasso / multi-select ─────────────────────────── */
+    .lasso-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 4;           /* above canvas, below ann-layer labels */
+      pointer-events: none;
+      touch-action: none;
+    }
+    body.lasso-mode .lasso-layer {
+      pointer-events: all;
+    }
+    .lasso-rect {
+      position: absolute;
+      border: 2px dashed #f90;
+      background: rgba(255,153,0,0.12);
+      display: none;
+      pointer-events: none;
+      box-sizing: border-box;
+    }
+    .ann-label.ann-selected {
+      outline: 2px solid #f90;
+      outline-offset: 3px;
+      border-radius: 3px;
+    }
+    .ann-select-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 300;
+      background: #1c1c1e;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      gap: 12px;
+    }
+    #sel-count {
+      flex: 1;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    #btn-sel-done {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
 
     /* Inline annotation input + buttons */
     .ann-input-wrap {
@@ -1154,7 +1204,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.19</div>
+  <div class="version-badge">V 3.20</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1978,6 +2028,37 @@ function createSongSlide(track) {
 
   slide.addEventListener('scroll', closeDropdown, { passive: true });
 
+  // ── Two-finger double-tap → toggle lasso mode ────────
+  let twoFingerTapTime  = 0;
+  let twoFingerTapStart = 0;
+  let twoFingerActive   = false;
+
+  slide.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      twoFingerTapStart = Date.now();
+      twoFingerActive   = true;
+    } else if (e.touches.length !== 2) {
+      twoFingerActive = false;
+    }
+  }, { passive: true });
+
+  slide.addEventListener('touchend', e => {
+    if (twoFingerActive && e.touches.length === 0) {
+      const dur = Date.now() - twoFingerTapStart;
+      if (dur < 350) {
+        const now = Date.now();
+        if (now - twoFingerTapTime < 500) {
+          twoFingerTapTime = 0;
+          if (selectMode) exitSelectMode();
+          else enterSelectMode();
+        } else {
+          twoFingerTapTime = now;
+        }
+      }
+    }
+    if (e.touches.length === 0) twoFingerActive = false;
+  }, { passive: true });
+
   track.appendChild(slide);
   return slide;
 }
@@ -1997,6 +2078,7 @@ function setupSwipeGesture(pdfScroll, track) {
 
   const onStart = e => {
     if (trackingId !== null) return;              // already tracking a touch
+    if (selectMode) return;                       // lasso mode — no swiping
     if (e.pointerType === 'mouse' && e.button !== 0) return;  // left-click only
     trackingId = e.pointerId;
     startX     = e.clientX;
@@ -2137,13 +2219,20 @@ async function renderPages(container, pdfDoc, songId) {
     const annLayer     = document.createElement('div');
     annLayer.className = 'ann-layer';
 
+    const lassoLayer = document.createElement('div');
+    lassoLayer.className = 'lasso-layer';
+    const lassoRect = document.createElement('div');
+    lassoRect.className = 'lasso-rect';
+    lassoLayer.appendChild(lassoRect);
+
     wrap.appendChild(canvas);
+    wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
     container.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
     app.pages.push({
-      wrap, canvas, annLayer,
+      wrap, canvas, annLayer, lassoLayer,
       w: vp.width / DPR, h: vp.height / DPR,
       songId: songId || null,
       songPageIndex: p - 1,
@@ -2151,6 +2240,7 @@ async function renderPages(container, pdfDoc, songId) {
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    initLassoLayer(app.pages[app.pages.length - 1]);
   }
 }
 
@@ -2300,6 +2390,121 @@ function cancelAnn() {
 
 // ─────────────────── Multi-select state ─────────────────
 
+
+// ─────────────────── Multi-select / lasso state ──────────
+let selectMode       = false;
+const selectedAnnIds = new Set();
+let annSelectBar     = null;
+
+function enterSelectMode() {
+  if (selectMode) return;
+  selectMode = true;
+  document.body.classList.add('lasso-mode');
+  annSelectBar = document.createElement('div');
+  annSelectBar.className = 'ann-select-bar';
+  annSelectBar.innerHTML =
+    '<span id="sel-count">Draw a box to select notes</span>' +
+    '<button id="btn-sel-done">Done</button>';
+  document.getElementById('viewer').appendChild(annSelectBar);
+  document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
+  updateSelCount();
+}
+
+function exitSelectMode() {
+  if (!selectMode) return;
+  selectMode = false;
+  document.body.classList.remove('lasso-mode');
+  selectedAnnIds.clear();
+  document.querySelectorAll('.ann-label.ann-selected').forEach(el => el.classList.remove('ann-selected'));
+  if (annSelectBar) { annSelectBar.remove(); annSelectBar = null; }
+}
+
+function updateSelCount() {
+  const el = document.getElementById('sel-count');
+  if (!el) return;
+  el.textContent = selectedAnnIds.size === 0
+    ? 'Draw a box to select notes'
+    : `${selectedAnnIds.size} selected · tap to deselect`;
+}
+
+// ─────────────────── Lasso drawing (per page) ────────────
+function initLassoLayer(pg) {
+  const { lassoLayer, annLayer } = pg;
+  const lassoRect = lassoLayer.querySelector('.lasso-rect');
+  let active = false;
+  let startX = 0, startY = 0;
+
+  lassoLayer.addEventListener('pointerdown', e => {
+    // If tapping an existing annotation label — toggle its selection
+    const lbl = document.elementFromPoint(e.clientX, e.clientY);
+    if (lbl && lbl.closest('.ann-label')) {
+      const ann = lbl.closest('.ann-label')._ann;
+      if (ann) {
+        if (selectedAnnIds.has(ann.id)) {
+          selectedAnnIds.delete(ann.id);
+          lbl.closest('.ann-label').classList.remove('ann-selected');
+        } else {
+          selectedAnnIds.add(ann.id);
+          lbl.closest('.ann-label').classList.add('ann-selected');
+        }
+        updateSelCount();
+      }
+      return;
+    }
+    active = true;
+    lassoLayer.setPointerCapture(e.pointerId);
+    const r  = lassoLayer.getBoundingClientRect();
+    startX   = e.clientX - r.left;
+    startY   = e.clientY - r.top;
+    lassoRect.style.left   = startX + 'px';
+    lassoRect.style.top    = startY + 'px';
+    lassoRect.style.width  = '0px';
+    lassoRect.style.height = '0px';
+    lassoRect.style.display = 'block';
+  });
+
+  lassoLayer.addEventListener('pointermove', e => {
+    if (!active) return;
+    const r  = lassoLayer.getBoundingClientRect();
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const x  = Math.min(startX, cx);
+    const y  = Math.min(startY, cy);
+    lassoRect.style.left   = x + 'px';
+    lassoRect.style.top    = y + 'px';
+    lassoRect.style.width  = Math.abs(cx - startX) + 'px';
+    lassoRect.style.height = Math.abs(cy - startY) + 'px';
+  });
+
+  lassoLayer.addEventListener('pointerup', e => {
+    if (!active) return;
+    active = false;
+    lassoRect.style.display = 'none';
+    const r  = lassoLayer.getBoundingClientRect();
+    const cx = e.clientX - r.left;
+    const cy = e.clientY - r.top;
+    const x1 = Math.min(startX, cx);
+    const y1 = Math.min(startY, cy);
+    const x2 = Math.max(startX, cx);
+    const y2 = Math.max(startY, cy);
+    if (x2 - x1 < 8 && y2 - y1 < 8) return; // too small — not a drag
+    annLayer.querySelectorAll('.ann-label').forEach(lbl => {
+      const lb = lbl.getBoundingClientRect();
+      const lx = lb.left + lb.width  / 2 - r.left;
+      const ly = lb.top  + lb.height / 2 - r.top;
+      if (lx >= x1 && lx <= x2 && ly >= y1 && ly <= y2) {
+        if (lbl._ann) selectedAnnIds.add(lbl._ann.id);
+        lbl.classList.add('ann-selected');
+      }
+    });
+    updateSelCount();
+  });
+
+  lassoLayer.addEventListener('pointercancel', () => {
+    active = false;
+    lassoRect.style.display = 'none';
+  });
+}
 
 // ─────────────────── Draw saved annotations ──────────────
 function drawAllAnnotations() {
@@ -2737,6 +2942,7 @@ document.getElementById('mi-clear').addEventListener('click', () => {
 
 function goBack() {
   if (app.pendingAnn) cancelAnn();
+  exitSelectMode();
   saveCurrentSession();
   const sess = currentSession();
   const fromGroup = sess && (sess.groupSetlistId || sess.groupId);

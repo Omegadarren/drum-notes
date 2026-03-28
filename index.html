@@ -1282,7 +1282,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.24</div>
+  <div class="version-badge">V 3.25</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3589,6 +3589,7 @@ async function loadGroupSetlists(gid) {
         <div class="setlist-ctx-menu">
           <button data-action="perform">${sl.performed ? 'Un-mark performed' : 'Mark as performed'}</button>
           ${!sl.performed ? `<button data-action="edit">Edit setlist</button>` : ''}
+          <button data-action="duplicate">Duplicate</button>
           <button data-action="arch">Archive</button>
           <div class="setlist-ctx-divider"></div>
           <button data-action="del" class="ctx-danger" ${sl.performed ? 'disabled' : ''}>Delete</button>
@@ -3634,6 +3635,29 @@ async function loadGroupSetlists(gid) {
             openEditSetlistModal(doc.id, sl.name, sl.songIds || []);
           });
         }
+        row.querySelector('[data-action="duplicate"]').addEventListener('click', async e => {
+          e.stopPropagation();
+          row.classList.remove('ctx-open');
+          const newName = prompt('Name for the duplicate:', sl.name + ' (copy)');
+          if (!newName || !newName.trim()) return;
+          setLoading(true, 'Duplicating…');
+          try {
+            const newId = genId();
+            await db.collection('groups').doc(currentGroupId).collection('setlists').doc(newId).set({
+              name: newName.trim(),
+              songIds: sl.songIds || [],
+              songs: sl.songs || '',
+              createdBy: fbUid,
+              createdAt: Date.now(),
+            });
+            setLoading(false);
+            hint(`"${newName.trim()}" created! ✅`, 2500);
+            loadGroupSetlists(currentGroupId);
+          } catch (err) {
+            setLoading(false);
+            alert('Could not duplicate: ' + err.message);
+          }
+        });
         row.querySelector('[data-action="arch"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');

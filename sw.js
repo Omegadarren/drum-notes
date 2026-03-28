@@ -1,6 +1,6 @@
 // BandNotes Service Worker — offline-first shell caching
-const SHELL_CACHE = 'bandnotes-shell-v1';
-const CDN_CACHE   = 'bandnotes-cdn-v1';
+const SHELL_CACHE = 'bandnotes-shell-v2';
+const CDN_CACHE   = 'bandnotes-cdn-v2';
 
 const CDN_PRECACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
@@ -38,13 +38,15 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  // ── Cross-origin (CDN scripts, Firebase) — cache-first ────────────────────
-  // These URLs are versioned so their content never changes.
-  if (url.origin !== self.location.origin) {
+  // ── Known CDN library scripts — cache-first ────────────────────────────────
+  // Only intercept the specific versioned CDN URLs we pre-cached at install.
+  // All other cross-origin requests (Firebase Auth/Firestore APIs etc.) are
+  // intentionally ignored here so the browser network stack handles them normally.
+  if (CDN_PRECACHE.includes(url.href)) {
     e.respondWith(
       caches.match(e.request).then(cached => {
         if (cached) return cached;
-        return fetch(e.request, { mode: 'no-cors' }).then(response => {
+        return fetch(e.request).then(response => {
           const clone = response.clone();
           caches.open(CDN_CACHE).then(cache => cache.put(e.request, clone));
           return response;
@@ -53,6 +55,11 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
+
+  // ── Cross-origin requests not in the CDN list (Firebase APIs, etc.) ────────
+  // Do NOT intercept — let the browser make a normal network request so that
+  // Firebase Auth and Firestore work correctly.
+  if (url.origin !== self.location.origin) return;
 
   // ── Same-origin (app shell / index.html) — stale-while-revalidate ─────────
   // Serve from cache instantly; silently update the cache from network.

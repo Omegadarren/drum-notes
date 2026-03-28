@@ -63,12 +63,25 @@
       background: #1a3a5c;
       color: #b3d4f5;
       font-size: 14px;
-      padding: 10px 18px;
+      padding: 10px 44px 10px 18px;
       line-height: 1.4;
       text-align: center;
       border-bottom: 1px solid #2a5080;
     }
     #offline-warning.show { display: block; }
+    #offline-warning-close {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #b3d4f5;
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+    }
     #desktop-warning-close {
       position: absolute;
       right: 12px;
@@ -1121,6 +1134,7 @@
 <!-- ==================== DESKTOP WARNING ==================== -->
 <div id="offline-warning">
   📴 No internet connection — showing your locally saved backup.
+  <button id="offline-warning-close" title="Dismiss">×</button>
 </div>
 
 <div id="desktop-warning">
@@ -1140,7 +1154,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.16</div>
+  <div class="version-badge">V 3.17</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4181,6 +4195,8 @@ renderStart();
   update();
   window.addEventListener('online',  update);
   window.addEventListener('offline', update);
+  document.getElementById('offline-warning-close')
+    .addEventListener('click', () => banner.classList.remove('show'));
 })();
 
 // ─────────────────── Service Worker (offline) ────────────

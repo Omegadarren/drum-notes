@@ -1038,7 +1038,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.9</div>
+  <div class="version-badge">V 3.10</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1869,30 +1869,30 @@ function setupSwipeGesture(pdfScroll, track) {
   // Clean up any previous handlers
   if (pdfScroll._swipeHandlers) {
     const h = pdfScroll._swipeHandlers;
-    pdfScroll.removeEventListener('touchstart', h.start);
-    pdfScroll.removeEventListener('touchmove',  h.move);
-    pdfScroll.removeEventListener('touchend',   h.end);
-    pdfScroll.removeEventListener('touchcancel', h.cancel);
+    pdfScroll.removeEventListener('pointerdown',   h.start);
+    pdfScroll.removeEventListener('pointermove',   h.move);
+    pdfScroll.removeEventListener('pointerup',     h.end);
+    pdfScroll.removeEventListener('pointercancel', h.cancel);
   }
 
-  let startX = 0, startY = 0, dirLocked = null, dragging = false, baseOffset = 0;
+  let trackingId = null, startX = 0, startY = 0, dirLocked = null, dragging = false, baseOffset = 0;
 
   const onStart = e => {
-    if (e.touches.length !== 1) return;
-    const t  = e.touches[0];
-    startX   = t.clientX;
-    startY   = t.clientY;
-    dirLocked = null;
-    dragging  = false;
+    if (trackingId !== null) return;              // already tracking a touch
+    if (e.pointerType === 'mouse' && e.button !== 0) return;  // left-click only
+    trackingId = e.pointerId;
+    startX     = e.clientX;
+    startY     = e.clientY;
+    dirLocked  = null;
+    dragging   = false;
     baseOffset = -app.slideIdx * pdfScroll.clientWidth;
     track.style.transition = 'none';
   };
 
   const onMove = e => {
-    if (e.touches.length !== 1) return;
-    const t  = e.touches[0];
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
+    if (e.pointerId !== trackingId) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
 
     if (!dirLocked) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
@@ -1900,8 +1900,10 @@ function setupSwipeGesture(pdfScroll, track) {
     }
     if (dirLocked !== 'x') return;
 
-    dragging = true;
-    e.preventDefault();
+    if (!dragging) {
+      dragging = true;
+      try { pdfScroll.setPointerCapture(trackingId); } catch(_) {}
+    }
 
     // Resist at first and last slide
     const max = app.slides.length - 1;
@@ -1913,26 +1915,29 @@ function setupSwipeGesture(pdfScroll, track) {
   };
 
   const onEnd = e => {
+    if (e.pointerId !== trackingId) return;
+    trackingId = null;
     if (!dragging) return;
-    dragging  = false;
-    const dx  = e.changedTouches[0].clientX - startX;
+    dragging = false;
+    const dx  = e.clientX - startX;
     const threshold = Math.min(80, pdfScroll.clientWidth * 0.3);
     let newIdx = app.slideIdx;
     if (dx < -threshold && app.slideIdx < app.slides.length - 1) newIdx++;
     else if (dx > threshold && app.slideIdx > 0) newIdx--;
-
     goToSlide(newIdx);
   };
 
-  const onCancel = () => {
+  const onCancel = e => {
+    if (e.pointerId !== trackingId) return;
+    trackingId = null;
     if (dragging) goToSlide(app.slideIdx);  // snap back
     dragging = false;
   };
 
-  pdfScroll.addEventListener('touchstart',  onStart,  { passive: true });
-  pdfScroll.addEventListener('touchmove',   onMove,   { passive: false });
-  pdfScroll.addEventListener('touchend',    onEnd,    { passive: true });
-  pdfScroll.addEventListener('touchcancel', onCancel, { passive: true });
+  pdfScroll.addEventListener('pointerdown',   onStart);
+  pdfScroll.addEventListener('pointermove',   onMove);
+  pdfScroll.addEventListener('pointerup',     onEnd);
+  pdfScroll.addEventListener('pointercancel', onCancel);
   pdfScroll._swipeHandlers = { start: onStart, move: onMove, end: onEnd, cancel: onCancel };
 }
 

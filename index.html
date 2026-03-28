@@ -1243,11 +1243,24 @@
       top: auto !important; left: auto !important;
       z-index: auto !important; margin: 0 !important; padding: 0 !important;
     }
-    /* Each image fills exactly one print page — no explicit page-break rules needed */
-    #_print-content img {
+    /* Each wrapper div is one print page */
+    .print-page {
       display: block !important;
       width: 100vw !important;
       height: 100vh !important;
+      overflow: hidden !important;
+      margin: 0 !important; padding: 0 !important;
+      break-after: page;
+      page-break-after: always;
+    }
+    .print-page:last-child {
+      break-after: auto;
+      page-break-after: auto;
+    }
+    .print-page img {
+      display: block !important;
+      width: 100% !important;
+      height: 100% !important;
       object-fit: contain !important;
       object-position: center top !important;
       -webkit-print-color-adjust: exact;
@@ -1282,7 +1295,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.25</div>
+  <div class="version-badge">V 3.26</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3015,10 +3028,12 @@ function printAll() {
   pd.id = '_print-content';
 
   const imgs = images.map((src) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'print-page';
     const img = document.createElement('img');
     img.src = src;
-    img.style.cssText = 'display:block;width:100%;';
-    pd.appendChild(img);
+    wrapper.appendChild(img);
+    pd.appendChild(wrapper);
     return img;
   });
   document.body.appendChild(pd);

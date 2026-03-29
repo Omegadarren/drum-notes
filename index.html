@@ -991,6 +991,8 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-msg { color: var(--muted); font-size: 17px; }
+    #loading-cancel { color: var(--accent); font-size: 16px; margin-top: 4px; padding: 10px 28px; cursor: pointer; opacity: 0.85; display: none; }
+    #loading-cancel.visible { display: block; }
 
     /* ===================== HINT TOAST ===================== */
     .hint-toast {
@@ -1590,7 +1592,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.56</div>
+  <div class="version-badge">V 3.59</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1991,6 +1993,7 @@
 <div id="loading">
   <div class="spinner"></div>
   <div class="loading-msg" id="loading-msg">Loading…</div>
+  <div id="loading-cancel">Cancel</div>
 </div>
 
 <script>
@@ -3695,10 +3698,18 @@ function hint(msg, dur = 2800) {
   }, dur);
 }
 
-function setLoading(show, msg = 'Loading…') {
+let _loadCancelled = false;
+function setLoading(show, msg = 'Loading…', cancelable = false) {
   document.getElementById('loading-msg').textContent = msg;
   document.getElementById('loading').classList.toggle('show', show);
+  const cancelBtn = document.getElementById('loading-cancel');
+  cancelBtn.classList.toggle('visible', !!(show && cancelable));
+  if (show) _loadCancelled = false;
 }
+document.getElementById('loading-cancel').addEventListener('click', () => {
+  _loadCancelled = true;
+  setLoading(false);
+});
 
 // ─────────────────── Firebase + Groups ──────────────────
 const FB_CONFIG = {
@@ -4568,13 +4579,14 @@ async function showPlayedSongs(gid) {
 async function openGroupSetlist(setlistId, sl) {
   // ── New format: songIds array ──────────────────────────
   if (sl.songIds && sl.songIds.length) {
-    setLoading(true, 'Loading setlist…');
+    setLoading(true, 'Loading setlist…', true);
     try {
       const songPdfs  = [];
       let   annotations = [];
       let   usedCache   = false;
 
       const songResults = await Promise.all(sl.songIds.map(async (songId) => {
+        if (_loadCancelled) return null;
         let songName  = null;
         let pdfData   = null;
         let songBpm   = null;
@@ -4649,6 +4661,8 @@ async function openGroupSetlist(setlistId, sl) {
         if (result.fromCache) usedCache = true;
       }
 
+      if (_loadCancelled) { setLoading(false); return; }
+
       if (!songPdfs.length) {
         setLoading(false);
         alert('No WiFi — and no local backup found for this setlist. Open it once while online to save a local copy.');
@@ -4700,7 +4714,7 @@ async function openGroupSetlist(setlistId, sl) {
     openSession(existing);
     return;
   }
-  setLoading(true, 'Downloading setlist…');
+  setLoading(true, 'Downloading setlist…', true);
   try {
     const url = await storage.ref(sl.storagePath).getDownloadURL();
     const buf = await new Promise((resolve, reject) => {

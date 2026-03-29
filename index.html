@@ -31,6 +31,21 @@
       --accent-glow: rgba(229,57,53,0.18);
       --text: #f2f2f7;
       --muted: #8e8e93;
+      /* light-mode tokens (overridden by body.light) */
+      --press-bg: #2a2a2c;
+      --pdf-bg: #0a0a0a;
+      --divider-bg: #1c1c1e;
+    }
+    body.light {
+      --bg: #f2f2f7;
+      --surface: #ffffff;
+      --border: #d1d1d6;
+      --text: #1c1c1e;
+      --muted: #6c6c70;
+      --accent-glow: rgba(229,57,53,0.12);
+      --press-bg: #e5e5ea;
+      --pdf-bg: #e8e8ed;
+      --divider-bg: #e5e5ea;
     }
 
     html, body {
@@ -157,7 +172,7 @@
       touch-action: manipulation;
       line-height: 1;
     }
-    .btn-fullscreen:active { background: #2a2a2c; }
+    .btn-fullscreen:active { background: var(--press-bg); }
 
     .btn-refresh {
       font-size: 17px;
@@ -170,7 +185,20 @@
       touch-action: manipulation;
       line-height: 1;
     }
-    .btn-refresh:active { background: #2a2a2c; }
+    .btn-refresh:active { background: var(--press-bg); }
+
+    .btn-theme {
+      font-size: 18px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 10px;
+      color: var(--muted);
+      cursor: pointer;
+      touch-action: manipulation;
+      line-height: 1;
+    }
+    .btn-theme:active { background: var(--press-bg); }
 
     /* Import setlist button */
     .btn-import {
@@ -268,7 +296,7 @@
       gap: 14px;
       touch-action: manipulation;
     }
-    .session-row:active { background: #2a2a2c; }
+    .session-row:active { background: var(--press-bg); }
     .session-row-icon  { font-size: 28px; flex-shrink: 0; }
     .session-row-info  { flex: 1; min-width: 0; }
     .session-row-name  { font-size: 19px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -403,7 +431,7 @@
       flex-shrink: 0;
       touch-action: manipulation;
     }
-    .vhdr-back:active { background: #333; }
+    .vhdr-back:active { background: var(--press-bg); }
 
     .vhdr-title {
       flex: 1;
@@ -417,7 +445,7 @@
       font-size: 12px;
       padding: 5px 12px;
       border-radius: 20px;
-      background: #2a2a2c;
+      background: var(--press-bg);
       color: var(--muted);
       white-space: nowrap;
       flex-shrink: 0;
@@ -435,7 +463,7 @@
       flex-shrink: 0;
       touch-action: manipulation;
     }
-    .vhdr-menu:active { background: #333; }
+    .vhdr-menu:active { background: var(--press-bg); }
 
     /* ===================== METRONOME ===================== */
     .metro-btn {
@@ -454,7 +482,7 @@
       white-space: nowrap;
       line-height: 1;
     }
-    .metro-btn:active { background: #2a2a2c; }
+    .metro-btn:active { background: var(--press-bg); }
     .metro-dot {
       width: 14px;
       height: 14px;
@@ -501,7 +529,7 @@
       gap: 8px;
     }
     .metro-bpm-btn {
-      background: #2a2a2c;
+      background: var(--press-bg);
       border: none;
       border-radius: 8px;
       color: var(--text);
@@ -517,7 +545,7 @@
     }
     .metro-bpm-btn:active { background: #3a3a3c; }
     .metro-bpm-input {
-      background: #2a2a2c;
+      background: var(--press-bg);
       border: 1px solid var(--border);
       border-radius: 10px;
       color: var(--text);
@@ -531,7 +559,7 @@
     .metro-bpm-input::-webkit-inner-spin-button,
     .metro-bpm-input::-webkit-outer-spin-button { -webkit-appearance: none; }
     .metro-toggle-btn {
-      background: #2a2a2c;
+      background: var(--press-bg);
       border: 1.5px solid var(--border);
       border-radius: 20px;
       color: var(--muted);
@@ -558,7 +586,7 @@
     .metro-sound-label { font-size: 12px; color: var(--muted); flex-shrink: 0; }
     .metro-sound-opts { display: flex; gap: 5px; }
     .metro-sound-opt {
-      background: #2a2a2c;
+      background: var(--press-bg);
       border: 1.5px solid var(--border);
       border-radius: 14px;
       color: var(--muted);
@@ -599,7 +627,7 @@
     }
     .dropdown-item:last-child { border-bottom: none; }
     .dropdown-item:active,
-    .dropdown-item.pressed { background: #2a2a2c; }
+    .dropdown-item.pressed { background: var(--press-bg); }
     .dropdown-item.danger { color: var(--accent); }
 
 
@@ -609,7 +637,7 @@
       flex: 1;
       overflow: hidden;
       position: relative;
-      background: #0a0a0a;
+      background: var(--pdf-bg);
       user-select: none;
       -webkit-user-select: none;
     }
@@ -641,7 +669,7 @@
       touch-action: manipulation;
       flex-shrink: 0;
     }
-    .btn-slide-nav:active { background: #333; }
+    .btn-slide-nav:active { background: var(--press-bg); }
     .btn-slide-nav:disabled { opacity: 0.3; }
     .slide-counter {
       font-size: 13px;
@@ -661,7 +689,7 @@
       flex-shrink: 0;
       white-space: nowrap;
     }
-    .btn-jump-to:active { background: #333; }
+    .btn-jump-to:active { background: var(--press-bg); }
     .jump-dropdown {
       position: absolute;
       top: calc(var(--hdr) + 6px);
@@ -691,7 +719,7 @@
       gap: 10px;
     }
     .jump-item:last-child { border-bottom: none; }
-    .jump-item:active, .jump-item.active { background: #2a2a2c; }
+    .jump-item:active, .jump-item.active { background: var(--press-bg); }
     .jump-item.current { color: var(--accent); }
     .jump-item-num {
       font-size: 12px;
@@ -704,7 +732,7 @@
       position: relative;
       width: 100%;
       display: block;
-      border-bottom: 4px solid #0a0a0a;
+      border-bottom: 4px solid var(--pdf-bg);
     }
     .page-wrap canvas {
       display: block;
@@ -780,7 +808,7 @@
       position: fixed;
       bottom: 0; left: 0; right: 0;
       z-index: 300;
-      background: #1c1c1e;
+      background: var(--surface);
       border-top: 1px solid var(--border);
       display: flex;
       align-items: center;
@@ -1012,7 +1040,7 @@
       flex-shrink: 0;
       touch-action: manipulation;
     }
-    .ghdr-back:active { background: #333; }
+    .ghdr-back:active { background: var(--press-bg); }
     .ghdr-title {
       flex: 1;
       font-size: 20px;
@@ -1064,7 +1092,7 @@
       gap: 14px;
       touch-action: manipulation;
     }
-    .group-row:active { background: #2a2a2c; }
+    .group-row:active { background: var(--press-bg); }
     .group-row-icon { font-size: 26px; flex-shrink: 0; }
     .group-row-info { flex: 1; min-width: 0; }
     .group-row-name { font-size: 19px; font-weight: 500; }
@@ -1108,7 +1136,7 @@
       gap: 14px;
       touch-action: manipulation;
     }
-    .setlist-row:active { background: #2a2a2c; }
+    .setlist-row:active { background: var(--press-bg); }
     .setlist-row-icon { font-size: 26px; flex-shrink: 0; }
     .setlist-row-info { flex: 1; min-width: 0; }
     .setlist-row-name { font-size: 19px; font-weight: 500; }
@@ -1119,7 +1147,7 @@
     #song-library-screen.active { display:flex; }
     .song-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
     .song-row:last-child { border-bottom:none; }
-    .song-row:active { background:#1c1c1e; }
+    .song-row:active { background:var(--surface); }
     .song-row-icon { font-size:26px; flex-shrink:0; }
     .song-row-info { flex:1; min-width:0; }
     .song-row-name { font-size:19px; font-weight:500; }
@@ -1208,7 +1236,7 @@
     .sl-remove-btn { background:none; border:none; color:var(--muted); font-size:18px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
     .sl-available-row { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
     .sl-available-row:last-child { border-bottom:none; }
-    .sl-available-row:active { background:#1c1c1e; }
+    .sl-available-row:active { background:var(--surface); }
     .sl-add-btn { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:5px 12px; font-size:16px; font-weight:700; cursor:pointer; touch-action:manipulation; flex-shrink:0; }
 
     /* Alpha filter bar */
@@ -1218,7 +1246,7 @@
     .sl-alpha-btn.clear-btn { color:var(--accent); border-color:var(--accent); padding:3px 8px; }
 
     /* Song divider in viewer */
-    .song-divider { background:#1c1c1e; border-top:2px solid var(--border); border-bottom:2px solid var(--border); padding:10px 18px; font-size:16px; font-weight:600; color:var(--muted); letter-spacing:0.5px; }
+    .song-divider { background:var(--divider-bg); border-top:2px solid var(--border); border-bottom:2px solid var(--border); padding:10px 18px; font-size:16px; font-weight:600; color:var(--muted); letter-spacing:0.5px; }
 
     .setlist-rename-btn {
       background: none;
@@ -1231,7 +1259,7 @@
       flex-shrink: 0;
       touch-action: manipulation;
     }
-    .setlist-rename-btn:active { background: #2a2a2c; }
+    .setlist-rename-btn:active { background: var(--press-bg); }
     .setlist-rename-btn:disabled { opacity:0.35; cursor:not-allowed; pointer-events:none; }
     .setlist-locked-icon { font-size:18px; flex-shrink:0; padding:6px 8px; opacity:0.5; }
 
@@ -1249,13 +1277,13 @@
       touch-action: manipulation;
       line-height: 1;
     }
-    .setlist-ctx-btn:active { background: #2a2a2c; }
+    .setlist-ctx-btn:active { background: var(--press-bg); }
     .setlist-ctx-menu {
       display: none;
       position: absolute;
       right: 48px;
       top: calc(100% - 6px);
-      background: #1c1c1e;
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 6px 0;
@@ -1278,7 +1306,7 @@
       touch-action: manipulation;
       white-space: nowrap;
     }
-    .setlist-ctx-menu button:active { background: #2a2a2c; }
+    .setlist-ctx-menu button:active { background: var(--press-bg); }
     .setlist-ctx-menu button:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
     .setlist-ctx-menu button.ctx-danger { color: #ff3b30; }
     .setlist-ctx-divider { height: 1px; background: var(--border); margin: 4px 0; }
@@ -1289,7 +1317,7 @@
     .song-history-date { font-size:12px; color:var(--muted); margin-left:auto; white-space:nowrap; }
     .setlist-perform-btn { background:none; border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:16px; padding:6px 10px; cursor:pointer; flex-shrink:0; touch-action:manipulation; }
     .setlist-perform-btn.performed { color:#34c759; border-color:#34c759; background:rgba(52,199,89,0.10); }
-    .setlist-perform-btn:not(.performed):active { background:#2a2a2c; }
+    .setlist-perform-btn:not(.performed):active { background:var(--press-bg); }
 
     /* Setlist songs tooltip */
     .setlist-row { position: relative; }
@@ -1298,7 +1326,7 @@
       position: absolute;
       left: 0; right: 0;
       top: calc(100% + 6px);
-      background: #1c1c1e;
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 16px;
@@ -1329,7 +1357,7 @@
       margin-top: 4px;
       margin-bottom: 10px;
     }
-    .archive-toggle-btn:active { background: #1c1c1e; }
+    .archive-toggle-btn:active { background: var(--surface); }
 
     .backup-stale-item {
       display: flex;
@@ -1375,7 +1403,7 @@
     }
     .btn-copy-code:active { opacity: 0.7; }
     .btn-paste-code {
-      background: #2a2a2c;
+      background: var(--press-bg);
       color: var(--muted);
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -1475,10 +1503,11 @@
       <span class="profile-name-label">Playing as</span>
       <span id="profile-display">—</span>
     </div>
+    <button class="btn-theme" id="btn-theme" title="Toggle light/dark">☀️</button>
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.54</div>
+  <div class="version-badge">V 3.55</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2230,6 +2259,22 @@ document.getElementById('btn-profile-save').addEventListener('click', () => {
 document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
 
 document.getElementById('btn-refresh').addEventListener('click', () => location.reload());
+
+// ── Light/Dark theme toggle ────────────────────────────────────────────────
+(function() {
+  const THEME_KEY = 'bn_theme';
+  function applyTheme(light) {
+    document.body.classList.toggle('light', light);
+    document.getElementById('btn-theme').textContent = light ? '☾' : '☀️';
+  }
+  // Apply immediately on load
+  applyTheme(localStorage.getItem(THEME_KEY) === 'light');
+  document.getElementById('btn-theme').addEventListener('click', () => {
+    const nowLight = !document.body.classList.contains('light');
+    localStorage.setItem(THEME_KEY, nowLight ? 'light' : 'dark');
+    applyTheme(nowLight);
+  });
+})();
 
 document.getElementById('btn-manual').addEventListener('click', () => window.open('./manual.html', '_blank'));
 

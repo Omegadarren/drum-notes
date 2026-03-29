@@ -1309,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.30</div>
+  <div class="version-badge">V 3.29</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1430,7 +1430,6 @@
       <div class="modal-title" style="font-size:22px;">🎤 Played Songs</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="ps-sort-btn" id="btn-ps-sort" title="Toggle sort">By Song</button>
-        <button class="ps-sort-btn" id="btn-ps-order" title="Toggle order">↑ Asc</button>
         <button class="ps-close-btn" id="btn-played-songs-close">✕</button>
       </div>
     </div>
@@ -3850,22 +3849,12 @@ async function loadGroupSetlists(gid) {
 
 let _psData = null;   // { songMap, allSetlists } cached after first fetch
 let _psSortBySong = false;
-let _psSortDesc   = false;
 
 function renderPlayedSongs() {
-  const listEl   = document.getElementById('played-songs-list');
-  const btn      = document.getElementById('btn-ps-sort');
-  const orderBtn = document.getElementById('btn-ps-order');
+  const listEl = document.getElementById('played-songs-list');
+  const btn    = document.getElementById('btn-ps-sort');
   const { songMap, allSetlists } = _psData;
-  btn.textContent      = _psSortBySong ? 'By Setlist' : 'By Song';
-  orderBtn.textContent = _psSortDesc   ? '↓ Desc'     : '↑ Asc';
-
-  // Apply sort direction to the setlist array
-  const sorted = [...allSetlists].sort((a, b) => {
-    const ta = a.data().createdAt || a.data().uploadedAt || 0;
-    const tb = b.data().createdAt || b.data().uploadedAt || 0;
-    return _psSortDesc ? tb - ta : ta - tb;
-  });
+  btn.textContent = _psSortBySong ? 'By Setlist' : 'By Song';
 
   if (!allSetlists.length) {
     listEl.innerHTML = '<div class="groups-empty">No setlists yet.</div>';
@@ -3875,12 +3864,12 @@ function renderPlayedSongs() {
   let html = '';
 
   if (!_psSortBySong) {
-    // ── By Setlist ────────────────────────────────
-    const hasPerformed = sorted.some(d => d.data().performed);
+    // ── By Setlist (default) ───────────────────────────────────────────────────
+    const hasPerformed = allSetlists.some(d => d.data().performed);
     if (!hasPerformed) {
       html += '<div class="groups-empty" style="padding:12px 4px 8px;font-size:13px;text-align:left;">No setlists have been marked as performed yet. Tap ··· on a setlist to mark it. Showing all:</div>';
     }
-    sorted.forEach(sldoc => {
+    allSetlists.forEach(sldoc => {
       const sl = sldoc.data();
       const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
       const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -3894,10 +3883,11 @@ function renderPlayedSongs() {
       }
     });
   } else {
-    // ── By Song ───────────────────────────────────────
+    // ── By Song ───────────────────────────────────────────────────────────────
+    // Build map: songId -> [ { setlistName, dateStr, performed } ]
     const songAppearances = {};
-    const songOrder = [];
-    sorted.forEach(sldoc => {
+    const songOrder = [];  // preserve encounter order (alphabetical via songMap)
+    allSetlists.forEach(sldoc => {
       const sl = sldoc.data();
       if (!sl.songIds || !sl.songIds.length) return;
       const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
@@ -4469,16 +4459,10 @@ document.getElementById('btn-played-songs-close').addEventListener('click', () =
   document.getElementById('played-songs-modal').classList.remove('open');
   _psData = null;
   _psSortBySong = false;
-  _psSortDesc   = false;
 });
 document.getElementById('btn-ps-sort').addEventListener('click', () => {
   if (!_psData) return;
   _psSortBySong = !_psSortBySong;
-  renderPlayedSongs();
-});
-document.getElementById('btn-ps-order').addEventListener('click', () => {
-  if (!_psData) return;
-  _psSortDesc = !_psSortDesc;
   renderPlayedSongs();
 });
 

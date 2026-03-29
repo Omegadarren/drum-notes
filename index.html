@@ -707,7 +707,7 @@
     /* ===================== DELETE CONFIRM TOAST ===================== */
     .del-toast {
       position: fixed;
-      bottom: 52px;
+      bottom: calc(52px + env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       background: #2c2c2e;
@@ -797,7 +797,7 @@
     /* ===================== HINT TOAST ===================== */
     .hint-toast {
       position: fixed;
-      bottom: 36px;
+      bottom: calc(36px + env(safe-area-inset-bottom));
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0,0,0,0.78);
@@ -1309,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.32</div>
+  <div class="version-badge">V 3.33</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4955,6 +4955,19 @@ renderStart();
   window.addEventListener('offline', update);
   document.getElementById('offline-warning-close')
     .addEventListener('click', () => banner.classList.remove('show'));
+})();
+
+// ─────────────────── Orientation / resize — fix slide alignment ─────────────
+(function() {
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (app.slides && app.slides.length > 1) {
+        goToSlide(app.slideIdx);
+      }
+    }, 150);
+  });
 })();
 
 // ─────────────────── Service Worker (offline) ────────────

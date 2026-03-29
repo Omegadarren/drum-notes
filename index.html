@@ -421,7 +421,115 @@
     }
     .vhdr-menu:active { background: #333; }
 
+    /* ===================== METRONOME ===================== */
+    .metro-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px 4px 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      flex-shrink: 0;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      line-height: 1;
+    }
+    .metro-btn:active { background: #2a2a2c; }
+    .metro-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #444;
+      transition: background 0.05s;
+      flex-shrink: 0;
+    }
+    .metro-btn.active .metro-dot   { background: #30d158; }
+    .metro-btn.active              { border-color: #30d158; color: #30d158; }
+    .metro-dot.flash               { background: #ff453a !important; }
+    .metro-popover {
+      position: absolute;
+      top: calc(var(--hdr) + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+      padding: 14px 18px;
+      display: none;
+      z-index: 200;
+      gap: 10px;
+      flex-direction: column;
+      align-items: center;
+      min-width: 180px;
+    }
+    .metro-popover.open { display: flex; }
+    .metro-popover-title {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metro-bpm-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .metro-bpm-btn {
+      background: #2a2a2c;
+      border: none;
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 20px;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .metro-bpm-btn:active { background: #3a3a3c; }
+    .metro-bpm-input {
+      background: #2a2a2c;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      width: 72px;
+      padding: 6px 4px;
+      -moz-appearance: textfield;
+    }
+    .metro-bpm-input::-webkit-inner-spin-button,
+    .metro-bpm-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .metro-toggle-btn {
+      background: #2a2a2c;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 7px 22px;
+      cursor: pointer;
+      touch-action: manipulation;
+      width: 100%;
+    }
+    .metro-toggle-btn.active {
+      background: rgba(48,209,88,0.15);
+      border-color: #30d158;
+      color: #30d158;
+    }
+    .metro-toggle-btn:active { opacity: 0.7; }
+
     /* Dropdown */
+
     .dropdown-menu {
       position: absolute;
       top: calc(var(--hdr) + 6px);
@@ -1323,7 +1431,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.37</div>
+  <div class="version-badge">V 3.39</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1633,6 +1741,19 @@
     <div class="jump-dropdown" id="jump-dropdown"></div>
     <div class="vhdr-chip" id="mode-chip">Scroll</div>
     <div class="vhdr-chip" id="shared-notes-chip" style="display:none;background:#5e5ce6;cursor:pointer;">👥 Shared</div>
+    <button class="metro-btn" id="btn-metro" title="Metronome">
+      <span class="metro-dot" id="metro-dot"></span>
+      <span id="metro-bpm-label">120</span>
+    </button>
+    <div class="metro-popover" id="metro-popover">
+      <div class="metro-popover-title">Metronome</div>
+      <div class="metro-bpm-row">
+        <button class="metro-bpm-btn" id="metro-bpm-down">−</button>
+        <input class="metro-bpm-input" id="metro-bpm-input" type="number" min="20" max="300" value="120">
+        <button class="metro-bpm-btn" id="metro-bpm-up">＋</button>
+      </div>
+      <button class="metro-toggle-btn" id="metro-toggle">▶ Start</button>
+    </div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
   </div>
@@ -4637,6 +4758,120 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   if (!currentGroupId) return;
   showPlayedSongs(currentGroupId);
 });
+
+// ── Metronome ─────────────────────────────────────────────
+(function() {
+  const METRO_KEY = 'bandnotes_metro_bpm';
+  let metroBpm     = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
+  let metroRunning = false;
+  let metroTimer   = null;
+  let flashTimer   = null;
+
+  const btnMetro    = document.getElementById('btn-metro');
+  const dot         = document.getElementById('metro-dot');
+  const bpmLabel    = document.getElementById('metro-bpm-label');
+  const popover     = document.getElementById('metro-popover');
+  const bpmInput    = document.getElementById('metro-bpm-input');
+  const btnUp       = document.getElementById('metro-bpm-up');
+  const btnDown     = document.getElementById('metro-bpm-down');
+  const toggleBtn   = document.getElementById('metro-toggle');
+
+  // Init display
+  bpmInput.value = metroBpm;
+  bpmLabel.textContent = metroBpm;
+
+  function applyBpm(val) {
+    metroBpm = Math.min(300, Math.max(20, val || 120));
+    bpmInput.value = metroBpm;
+    bpmLabel.textContent = metroBpm;
+    localStorage.setItem(METRO_KEY, metroBpm);
+    if (metroRunning) restartTick();
+  }
+
+  function flash() {
+    dot.classList.add('flash');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => dot.classList.remove('flash'), 80);
+  }
+
+  function startTick() {
+    metroRunning = true;
+    btnMetro.classList.add('active');
+    toggleBtn.classList.add('active');
+    toggleBtn.textContent = '⏹ Stop';
+    const interval = Math.round(60000 / metroBpm);
+    flash();
+    metroTimer = setInterval(flash, interval);
+  }
+
+  function stopTick() {
+    metroRunning = false;
+    clearInterval(metroTimer);
+    clearTimeout(flashTimer);
+    metroTimer = null;
+    dot.classList.remove('flash');
+    btnMetro.classList.remove('active');
+    toggleBtn.classList.remove('active');
+    toggleBtn.textContent = '▶ Start';
+  }
+
+  function restartTick() {
+    clearInterval(metroTimer);
+    clearTimeout(flashTimer);
+    const interval = Math.round(60000 / metroBpm);
+    flash();
+    metroTimer = setInterval(flash, interval);
+  }
+
+  // Toggle popover
+  btnMetro.addEventListener('click', e => {
+    e.stopPropagation();
+    const isOpen = popover.classList.contains('open');
+    // Close any other open overlays
+    document.getElementById('dropdown').classList.remove('open');
+    document.getElementById('jump-dropdown').classList.remove('open');
+    popover.classList.toggle('open', !isOpen);
+    if (!isOpen) setTimeout(() => bpmInput.select(), 50);
+  });
+
+  // Close popover on outside tap
+  document.addEventListener('click', e => {
+    if (!popover.contains(e.target) && e.target !== btnMetro) {
+      popover.classList.remove('open');
+    }
+  });
+
+  // BPM input
+  bpmInput.addEventListener('change', () => applyBpm(parseInt(bpmInput.value, 10)));
+  bpmInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { bpmInput.blur(); applyBpm(parseInt(bpmInput.value, 10)); }
+  });
+
+  // Hold-to-repeat for up/down buttons
+  function makeHoldBtn(btn, delta) {
+    let holdInterval = null;
+    const step = () => applyBpm(metroBpm + delta);
+    btn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      step();
+      holdInterval = setInterval(step, 120);
+    });
+    const stop = () => { clearInterval(holdInterval); holdInterval = null; };
+    btn.addEventListener('pointerup', stop);
+    btn.addEventListener('pointerleave', stop);
+    btn.addEventListener('pointercancel', stop);
+  }
+  makeHoldBtn(btnDown, -1);
+  makeHoldBtn(btnUp,   +1);
+
+  // Start/stop toggle
+  toggleBtn.addEventListener('click', () => {
+    if (metroRunning) stopTick(); else startTick();
+  });
+
+  // Stop metronome when leaving viewer
+  document.getElementById('btn-back').addEventListener('click', stopTick, { capture: true });
+})();
 document.getElementById('btn-played-songs-close').addEventListener('click', () => {
   document.getElementById('played-songs-modal').classList.remove('open');
   _psData = null;

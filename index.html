@@ -1461,7 +1461,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.49</div>
+  <div class="version-badge">V 3.50</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1667,10 +1667,8 @@
     <button class="ghdr-action" id="btn-upload-song" style="display:none;">⬆ Add Song</button>
   </div>
   <div class="groups-scroll">
-    <div style="padding:8px 16px 0;">
-      <input class="text-input" id="song-library-search" type="search"
-             placeholder="🔍 Search songs…" autocomplete="off" autocorrect="off" spellcheck="false"
-             style="width:100%;box-sizing:border-box;">
+    <div style="padding:6px 16px 0;">
+      <div id="song-library-alpha-filter" class="sl-alpha-bar"></div>
     </div>
     <div class="groups-section-label">All Songs</div>
     <div id="song-library-list"><div class="groups-empty">Loading…</div></div>
@@ -4724,17 +4722,9 @@ async function loadSongLibrary(gid, isAdmin) {
       }
       listEl.appendChild(row);
     });
-    // Wire up search filter
-    const searchInp = document.getElementById('song-library-search');
-    if (searchInp) {
-      searchInp.value = '';
-      searchInp.oninput = () => {
-        const q = searchInp.value.trim().toLowerCase();
-        listEl.querySelectorAll('.song-row').forEach(r => {
-          r.style.display = !q || r.querySelector('.song-row-name').textContent.toLowerCase().includes(q) ? '' : 'none';
-        });
-      };
-    }
+    // Wire up alpha filter
+    songLibraryAlphaFilter = '';
+    initSongLibraryAlphaFilter();
   } catch (err) {
     listEl.innerHTML = `<div class="groups-empty">Could not load songs.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small></div>`;
     console.error(err);
@@ -5224,6 +5214,37 @@ document.getElementById('inp-duplicate-setlist').addEventListener('keydown', e =
 let selectedSetlistSongs = [];  // [{ id, name }]
 let setlistLibrarySongs  = [];  // [{ id, name }]  — cached from Firestore
 let setlistAlphaFilter   = '';  // '' = no filter, 'A'–'Z' = filtered
+let songLibraryAlphaFilter = '';  // '' = no filter, 'A'–'Z' = filtered
+
+function initSongLibraryAlphaFilter() {
+  const bar = document.getElementById('song-library-alpha-filter');
+  if (!bar) return;
+  bar.innerHTML = '';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+    const btn = document.createElement('button');
+    btn.className = 'sl-alpha-btn';
+    btn.textContent = letter;
+    btn.dataset.letter = letter;
+    if (letter === songLibraryAlphaFilter) btn.classList.add('active');
+    btn.addEventListener('click', e => { e.stopPropagation(); setSongLibraryAlphaFilter(letter); });
+    bar.appendChild(btn);
+  });
+  if (songLibraryAlphaFilter) {
+    const clr = document.createElement('button');
+    clr.className = 'sl-alpha-btn clear-btn';
+    clr.textContent = '✕ Clear';
+    clr.addEventListener('click', e => { e.stopPropagation(); setSongLibraryAlphaFilter(''); });
+    bar.appendChild(clr);
+  }
+}
+
+function setSongLibraryAlphaFilter(letter) {
+  songLibraryAlphaFilter = letter;
+  initSongLibraryAlphaFilter();
+  document.getElementById('song-library-list').querySelectorAll('.song-row').forEach(r => {
+    r.style.display = !letter || r.querySelector('.song-row-name').textContent.toUpperCase().startsWith(letter) ? '' : 'none';
+  });
+}
 
 function initAlphaFilter() {
   const bar = document.getElementById('setlist-alpha-filter');

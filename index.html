@@ -1461,7 +1461,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.47</div>
+  <div class="version-badge">V 3.48</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4846,7 +4846,6 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   let metroBpm     = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
   let metroSoundMode = localStorage.getItem(METRO_SOUND_KEY) || 'click';  // 'off'|'click'|'beep'|'wood'
   let metroRunning = false;
-  let metroTimer   = null;
   let flashTimer   = null;
   let audioCtx     = null;
 
@@ -4876,46 +4875,8 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   }
 
   function playClick() {
-    if (metroSoundMode === 'off') return;
-    try {
-      const ctx = getAudioCtx();
-      const t   = ctx.currentTime;
-      if (metroSoundMode === 'click') {
-        // White-noise burst — non-pitched percussive click
-        const bufLen = Math.floor(ctx.sampleRate * 0.04);
-        const buf    = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-        const data   = buf.getChannelData(0);
-        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        const env = ctx.createGain();
-        src.connect(env); env.connect(ctx.destination);
-        env.gain.setValueAtTime(1.2, t);
-        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-        src.start(t); src.stop(t + 0.04);
-      } else if (metroSoundMode === 'beep') {
-        // Sine tone — classic pitched beep
-        const osc = ctx.createOscillator();
-        const env = ctx.createGain();
-        osc.connect(env); env.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1000, t);
-        env.gain.setValueAtTime(0.5, t);
-        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-        osc.start(t); osc.stop(t + 0.06);
-      } else if (metroSoundMode === 'wood') {
-        // Triangle wave at high freq — woodblock feel
-        const osc = ctx.createOscillator();
-        const env = ctx.createGain();
-        osc.connect(env); env.connect(ctx.destination);
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, t);
-        osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
-        env.gain.setValueAtTime(0.7, t);
-        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-        osc.start(t); osc.stop(t + 0.05);
-      }
-    } catch (e) {}
+    // Preview: schedule at current time immediately
+    try { scheduleClick(getAudioCtx().currentTime); } catch(e) {}
   }
 
   soundOpts.forEach(btn => {
@@ -4924,7 +4885,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
       metroSoundMode = btn.dataset.sound;
       localStorage.setItem(METRO_SOUND_KEY, metroSoundMode);
       refreshSoundOpts();
-      if (metroSoundMode !== 'off') { try { playClick(); } catch(e) {} }
+      if (metroSoundMode !== 'off') playClick();
     });
   });
 
@@ -4956,21 +4917,89 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     }, 120);
   }
 
+  // ── Lookahead scheduler ───────────────────────────────
+  // Schedules audio via AudioContext clock (accurate) and
+  // fires visual flash via setTimeout synced to each beat.
+  const LOOKAHEAD   = 0.1;   // seconds ahead to schedule
+  const SCHEDULE_MS = 50;    // how often to call scheduler (ms)
+  let   nextBeatTime = 0;    // AudioContext time of next beat
+  let   schedTimer   = null;
+
+  function scheduleClick(audioTime) {
+    if (metroSoundMode === 'off') return;
+    try {
+      const ctx = getAudioCtx();
+      const t   = audioTime;
+      if (metroSoundMode === 'click') {
+        const bufLen = Math.floor(ctx.sampleRate * 0.04);
+        const buf    = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data   = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const env = ctx.createGain();
+        src.connect(env); env.connect(ctx.destination);
+        env.gain.setValueAtTime(1.2, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+        src.start(t); src.stop(t + 0.04);
+      } else if (metroSoundMode === 'beep') {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        osc.connect(env); env.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1000, t);
+        env.gain.setValueAtTime(0.5, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        osc.start(t); osc.stop(t + 0.06);
+      } else if (metroSoundMode === 'wood') {
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        osc.connect(env); env.connect(ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
+        env.gain.setValueAtTime(0.7, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+        osc.start(t); osc.stop(t + 0.05);
+      }
+    } catch (e) {}
+  }
+
+  function scheduler() {
+    if (!metroRunning) return;
+    try {
+      const ctx      = getAudioCtx();
+      const interval = 60 / metroBpm;
+      while (nextBeatTime < ctx.currentTime + LOOKAHEAD) {
+        scheduleClick(nextBeatTime);
+        // Schedule visual flash at the right moment
+        const delay = Math.max(0, (nextBeatTime - ctx.currentTime) * 1000);
+        setTimeout(flash, delay);
+        nextBeatTime += interval;
+      }
+    } catch (e) {}
+    schedTimer = setTimeout(scheduler, SCHEDULE_MS);
+  }
+
   function startTick() {
     metroRunning = true;
     btnMetro.classList.add('active');
     toggleBtn.classList.add('active');
     toggleBtn.textContent = '⏹ Stop';
-    const interval = Math.round(60000 / metroBpm);
-    flash();
-    metroTimer = setInterval(flash, interval);
+    try {
+      const ctx = getAudioCtx();
+      nextBeatTime = ctx.currentTime;
+    } catch (e) {
+      nextBeatTime = 0;
+    }
+    scheduler();
   }
 
   function stopTick() {
     metroRunning = false;
-    clearInterval(metroTimer);
+    clearTimeout(schedTimer);
     clearTimeout(flashTimer);
-    metroTimer = null;
+    schedTimer = null;
     dot.classList.remove('flash');
     vhdr.classList.remove('metro-flash');
     btnMetro.classList.remove('active');
@@ -4979,11 +5008,15 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   }
 
   function restartTick() {
-    clearInterval(metroTimer);
+    clearTimeout(schedTimer);
     clearTimeout(flashTimer);
-    const interval = Math.round(60000 / metroBpm);
-    flash();
-    metroTimer = setInterval(flash, interval);
+    try {
+      const ctx = getAudioCtx();
+      nextBeatTime = ctx.currentTime;
+    } catch (e) {
+      nextBeatTime = 0;
+    }
+    scheduler();
   }
 
   // Toggle popover

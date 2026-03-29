@@ -1436,7 +1436,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.41</div>
+  <div class="version-badge">V 3.42</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2248,7 +2248,7 @@ async function launchViewer(session) {
         const bytes  = dataUrlToBytes(sp.pdfData);
         const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
         await renderPages(slide, pdfDoc, sp.songId);
-        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId });
+        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null });
       }
     } else {
       // Legacy single-PDF session
@@ -2439,6 +2439,9 @@ function goToSlide(idx) {
   track.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
   track.style.transform  = `translateX(${-idx * pdfScroll.clientWidth}px)`;
   updateSlideNav();
+  // Sync metronome to this song's BPM if set
+  const slideBpm = app.slides[idx] && app.slides[idx].bpm;
+  if (slideBpm && window.metroApplyBpm) window.metroApplyBpm(slideBpm);
 }
 
 // ─────────────────── Update song nav in header ───────────
@@ -4257,6 +4260,7 @@ async function openGroupSetlist(setlistId, sl) {
       for (const songId of sl.songIds) {
         let songName = null;
         let pdfData  = null;
+        let songBpm  = null;
 
         // Try live fetch first (skip if offline — go straight to cache)
         if (navigator.onLine) {
@@ -4266,6 +4270,7 @@ async function openGroupSetlist(setlistId, sl) {
             if (songDoc.exists) {
               const song = songDoc.data();
               songName = song.name;
+              songBpm = song.bpm || null;
               const url  = await storage.ref(song.storagePath).getDownloadURL();
               const buf  = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
@@ -4299,7 +4304,7 @@ async function openGroupSetlist(setlistId, sl) {
         }
 
         if (!pdfData) continue;
-        songPdfs.push({ songId, songName, pdfData });
+        songPdfs.push({ songId, songName, pdfData, bpm: songBpm });
 
         // Load annotations — localStorage first, then Firestore
         try {
@@ -4792,7 +4797,14 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     bpmLabel.textContent = metroBpm;
     localStorage.setItem(METRO_KEY, metroBpm);
     if (metroRunning) restartTick();
+    // Save BPM back to current song in Firestore
+    const slide = app.slides && app.slides[app.slideIdx];
+    if (slide && slide.songId && currentGroupId) {
+      db.collection('groups').doc(currentGroupId).collection('songs')
+        .doc(slide.songId).update({ bpm: metroBpm }).catch(() => {});
+    }
   }
+  window.metroApplyBpm = applyBpm;
 
   function flash() {
     dot.classList.add('flash');

@@ -1309,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.29</div>
+  <div class="version-badge">V 3.30</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3566,6 +3566,8 @@ document.getElementById('btn-group-detail-back').addEventListener('click', () =>
   document.getElementById('groups-screen').classList.add('active');
   currentGroupId   = null;
   currentGroupData = null;
+  _archiveOpen     = false;
+  _archiveSortDesc = false;
 });
 
 async function loadGroupSetlists(gid) {
@@ -3734,20 +3736,44 @@ async function loadGroupSetlists(gid) {
 
     // ── Render archived section ─────────────────────────
     if (archivedDocs.length > 0) {
+      // Sort by name (asc or desc)
+      archivedDocs.sort((a, b) => _archiveSortDesc
+        ? b.data().name.localeCompare(a.data().name)
+        : a.data().name.localeCompare(b.data().name));
+
       const label = `📦 ${archivedDocs.length} archived setlist${archivedDocs.length !== 1 ? 's' : ''}`;
+
+      // Header row: toggle + sort button
+      const archiveHdr = document.createElement('div');
+      archiveHdr.style.cssText = 'display:flex;align-items:center;gap:6px;';
+
       const toggleBtn = document.createElement('button');
       toggleBtn.className = 'archive-toggle-btn';
-      toggleBtn.textContent = label + ' · tap to view ›';
-      listEl.appendChild(toggleBtn);
+      toggleBtn.style.flex = '1';
+      toggleBtn.textContent = label + (_archiveOpen ? ' · tap to hide ›' : ' · tap to view ›');
+      archiveHdr.appendChild(toggleBtn);
+
+      const sortBtn = document.createElement('button');
+      sortBtn.className = 'ps-sort-btn';
+      sortBtn.title = 'Sort order';
+      sortBtn.textContent = _archiveSortDesc ? 'Z → A' : 'A → Z';
+      archiveHdr.appendChild(sortBtn);
+
+      listEl.appendChild(archiveHdr);
 
       const archiveRows = document.createElement('div');
-      archiveRows.style.display = 'none';
+      archiveRows.style.display = _archiveOpen ? '' : 'none';
       listEl.appendChild(archiveRows);
 
       toggleBtn.addEventListener('click', () => {
-        const isOpen = archiveRows.style.display !== 'none';
-        archiveRows.style.display = isOpen ? 'none' : '';
-        toggleBtn.textContent = isOpen ? label + ' · tap to view ›' : label + ' · tap to hide ›';
+        _archiveOpen = archiveRows.style.display === 'none';
+        archiveRows.style.display = _archiveOpen ? '' : 'none';
+        toggleBtn.textContent = _archiveOpen ? label + ' · tap to hide ›' : label + ' · tap to view ›';
+      });
+
+      sortBtn.addEventListener('click', () => {
+        _archiveSortDesc = !_archiveSortDesc;
+        loadGroupSetlists(currentGroupId);
       });
 
       for (const doc of archivedDocs) {
@@ -3849,6 +3875,8 @@ async function loadGroupSetlists(gid) {
 
 let _psData = null;   // { songMap, allSetlists } cached after first fetch
 let _psSortBySong = false;
+let _archiveSortDesc = false; // archived setlist name sort direction
+let _archiveOpen     = false; // remember expand/collapse state
 
 function renderPlayedSongs() {
   const listEl = document.getElementById('played-songs-list');

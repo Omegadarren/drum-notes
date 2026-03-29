@@ -536,22 +536,23 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      margin-top: 2px;
+      gap: 6px;
+      margin-top: 4px;
     }
-    .metro-sound-label { font-size: 13px; color: var(--muted); }
-    .metro-sound-toggle {
+    .metro-sound-label { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    .metro-sound-opts { display: flex; gap: 5px; }
+    .metro-sound-opt {
       background: #2a2a2c;
       border: 1.5px solid var(--border);
-      border-radius: 16px;
+      border-radius: 14px;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
-      padding: 5px 14px;
+      padding: 4px 10px;
       cursor: pointer;
       touch-action: manipulation;
     }
-    .metro-sound-toggle.on {
+    .metro-sound-opt.active {
       border-color: #30d158;
       color: #30d158;
       background: rgba(48,209,88,0.12);
@@ -1460,7 +1461,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.46</div>
+  <div class="version-badge">V 3.47</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1805,8 +1806,13 @@
       </div>
       <button class="metro-toggle-btn" id="metro-toggle">▶ Start</button>
       <div class="metro-sound-row">
-        <span class="metro-sound-label">🔊 Sound</span>
-        <button class="metro-sound-toggle" id="metro-sound-btn">Off</button>
+        <span class="metro-sound-label">🔊</span>
+        <div class="metro-sound-opts">
+          <button class="metro-sound-opt" data-sound="off">Off</button>
+          <button class="metro-sound-opt" data-sound="click">Click</button>
+          <button class="metro-sound-opt" data-sound="beep">Beep</button>
+          <button class="metro-sound-opt" data-sound="wood">Wood</button>
+        </div>
       </div>
     </div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
@@ -4835,10 +4841,10 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
 // ── Metronome ─────────────────────────────────────────────
 (function() {
-  const METRO_KEY       = 'bandnotes_metro_bpm';
-  const METRO_SOUND_KEY = 'bandnotes_metro_sound';
+  const METRO_KEY        = 'bandnotes_metro_bpm';
+  const METRO_SOUND_KEY  = 'bandnotes_metro_sound';
   let metroBpm     = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
-  let metroSound   = localStorage.getItem(METRO_SOUND_KEY) !== 'off';  // default ON
+  let metroSoundMode = localStorage.getItem(METRO_SOUND_KEY) || 'click';  // 'off'|'click'|'beep'|'wood'
   let metroRunning = false;
   let metroTimer   = null;
   let flashTimer   = null;
@@ -4853,43 +4859,73 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   const btnUp       = document.getElementById('metro-bpm-up');
   const btnDown     = document.getElementById('metro-bpm-down');
   const toggleBtn   = document.getElementById('metro-toggle');
-  const soundBtn    = document.getElementById('metro-sound-btn');
+  const soundOpts   = popover.querySelectorAll('.metro-sound-opt');
 
   // Init display
   bpmInput.value = metroBpm;
   bpmLabel.textContent = metroBpm;
-  soundBtn.textContent = metroSound ? 'On' : 'Off';
-  soundBtn.classList.toggle('on', metroSound);
+  function refreshSoundOpts() {
+    soundOpts.forEach(b => b.classList.toggle('active', b.dataset.sound === metroSoundMode));
+  }
+  refreshSoundOpts();
 
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
   }
 
   function playClick() {
-    if (!metroSound) return;
+    if (metroSoundMode === 'off') return;
     try {
       const ctx = getAudioCtx();
-      const osc = ctx.createOscillator();
-      const env = ctx.createGain();
-      osc.connect(env);
-      env.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1000, ctx.currentTime);
-      env.gain.setValueAtTime(0.5, ctx.currentTime);
-      env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.06);
+      const t   = ctx.currentTime;
+      if (metroSoundMode === 'click') {
+        // White-noise burst — non-pitched percussive click
+        const bufLen = Math.floor(ctx.sampleRate * 0.04);
+        const buf    = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+        const data   = buf.getChannelData(0);
+        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const env = ctx.createGain();
+        src.connect(env); env.connect(ctx.destination);
+        env.gain.setValueAtTime(1.2, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+        src.start(t); src.stop(t + 0.04);
+      } else if (metroSoundMode === 'beep') {
+        // Sine tone — classic pitched beep
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        osc.connect(env); env.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1000, t);
+        env.gain.setValueAtTime(0.5, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+        osc.start(t); osc.stop(t + 0.06);
+      } else if (metroSoundMode === 'wood') {
+        // Triangle wave at high freq — woodblock feel
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        osc.connect(env); env.connect(ctx.destination);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
+        env.gain.setValueAtTime(0.7, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+        osc.start(t); osc.stop(t + 0.05);
+      }
     } catch (e) {}
   }
 
-  soundBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    metroSound = !metroSound;
-    localStorage.setItem(METRO_SOUND_KEY, metroSound ? 'on' : 'off');
-    soundBtn.textContent = metroSound ? 'On' : 'Off';
-    soundBtn.classList.toggle('on', metroSound);
-    if (metroSound) try { getAudioCtx(); } catch (e) {}
+  soundOpts.forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      metroSoundMode = btn.dataset.sound;
+      localStorage.setItem(METRO_SOUND_KEY, metroSoundMode);
+      refreshSoundOpts();
+      if (metroSoundMode !== 'off') { try { playClick(); } catch(e) {} }
+    });
   });
 
   function applyBpm(val) {

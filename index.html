@@ -1323,7 +1323,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.35</div>
+  <div class="version-badge">V 3.37</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1393,6 +1393,7 @@
     <div class="ghdr-back" id="btn-group-detail-back">‹</div>
     <div class="ghdr-title" id="group-detail-title">Group</div>
     <div style="display:flex;gap:6px;align-items:center;">
+      <button class="ghdr-action" id="btn-gd-played-songs">🎤 Played</button>
       <button class="ghdr-action" id="btn-default-folder" title="Download folder" style="padding:10px 13px;font-size:18px;line-height:1;">📁</button>
       <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">✚ Setlist</button>
     </div>
@@ -4628,6 +4629,10 @@ document.getElementById('btn-song-library-back').addEventListener('click', () =>
 });
 
 // ── Played Songs — event handlers ────────────────────────
+document.getElementById('btn-gd-played-songs').addEventListener('click', () => {
+  if (!currentGroupId) return;
+  showPlayedSongs(currentGroupId);
+});
 document.getElementById('btn-played-songs').addEventListener('click', () => {
   if (!currentGroupId) return;
   showPlayedSongs(currentGroupId);

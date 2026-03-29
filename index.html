@@ -4806,6 +4806,7 @@ async function loadSongLibrary(gid, isAdmin) {
               setLoading(false);
               alert('Could not delete: ' + err.message);
             }
+          });
         });
       }
       listEl.appendChild(row);

@@ -1436,7 +1436,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.43</div>
+  <div class="version-badge">V 3.44</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4834,6 +4834,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     clearTimeout(flashTimer);
     metroTimer = null;
     dot.classList.remove('flash');
+    vhdr.classList.remove('metro-flash');
     btnMetro.classList.remove('active');
     toggleBtn.classList.remove('active');
     toggleBtn.textContent = '▶ Start';

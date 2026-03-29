@@ -1309,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.30</div>
+  <div class="version-badge">V 3.31</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1577,6 +1577,19 @@
   </div>
 </div>
 
+<div class="modal-bg" id="shared-notes-modal">
+  <div class="modal-box">
+    <div class="ps-modal-hdr">
+      <div class="modal-title" style="font-size:20px;">👥 Shared Notes</div>
+      <button class="ps-close-btn" id="btn-shared-notes-close">✕</button>
+    </div>
+    <div id="shared-notes-body" style="max-height:55vh;overflow-y:auto;"></div>
+    <div style="margin-top:8px;">
+      <button class="btn-primary" id="btn-shared-import" style="width:100%;font-size:15px;padding:13px;">Import to my notes ↓</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="rename-song-modal">
   <div class="modal-box">
     <div class="modal-title">Rename Song ✏️</div>
@@ -1603,12 +1616,14 @@
     <button class="btn-jump-to" id="btn-jump-to" style="display:none">Jump to ▾</button>
     <div class="jump-dropdown" id="jump-dropdown"></div>
     <div class="vhdr-chip" id="mode-chip">Scroll</div>
+    <div class="vhdr-chip" id="shared-notes-chip" style="display:none;background:#5e5ce6;cursor:pointer;">👥 Shared</div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
   </div>
 
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
+    <div class="dropdown-item" id="mi-share-notes">👥&nbsp; Share notes</div>
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
@@ -2089,7 +2104,7 @@ async function launchViewer(session) {
         const bytes  = dataUrlToBytes(sp.pdfData);
         const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
         await renderPages(slide, pdfDoc, sp.songId);
-        app.slides.push({ el: slide, songName: sp.songName });
+        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId });
       }
     } else {
       // Legacy single-PDF session
@@ -2097,7 +2112,7 @@ async function launchViewer(session) {
       const bytes = dataUrlToBytes(session.pdfData);
       app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
       await renderPages(slide, app.pdfDoc, null);
-      app.slides.push({ el: slide, songName: session.name });
+      app.slides.push({ el: slide, songName: session.name, songId: null });
     }
     updateSlideNav();
     drawAllAnnotations();
@@ -3178,6 +3193,21 @@ document.getElementById('mi-clear').addEventListener('click', () => {
   hint('All notes cleared.');
 });
 
+document.getElementById('mi-share-notes').addEventListener('click', e => {
+  e.stopPropagation();
+  closeDropdown();
+  shareNotesForCurrentSong();
+});
+document.getElementById('shared-notes-chip').addEventListener('click', () => {
+  openSharedNotesModal();
+});
+document.getElementById('btn-shared-notes-close').addEventListener('click', () => {
+  document.getElementById('shared-notes-modal').classList.remove('open');
+});
+document.getElementById('btn-shared-import').addEventListener('click', () => {
+  importSharedAnnotations();
+});
+
 function goBack() {
   if (app.pendingAnn) cancelAnn();
   exitSelectMode();
@@ -3193,6 +3223,8 @@ function goBack() {
   app.pages     = [];
   app.slides    = [];
   app.slideIdx  = 0;
+  _sharedAnns   = [];
+  document.getElementById('shared-notes-chip').style.display = 'none';
   document.querySelectorAll('.del-toast').forEach(el => el.remove());
   document.getElementById('pdf-scroll').innerHTML = '';
   document.getElementById('viewer').classList.remove('active');
@@ -3875,6 +3907,92 @@ async function loadGroupSetlists(gid) {
 
 let _psData = null;   // { songMap, allSetlists } cached after first fetch
 let _psSortBySong = false;
+let _sharedAnns = []; // [{ songId, songName, annotations, sharedBy, sharedAt }]
+
+// ── Shared Annotations ───────────────────────────────────────────────────
+async function loadSharedAnnotations(gid, songIds, songNames) {
+  _sharedAnns = [];
+  document.getElementById('shared-notes-chip').style.display = 'none';
+  if (!gid || !songIds || !songIds.length || !fbUid) return;
+  try {
+    for (let i = 0; i < songIds.length; i++) {
+      const sid  = songIds[i];
+      const snap = await db.collection('groups').doc(gid)
+        .collection('sharedAnnotations').doc(sid).get();
+      if (!snap.exists) continue;
+      const d = snap.data();
+      if (d.uid === fbUid) continue; // don't show your own
+      if (d.annotations && d.annotations.length) {
+        _sharedAnns.push({
+          songId:      sid,
+          songName:    songNames[i] || sid,
+          annotations: d.annotations,
+          sharedBy:    d.sharedBy || 'Someone',
+          sharedAt:    d.sharedAt || 0,
+        });
+      }
+    }
+    if (_sharedAnns.length) {
+      const chip = document.getElementById('shared-notes-chip');
+      chip.style.display = '';
+      chip.textContent   = '👥 Shared';
+    }
+  } catch {}
+}
+
+function shareNotesForCurrentSong() {
+  const sess = currentSession();
+  if (!sess || !sess.groupId) { hint('Not in a group session.'); return; }
+  const slide    = app.slides[app.slideIdx];
+  const songId   = slide?.songId || sess.songIds?.[0];
+  if (!songId) { hint('Cannot share — no song ID.'); return; }
+  const songName = slide?.songName || sess.name;
+  const anns     = sess.annotations.filter(a => a.songId === songId);
+  if (!anns.length) { hint('No notes to share for this song.', 2500); return; }
+  const name = getProfileName() || 'Someone';
+  if (!confirm(`Share your ${anns.length} note${anns.length !== 1 ? 's' : ''} for “${songName}” with the group?\n\nAnyone in the group will be able to import them.`)) return;
+  db.collection('groups').doc(sess.groupId)
+    .collection('sharedAnnotations').doc(songId)
+    .set({ annotations: anns, sharedBy: name, sharedAt: Date.now(), uid: fbUid })
+    .then(() => hint(`📤 Notes for “${songName}” shared with the group!`, 3000))
+    .catch(() => hint('Could not share — check your connection.', 3000));
+}
+
+function openSharedNotesModal() {
+  if (!_sharedAnns.length) return;
+  const body = document.getElementById('shared-notes-body');
+  let html = '';
+  _sharedAnns.forEach(entry => {
+    const d = entry.sharedAt
+      ? new Date(entry.sharedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+    html += `<div class="ps-setlist-hdr">${esc(entry.songName)}<span class="ps-setlist-date">${entry.annotations.length}×</span></div>`;
+    html += `<div class="ps-empty-label" style="margin:-4px 0 6px 12px;">by ${esc(entry.sharedBy)}${d ? ' · ' + d : ''}</div>`;
+    entry.annotations.forEach(a => {
+      html += `<div class="ps-song-item">${esc(a.text)}</div>`;
+    });
+  });
+  body.innerHTML = html;
+  document.getElementById('shared-notes-modal').classList.add('open');
+}
+
+function importSharedAnnotations() {
+  const sess = currentSession();
+  if (!sess || !_sharedAnns.length) return;
+  let imported = 0;
+  _sharedAnns.forEach(entry => {
+    entry.annotations.forEach(a => {
+      sess.annotations.push({ ...a, id: genId() }); // new id to avoid conflicts
+      imported++;
+    });
+  });
+  saveCurrentSession();
+  redrawAllAnnotations();
+  document.getElementById('shared-notes-modal').classList.remove('open');
+  _sharedAnns = [];
+  document.getElementById('shared-notes-chip').style.display = 'none';
+  hint(`✅ Imported ${imported} shared note${imported !== 1 ? 's' : ''} to your notes!`, 3000);
+}
 let _archiveSortDesc = false; // archived setlist name sort direction
 let _archiveOpen     = false; // remember expand/collapse state
 
@@ -4074,6 +4192,7 @@ async function openGroupSetlist(setlistId, sl) {
       app.currentId = session.id;
       document.getElementById('group-detail-screen').classList.remove('active');
       await launchViewer(session);
+      loadSharedAnnotations(currentGroupId, sl.songIds, session.songPdfs.map(sp => sp.songName));
       hint(usedCache
         ? '� No WiFi — opened from local backup'
         : 'Double-tap anywhere to add a note!', 4500);
@@ -4456,6 +4575,7 @@ async function openLibrarySong(songId, song) {
     document.getElementById('song-library-screen').classList.remove('active');
     document.getElementById('group-detail-screen').classList.remove('active');
     await launchViewer(session);
+    loadSharedAnnotations(currentGroupId, [songId], [song.name]);
     hint(fromCache ? '� No WiFi — opened from local backup' : 'Double-tap anywhere to add a note!', 4000);
   } catch (err) {
     alert('Could not open song: ' + err.message);

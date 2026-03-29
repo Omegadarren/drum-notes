@@ -1436,7 +1436,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.44</div>
+  <div class="version-badge">V 3.45</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1642,6 +1642,11 @@
     <button class="ghdr-action" id="btn-upload-song" style="display:none;">⬆ Add Song</button>
   </div>
   <div class="groups-scroll">
+    <div style="padding:8px 16px 0;">
+      <input class="text-input" id="song-library-search" type="search"
+             placeholder="🔍 Search songs…" autocomplete="off" autocorrect="off" spellcheck="false"
+             style="width:100%;box-sizing:border-box;">
+    </div>
     <div class="groups-section-label">All Songs</div>
     <div id="song-library-list"><div class="groups-empty">Loading…</div></div>
   </div>
@@ -1731,6 +1736,23 @@
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-rename-song-cancel">Cancel</button>
       <button class="btn-primary" id="btn-rename-song-save">Save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== DUPLICATE SETLIST MODAL ==================== -->
+<div class="modal-bg" id="duplicate-setlist-modal">
+  <div class="modal-box">
+    <div class="modal-title">Duplicate Setlist</div>
+    <div>
+      <div class="field-label">New setlist name</div>
+      <input class="text-input" id="inp-duplicate-setlist" type="text"
+             placeholder="Setlist name…" maxlength="80"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-duplicate-setlist-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-duplicate-setlist-confirm">Duplicate →</button>
     </div>
   </div>
 </div>
@@ -2261,6 +2283,10 @@ async function launchViewer(session) {
     updateSlideNav();
     drawAllAnnotations();
     hint('Double-tap anywhere to add a note  ·  Tap a note to delete it', 4500);
+    if (!localStorage.getItem('bn_lasso_hint_seen')) {
+      localStorage.setItem('bn_lasso_hint_seen', '1');
+      setTimeout(() => hint('💡 Two-finger double-tap anywhere to enter lasso selection mode', 5000), 5200);
+    }
   } catch (err) {
     console.error('PDF load error:', err);
     alert('Could not load the PDF. The file may be damaged or too large.');
@@ -3843,7 +3869,10 @@ async function loadGroupSetlists(gid) {
           if (nowPerformed && !confirm(`Mark "${sl.name}" as performed?\n\nThis logs each song's play count.`)) return;
           setLoading(true, nowPerformed ? 'Marking as performed…' : 'Updating…');
           try {
-            await db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({ performed: nowPerformed });
+            await db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({
+              performed:   nowPerformed,
+              performedAt: nowPerformed ? Date.now() : null,
+            });
             setLoading(false);
             hint(nowPerformed ? '🎤 Marked as performed!' : 'Removed from performed.', 2500);
             loadGroupSetlists(currentGroupId);
@@ -3860,28 +3889,16 @@ async function loadGroupSetlists(gid) {
             openEditSetlistModal(doc.id, sl.name, sl.songIds || []);
           });
         }
-        row.querySelector('[data-action="duplicate"]').addEventListener('click', async e => {
+        row.querySelector('[data-action="duplicate"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');
-          const newName = prompt('Name for the duplicate:', sl.name + ' (copy)');
-          if (!newName || !newName.trim()) return;
-          setLoading(true, 'Duplicating…');
-          try {
-            const newId = genId();
-            await db.collection('groups').doc(currentGroupId).collection('setlists').doc(newId).set({
-              name: newName.trim(),
-              songIds: sl.songIds || [],
-              songs: sl.songs || '',
-              createdBy: fbUid,
-              createdAt: Date.now(),
-            });
-            setLoading(false);
-            hint(`"${newName.trim()}" created! ✅`, 2500);
-            loadGroupSetlists(currentGroupId);
-          } catch (err) {
-            setLoading(false);
-            alert('Could not duplicate: ' + err.message);
-          }
+          const dupModal = document.getElementById('duplicate-setlist-modal');
+          const dupInput  = document.getElementById('inp-duplicate-setlist');
+          dupInput.value  = sl.name + ' (copy)';
+          dupModal.dataset.songIds = JSON.stringify(sl.songIds || []);
+          dupModal.dataset.songs   = sl.songs || '';
+          dupModal.classList.add('open');
+          setTimeout(() => { dupInput.select(); dupInput.focus(); }, 80);
         });
         row.querySelector('[data-action="arch"]').addEventListener('click', e => {
           e.stopPropagation();
@@ -4257,10 +4274,12 @@ async function openGroupSetlist(setlistId, sl) {
       let   annotations = [];
       let   usedCache   = false;
 
-      for (const songId of sl.songIds) {
-        let songName = null;
-        let pdfData  = null;
-        let songBpm  = null;
+      const songResults = await Promise.all(sl.songIds.map(async (songId) => {
+        let songName  = null;
+        let pdfData   = null;
+        let songBpm   = null;
+        let fromCache = false;
+        let anns      = [];
 
         // Try live fetch first (skip if offline — go straight to cache)
         if (navigator.onLine) {
@@ -4270,7 +4289,7 @@ async function openGroupSetlist(setlistId, sl) {
             if (songDoc.exists) {
               const song = songDoc.data();
               songName = song.name;
-              songBpm = song.bpm || null;
+              songBpm  = song.bpm || null;
               const url  = await storage.ref(song.storagePath).getDownloadURL();
               const buf  = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
@@ -4297,18 +4316,17 @@ async function openGroupSetlist(setlistId, sl) {
         if (!pdfData) {
           const cached = await getCachedSongPdf(currentGroupId, songId);
           if (cached) {
-            pdfData  = cached.pdfData;
-            songName = cached.songName;
-            usedCache = true;
+            pdfData   = cached.pdfData;
+            songName  = cached.songName;
+            fromCache = true;
           }
         }
 
-        if (!pdfData) continue;
-        songPdfs.push({ songId, songName, pdfData, bpm: songBpm });
+        if (!pdfData) return null;
 
         // Load annotations — localStorage first, then Firestore
         try {
-          let anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
+          anns = JSON.parse(localStorage.getItem(SA_KEY(currentGroupId, songId)) || '[]');
           if (!anns.length && fbUid) {
             try {
               const fsDoc = await db.collection('groups').doc(currentGroupId)
@@ -4320,8 +4338,15 @@ async function openGroupSetlist(setlistId, sl) {
               }
             } catch {}
           }
-          annotations = annotations.concat(anns);
         } catch {}
+
+        return { sp: { songId, songName, pdfData, bpm: songBpm }, anns, fromCache };
+      }));
+      for (const result of songResults) {
+        if (!result) continue;
+        songPdfs.push(result.sp);
+        annotations = annotations.concat(result.anns);
+        if (result.fromCache) usedCache = true;
       }
 
       if (!songPdfs.length) {
@@ -4665,6 +4690,17 @@ async function loadSongLibrary(gid, isAdmin) {
       }
       listEl.appendChild(row);
     });
+    // Wire up search filter
+    const searchInp = document.getElementById('song-library-search');
+    if (searchInp) {
+      searchInp.value = '';
+      searchInp.oninput = () => {
+        const q = searchInp.value.trim().toLowerCase();
+        listEl.querySelectorAll('.song-row').forEach(r => {
+          r.style.display = !q || r.querySelector('.song-row-name').textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      };
+    }
   } catch (err) {
     listEl.innerHTML = `<div class="groups-empty">Could not load songs.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small></div>`;
     console.error(err);
@@ -5013,6 +5049,33 @@ document.getElementById('btn-rename-song-save').addEventListener('click', async 
     setLoading(false);
     alert('Could not rename: ' + err.message);
   }
+});
+document.getElementById('btn-duplicate-setlist-cancel').addEventListener('click', () => {
+  document.getElementById('duplicate-setlist-modal').classList.remove('open');
+});
+document.getElementById('btn-duplicate-setlist-confirm').addEventListener('click', async () => {
+  const modal   = document.getElementById('duplicate-setlist-modal');
+  const name    = document.getElementById('inp-duplicate-setlist').value.trim();
+  if (!name) return;
+  modal.classList.remove('open');
+  const songIds = JSON.parse(modal.dataset.songIds || '[]');
+  const songs   = modal.dataset.songs || '';
+  setLoading(true, 'Duplicating…');
+  try {
+    const newId = genId();
+    await db.collection('groups').doc(currentGroupId).collection('setlists').doc(newId).set({
+      name, songIds, songs, createdBy: fbUid, createdAt: Date.now(),
+    });
+    setLoading(false);
+    hint(`"${name}" created! ✅`, 2500);
+    loadGroupSetlists(currentGroupId);
+  } catch (err) {
+    setLoading(false);
+    alert('Could not duplicate: ' + err.message);
+  }
+});
+document.getElementById('inp-duplicate-setlist').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-duplicate-setlist-confirm').click();
 });
 
 // ─────────────────── Setlist Builder ────────────────────

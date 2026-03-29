@@ -1323,7 +1323,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.34</div>
+  <div class="version-badge">V 3.35</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2566,6 +2566,7 @@ function enterSelectMode() {
   annSelectBar.innerHTML =
     '<span id="sel-count">Draw a box to select notes</span>' +
     '<button class="sel-action-btn" id="btn-sel-align-l" title="Align left">←</button>' +
+    '<button class="sel-action-btn" id="btn-sel-align-c" title="Align center">↔</button>' +
     '<button class="sel-action-btn" id="btn-sel-align-r" title="Align right">→</button>' +
     '<button class="sel-action-btn" id="btn-sel-copy"    title="Copy texts">📋</button>' +
     '<button class="sel-action-btn danger" id="btn-sel-delete" title="Delete selected">🗑</button>' +
@@ -2573,6 +2574,7 @@ function enterSelectMode() {
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
   document.getElementById('btn-sel-align-l').addEventListener('click', () => alignSelected('left'));
+  document.getElementById('btn-sel-align-c').addEventListener('click', () => alignSelected('center'));
   document.getElementById('btn-sel-align-r').addEventListener('click', () => alignSelected('right'));
   document.getElementById('btn-sel-copy').addEventListener('click', copySelected);
   document.getElementById('btn-sel-delete').addEventListener('click', deleteSelected);
@@ -2628,9 +2630,10 @@ function alignSelected(dir) {
   const sess = currentSession();
   if (!sess || selectedAnnIds.size < 2) return;
   const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
-  const target = dir === 'left'
-    ? Math.min(...selected.map(a => a.xPct))
-    : Math.max(...selected.map(a => a.xPct));
+  let target;
+  if (dir === 'left')        target = Math.min(...selected.map(a => a.xPct));
+  else if (dir === 'right')  target = Math.max(...selected.map(a => a.xPct));
+  else                       target = selected.reduce((sum, a) => sum + a.xPct, 0) / selected.length;
   selected.forEach(a => { a.xPct = target; });
   saveCurrentSession();
   redrawAllAnnotations();

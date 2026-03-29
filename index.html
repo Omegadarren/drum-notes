@@ -1436,7 +1436,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.42</div>
+  <div class="version-badge">V 3.43</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4797,8 +4797,10 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     bpmLabel.textContent = metroBpm;
     localStorage.setItem(METRO_KEY, metroBpm);
     if (metroRunning) restartTick();
-    // Save BPM back to current song in Firestore
+    // Update in-memory BPM for current slide immediately
     const slide = app.slides && app.slides[app.slideIdx];
+    if (slide) slide.bpm = metroBpm;
+    // Save BPM back to current song in Firestore
     if (slide && slide.songId && currentGroupId) {
       db.collection('groups').doc(currentGroupId).collection('songs')
         .doc(slide.songId).update({ bpm: metroBpm }).catch(() => {});

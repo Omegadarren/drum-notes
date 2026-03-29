@@ -532,6 +532,30 @@
       color: #30d158;
     }
     .metro-toggle-btn:active { opacity: 0.7; }
+    .metro-sound-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .metro-sound-label { font-size: 13px; color: var(--muted); }
+    .metro-sound-toggle {
+      background: #2a2a2c;
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 14px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .metro-sound-toggle.on {
+      border-color: #30d158;
+      color: #30d158;
+      background: rgba(48,209,88,0.12);
+    }
 
     /* Dropdown */
 
@@ -1436,7 +1460,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.45</div>
+  <div class="version-badge">V 3.46</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1780,6 +1804,10 @@
         <button class="metro-bpm-btn" id="metro-bpm-up">＋</button>
       </div>
       <button class="metro-toggle-btn" id="metro-toggle">▶ Start</button>
+      <div class="metro-sound-row">
+        <span class="metro-sound-label">🔊 Sound</span>
+        <button class="metro-sound-toggle" id="metro-sound-btn">Off</button>
+      </div>
     </div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
@@ -4807,11 +4835,14 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
 // ── Metronome ─────────────────────────────────────────────
 (function() {
-  const METRO_KEY = 'bandnotes_metro_bpm';
+  const METRO_KEY       = 'bandnotes_metro_bpm';
+  const METRO_SOUND_KEY = 'bandnotes_metro_sound';
   let metroBpm     = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
+  let metroSound   = localStorage.getItem(METRO_SOUND_KEY) !== 'off';  // default ON
   let metroRunning = false;
   let metroTimer   = null;
   let flashTimer   = null;
+  let audioCtx     = null;
 
   const btnMetro    = document.getElementById('btn-metro');
   const dot         = document.getElementById('metro-dot');
@@ -4822,10 +4853,44 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   const btnUp       = document.getElementById('metro-bpm-up');
   const btnDown     = document.getElementById('metro-bpm-down');
   const toggleBtn   = document.getElementById('metro-toggle');
+  const soundBtn    = document.getElementById('metro-sound-btn');
 
   // Init display
   bpmInput.value = metroBpm;
   bpmLabel.textContent = metroBpm;
+  soundBtn.textContent = metroSound ? 'On' : 'Off';
+  soundBtn.classList.toggle('on', metroSound);
+
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    return audioCtx;
+  }
+
+  function playClick() {
+    if (!metroSound) return;
+    try {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const env = ctx.createGain();
+      osc.connect(env);
+      env.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1000, ctx.currentTime);
+      env.gain.setValueAtTime(0.5, ctx.currentTime);
+      env.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.06);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.06);
+    } catch (e) {}
+  }
+
+  soundBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    metroSound = !metroSound;
+    localStorage.setItem(METRO_SOUND_KEY, metroSound ? 'on' : 'off');
+    soundBtn.textContent = metroSound ? 'On' : 'Off';
+    soundBtn.classList.toggle('on', metroSound);
+    if (metroSound) try { getAudioCtx(); } catch (e) {}
+  });
 
   function applyBpm(val) {
     metroBpm = Math.min(300, Math.max(20, val || 120));
@@ -4847,6 +4912,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   function flash() {
     dot.classList.add('flash');
     vhdr.classList.add('metro-flash');
+    playClick();
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
       dot.classList.remove('flash');

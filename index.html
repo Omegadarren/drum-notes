@@ -1309,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.31</div>
+  <div class="version-badge">V 3.32</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2162,6 +2162,15 @@ function createSongSlide(track) {
   }, { passive: false });
 
   slide.addEventListener('scroll', closeDropdown, { passive: true });
+
+  // ── PC: double-click to add annotation ───────────────
+  slide.addEventListener('dblclick', e => {
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    if (target && target.closest('.ann-label')) return;
+    closeDropdown();
+    if (app.pendingAnn) commitAnn();
+    doubleTapAt(e.clientX, e.clientY);
+  });
 
   // ── Two-finger double-tap → toggle lasso mode ────────
   let twoFingerTapTime  = 0;

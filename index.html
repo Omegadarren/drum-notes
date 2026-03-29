@@ -972,6 +972,19 @@
       border-bottom: 1px solid var(--border);
       margin-bottom: 0;
     }
+    .ps-sort-btn {
+      font-size: 12px;
+      font-weight: 600;
+      color: #60a5fa;
+      border: 1.5px solid #60a5fa;
+      background: transparent;
+      border-radius: 8px;
+      padding: 5px 10px;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .ps-sort-btn:active { opacity: 0.7; }
     .ps-close-btn {
       background: none;
       border: 1.5px solid var(--border);
@@ -1296,7 +1309,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.28</div>
+  <div class="version-badge">V 3.29</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1415,7 +1428,10 @@
   <div class="modal-box">
     <div class="ps-modal-hdr">
       <div class="modal-title" style="font-size:22px;">🎤 Played Songs</div>
-      <button class="ps-close-btn" id="btn-played-songs-close">✕</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="ps-sort-btn" id="btn-ps-sort" title="Toggle sort">By Song</button>
+        <button class="ps-close-btn" id="btn-played-songs-close">✕</button>
+      </div>
     </div>
     <div id="played-songs-list"></div>
   </div>
@@ -3831,6 +3847,76 @@ async function loadGroupSetlists(gid) {
   }
 }
 
+let _psData = null;   // { songMap, allSetlists } cached after first fetch
+let _psSortBySong = false;
+
+function renderPlayedSongs() {
+  const listEl = document.getElementById('played-songs-list');
+  const btn    = document.getElementById('btn-ps-sort');
+  const { songMap, allSetlists } = _psData;
+  btn.textContent = _psSortBySong ? 'By Setlist' : 'By Song';
+
+  if (!allSetlists.length) {
+    listEl.innerHTML = '<div class="groups-empty">No setlists yet.</div>';
+    return;
+  }
+
+  let html = '';
+
+  if (!_psSortBySong) {
+    // ── By Setlist (default) ───────────────────────────
+    const hasPerformed = allSetlists.some(d => d.data().performed);
+    if (!hasPerformed) {
+      html += '<div class="groups-empty" style="padding:12px 4px 8px;font-size:13px;text-align:left;">No setlists have been marked as performed yet. Tap ··· on a setlist to mark it. Showing all:</div>';
+    }
+    allSetlists.forEach(sldoc => {
+      const sl = sldoc.data();
+      const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
+      const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const perfTag    = sl.performed ? ' <span style="font-size:12px;font-weight:500;color:#34c759;">🎤</span>' : '';
+      const archiveTag = sl.archived  ? ' <span style="font-size:11px;color:var(--muted);">📦</span>' : '';
+      html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}${archiveTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
+      if (sl.songIds && sl.songIds.length) {
+        sl.songIds.forEach(sid => { html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`; });
+      } else {
+        html += `<div class="ps-empty-label">No song list recorded</div>`;
+      }
+    });
+  } else {
+    // ── By Song ───────────────────────────────────────
+    // Build map: songId -> [ { setlistName, dateStr, performed } ]
+    const songAppearances = {};
+    const songOrder = [];  // preserve encounter order (alphabetical via songMap)
+    allSetlists.forEach(sldoc => {
+      const sl = sldoc.data();
+      if (!sl.songIds || !sl.songIds.length) return;
+      const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
+      const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      sl.songIds.forEach(sid => {
+        if (!songAppearances[sid]) { songAppearances[sid] = []; songOrder.push(sid); }
+        songAppearances[sid].push({ name: sl.name, dateStr, performed: !!sl.performed, archived: !!sl.archived });
+      });
+    });
+    // Sort songs alphabetically by name
+    const sortedSids = [...new Set(songOrder)].sort((a, b) =>
+      (songMap[a] || a).localeCompare(songMap[b] || b)
+    );
+    if (!sortedSids.length) {
+      html = '<div class="groups-empty">No songs found in any setlist.</div>';
+    } else {
+      sortedSids.forEach(sid => {
+        const appearances = songAppearances[sid];
+        html += `<div class="ps-setlist-hdr">${esc(songMap[sid] || sid)}<span class="ps-setlist-date">${appearances.length}×</span></div>`;
+        appearances.forEach(a => {
+          const tags = (a.performed ? ' 🎤' : '') + (a.archived ? ' 📦' : '');
+          html += `<div class="ps-song-item">${esc(a.name)}${tags}${a.dateStr ? `<span style="float:right;font-size:11px;opacity:0.55;">${esc(a.dateStr)}</span>` : ''}</div>`;
+        });
+      });
+    }
+  }
+  listEl.innerHTML = html;
+}
+
 async function showPlayedSongs(gid) {
   const modal  = document.getElementById('played-songs-modal');
   const listEl = document.getElementById('played-songs-list');
@@ -3843,7 +3929,6 @@ async function showPlayedSongs(gid) {
     ]);
     const songMap = {};
     songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
-
     const allSetlists = [];
     setlistSnap.forEach(d => { allSetlists.push(d); });
     allSetlists.sort((a, b) => {
@@ -3851,32 +3936,8 @@ async function showPlayedSongs(gid) {
       const tb = b.data().createdAt || b.data().uploadedAt || 0;
       return ta - tb;
     });
-
-    if (!allSetlists.length) {
-      listEl.innerHTML = '<div class="groups-empty">No setlists yet.</div>';
-      return;
-    }
-    const hasPerformed = allSetlists.some(d => d.data().performed);
-    let html = '';
-    if (!hasPerformed) {
-      html += '<div class="groups-empty" style="padding:12px 4px 8px;font-size:13px;text-align:left;">No setlists have been marked as performed yet. Tap ··· on a setlist to mark it. Showing all setlists:</div>';
-    }
-    allSetlists.forEach(sldoc => {
-      const sl = sldoc.data();
-      const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
-      const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-      const perfTag     = sl.performed ? ' <span style="font-size:12px;font-weight:500;color:#34c759;">🎤</span>' : '';
-      const archiveTag  = sl.archived  ? ' <span style="font-size:11px;color:var(--muted);">📦</span>' : '';
-      html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}${archiveTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
-      if (sl.songIds && sl.songIds.length) {
-        sl.songIds.forEach(sid => {
-          html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`;
-        });
-      } else {
-        html += `<div class="ps-empty-label">No song list recorded</div>`;
-      }
-    });
-    listEl.innerHTML = html;
+    _psData = { songMap, allSetlists };
+    renderPlayedSongs();
   } catch (err) {
     listEl.innerHTML = `<div class="groups-empty">Could not load: ${esc(err.message)}</div>`;
   }
@@ -4396,6 +4457,13 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 });
 document.getElementById('btn-played-songs-close').addEventListener('click', () => {
   document.getElementById('played-songs-modal').classList.remove('open');
+  _psData = null;
+  _psSortBySong = false;
+});
+document.getElementById('btn-ps-sort').addEventListener('click', () => {
+  if (!_psData) return;
+  _psSortBySong = !_psSortBySong;
+  renderPlayedSongs();
 });
 
 let pendingSongFiles = [];  // [{ file, name }]

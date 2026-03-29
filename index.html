@@ -602,6 +602,17 @@
     .dropdown-item.pressed { background: #2a2a2c; }
     .dropdown-item.danger { color: var(--accent); }
 
+    /* ===================== REORDER MODAL ===================== */
+    #reorder-modal .modal-box { max-height: 85vh; gap: 0; padding-bottom: 16px; overflow: hidden; display: flex; flex-direction: column; }
+    .ro-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; border: 1.5px solid var(--border); border-radius: 12px; margin: 12px 0 16px; }
+    .ro-row { display: flex; align-items: center; gap: 10px; padding: 13px 14px; border-bottom: 1px solid var(--border); }
+    .ro-row:last-child { border-bottom: none; }
+    .ro-num { font-size: 13px; color: var(--muted); width: 22px; text-align: right; flex-shrink: 0; }
+    .ro-name { flex: 1; font-size: 16px; }
+    .ro-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 18px; line-height: 1; padding: 4px 9px; cursor: pointer; touch-action: manipulation; flex-shrink: 0; }
+    .ro-btn:active { background: #2a2a2c; }
+    .ro-btn:disabled { opacity: 0.25; pointer-events: none; }
+
     /* ===================== PDF SCROLL / SLIDE HOST ===================== */
     #pdf-scroll {
       flex: 1;
@@ -1476,7 +1487,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.52</div>
+  <div class="version-badge">V 3.53</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1848,12 +1859,25 @@
   <div class="dropdown-menu" id="dropdown">
     <div class="dropdown-item" id="mi-share-notes">👥&nbsp; Share notes</div>
     <div class="dropdown-item" id="mi-note-style">✎&nbsp; Note style</div>
+    <div class="dropdown-item" id="mi-reorder" style="display:none;">↕&nbsp; Reorder songs</div>
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
   </div>
 
   <div id="pdf-scroll"></div>
+</div>
+
+<!-- ==================== REORDER SONGS MODAL ==================== -->
+<div class="modal-bg" id="reorder-modal">
+  <div class="modal-box" style="max-height:85vh;">
+    <div class="modal-title">↕ Reorder Songs</div>
+    <div class="ro-list" id="ro-list"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-reorder-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-reorder-save">Apply →</button>
+    </div>
+  </div>
 </div>
 
 <!-- ==================== STALE BACKUP MODAL ==================== -->
@@ -3512,6 +3536,10 @@ function goBack() {
 // ─────────────────── Dropdown menu ───────────────────────
 document.getElementById('btn-menu').addEventListener('click', e => {
   e.stopPropagation();
+  // Show reorder item only for multi-song setlists
+  const s = currentSession();
+  document.getElementById('mi-reorder').style.display =
+    (s && s.songPdfs && s.songPdfs.length > 1) ? '' : 'none';
   document.getElementById('dropdown').classList.toggle('open');
 });
 // Touch press feedback on dropdown items
@@ -3535,6 +3563,88 @@ document.addEventListener('touchstart', e => {
 function closeDropdown() {
   document.getElementById('dropdown').classList.remove('open');
 }
+
+// ─────────────────── Reorder Songs ───────────────────────
+let _reorderOrder = []; // working copy of song indices during reorder modal
+
+function openReorderModal() {
+  closeDropdown();
+  const s = currentSession();
+  if (!s || !s.songPdfs || s.songPdfs.length < 2) return;
+  // Build working order from current app.slides ordering
+  _reorderOrder = app.slides.map((sl, i) => i);
+  renderReorderList();
+  document.getElementById('reorder-modal').classList.add('open');
+}
+
+function renderReorderList() {
+  const list = document.getElementById('ro-list');
+  list.innerHTML = '';
+  const s = currentSession();
+  if (!s) return;
+  _reorderOrder.forEach((origIdx, pos) => {
+    const slide = app.slides[origIdx];
+    const row = document.createElement('div');
+    row.className = 'ro-row';
+    row.innerHTML = `
+      <span class="ro-num">${pos + 1}</span>
+      <span class="ro-name">${esc(slide.songName || 'Song ' + (pos + 1))}</span>
+      <button class="ro-btn" data-dir="up" title="Move up">↑</button>
+      <button class="ro-btn" data-dir="down" title="Move down">↓</button>`;
+    row.querySelector('[data-dir="up"]').disabled  = pos === 0;
+    row.querySelector('[data-dir="down"]').disabled = pos === _reorderOrder.length - 1;
+    row.querySelector('[data-dir="up"]').addEventListener('click', () => {
+      const tmp = _reorderOrder[pos - 1];
+      _reorderOrder[pos - 1] = _reorderOrder[pos];
+      _reorderOrder[pos]     = tmp;
+      renderReorderList();
+    });
+    row.querySelector('[data-dir="down"]').addEventListener('click', () => {
+      const tmp = _reorderOrder[pos + 1];
+      _reorderOrder[pos + 1] = _reorderOrder[pos];
+      _reorderOrder[pos]     = tmp;
+      renderReorderList();
+    });
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('btn-reorder-cancel').addEventListener('click', () => {
+  document.getElementById('reorder-modal').classList.remove('open');
+});
+
+document.getElementById('btn-reorder-save').addEventListener('click', () => {
+  const s = currentSession();
+  if (!s) { document.getElementById('reorder-modal').classList.remove('open'); return; }
+
+  // Apply new order to session.songPdfs
+  const newSongPdfs = _reorderOrder.map(i => s.songPdfs[i]);
+  s.songPdfs = newSongPdfs;
+  if (s.songIds) s.songIds = _reorderOrder.map(i => s.songIds[i]);
+
+  // Apply new order to app.slides
+  const newSlides = _reorderOrder.map(i => app.slides[i]);
+  app.slides = newSlides;
+
+  // Reorder DOM children in #slide-track
+  const track = document.getElementById('slide-track');
+  if (track) {
+    newSlides.forEach(sl => track.appendChild(sl.el));
+  }
+
+  // Jump to first song and refresh nav
+  app.slideIdx = 0;
+  const pdfScroll = document.getElementById('pdf-scroll');
+  if (pdfScroll) {
+    const t = document.getElementById('slide-track');
+    if (t) { t.style.transition = 'none'; t.style.transform = 'translateX(0)'; }
+  }
+  updateSlideNav();
+  document.getElementById('reorder-modal').classList.remove('open');
+  hint('Songs reordered \u2195', 2000);
+});
+
+document.getElementById('mi-reorder').addEventListener('click', openReorderModal);
 
 // ─────────────────── UI helpers ──────────────────────────
 function setChip(mode) {

@@ -440,16 +440,16 @@
     }
     .metro-btn:active { background: #2a2a2c; }
     .metro-dot {
-      width: 10px;
-      height: 10px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: #444;
-      transition: background 0.05s;
+      transition: background 0.04s, box-shadow 0.04s;
       flex-shrink: 0;
     }
-    .metro-btn.active .metro-dot   { background: #30d158; }
+    .metro-btn.active .metro-dot   { background: #30d158; box-shadow: 0 0 6px #30d158; }
     .metro-btn.active              { border-color: #30d158; color: #30d158; }
-    .metro-dot.flash               { background: #ff453a !important; }
+    .metro-dot.flash               { background: #ffffff !important; box-shadow: 0 0 0 3px rgba(255,60,40,0.5), 0 0 16px 4px rgba(255,60,40,0.85) !important; }
     .metro-popover {
       position: absolute;
       top: calc(var(--hdr) + 8px);
@@ -1431,7 +1431,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.39</div>
+  <div class="version-badge">V 3.40</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4791,7 +4791,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   function flash() {
     dot.classList.add('flash');
     clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => dot.classList.remove('flash'), 80);
+    flashTimer = setTimeout(() => dot.classList.remove('flash'), 120);
   }
 
   function startTick() {

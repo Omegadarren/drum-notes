@@ -1063,6 +1063,89 @@
     }
     .ghdr-action:active { opacity: 0.7; }
 
+    /* Group detail settings dropdown */
+    .gd-settings-menu {
+      position: absolute;
+      top: calc(var(--hdr) + 6px);
+      right: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 100;
+      min-width: 250px;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .gd-settings-menu.open { display: block; }
+    .gd-settings-item {
+      padding: 16px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      touch-action: manipulation;
+      color: var(--text);
+    }
+    .gd-settings-item:last-child { border-bottom: none; }
+    .gd-settings-item:active { background: var(--press-bg); }
+    .gd-settings-item.danger { color: var(--accent); }
+    .gd-invite-block {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .gd-invite-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .gd-invite-row { display: flex; align-items: center; gap: 10px; }
+    .gd-invite-code { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--text); flex: 1; }
+    .gd-copy-btn {
+      font-size: 13px; font-weight: 600;
+      color: #60a5fa; border: 1.5px solid #60a5fa;
+      background: transparent; border-radius: 8px;
+      padding: 5px 12px; cursor: pointer; touch-action: manipulation; white-space: nowrap;
+    }
+    .gd-copy-btn:active { opacity: 0.7; }
+
+    /* Group detail settings dropdown */
+    .gd-settings-menu {
+      position: absolute;
+      top: calc(var(--hdr) + 6px);
+      right: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      z-index: 100;
+      min-width: 240px;
+      display: none;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .gd-settings-menu.open { display: block; }
+    .gd-settings-item {
+      padding: 16px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      touch-action: manipulation;
+      color: var(--text);
+    }
+    .gd-settings-item:last-child { border-bottom: none; }
+    .gd-settings-item:active { background: var(--press-bg); }
+    .gd-settings-item.danger { color: var(--accent); }
+    .gd-settings-divider { height: 1px; background: var(--border); }
+    .gd-invite-block {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .gd-invite-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .gd-invite-row { display: flex; align-items: center; gap: 10px; }
+    .gd-invite-code { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--text); flex: 1; }
+    .gd-copy-btn {
+      font-size: 13px; font-weight: 600;
+      color: #60a5fa; border: 1.5px solid #60a5fa;
+      background: transparent; border-radius: 8px;
+      padding: 5px 12px; cursor: pointer; touch-action: manipulation; white-space: nowrap;
+    }
+    .gd-copy-btn:active { opacity: 0.7; }
+
     .groups-scroll {
       flex: 1;
       overflow-y: auto;
@@ -1507,7 +1590,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.55</div>
+  <div class="version-badge">V 3.56</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1572,7 +1655,7 @@
 </div>
 
 <!-- ==================== GROUP DETAIL SCREEN ==================== -->
-<div id="group-detail-screen">
+<div id="group-detail-screen" style="position:relative;">
   <div class="ghdr">
     <div class="ghdr-back" id="btn-group-detail-back">‹</div>
     <div class="ghdr-title" id="group-detail-title">Group</div>
@@ -1580,27 +1663,14 @@
       <button class="ghdr-action" id="btn-gd-played-songs">🎤 Played</button>
       <button class="ghdr-action" id="btn-default-folder" title="Download folder" style="padding:10px 13px;font-size:18px;line-height:1;">📁</button>
       <button class="ghdr-action" id="btn-upload-setlist" style="display:none;">✚ Setlist</button>
+      <button class="ghdr-action" id="btn-gd-settings" title="Settings" style="display:none;padding:10px 13px;font-size:18px;line-height:1;">⚙</button>
     </div>
   </div>
+  <!-- Settings dropdown (admin & member), built by JS -->
+  <div class="gd-settings-menu" id="gd-settings-menu"></div>
   <div class="groups-scroll" id="group-detail-scroll">
     <div class="groups-section-label">Setlists</div>
     <div id="group-setlists-list"><div class="groups-empty">Loading…</div></div>
-    <div id="group-admin-section" style="display:none;">
-      <div class="groups-section-label" style="margin-top:32px;">Admin</div>
-      <button class="ghdr-action" id="btn-song-library" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:12px;">📚 Song Library</button>
-      <div class="invite-code-box">
-        <div class="invite-code-label">Invite Code — share this with your band</div>
-        <div class="invite-code-value" id="group-invite-code">——</div>
-        <div class="invite-code-hint">Members tap "Join Group" and enter this code</div>
-        <button class="btn-copy-code" id="btn-copy-code">📋 Copy Code</button>
-      </div>
-      <button class="ghdr-action" id="btn-rename-group" style="width:100%;margin-top:12px;padding:14px;border-radius:12px;font-size:16px;">✏️ Rename Group</button>
-      <button class="danger-btn" id="btn-delete-group">Delete Group</button>
-    </div>
-    <div id="group-member-section" style="display:none;margin-top:32px;">
-      <button class="ghdr-action" id="btn-song-library-member" style="width:100%;padding:14px;border-radius:12px;font-size:16px;margin-bottom:12px;">📚 Song Library</button>
-      <button class="danger-btn" id="btn-leave-group">Leave Group</button>
-    </div>
   </div>
 </div>
 
@@ -3905,28 +3975,91 @@ async function openGroupDetail(gid, gdata) {
     adminGroups.unshift(gid);
     localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
   }
-  document.getElementById('group-detail-title').textContent  = gdata.name;
+  document.getElementById('group-detail-title').textContent   = gdata.name;
   document.getElementById('btn-upload-setlist').style.display = isAdmin ? '' : 'none';
-  document.getElementById('group-admin-section').style.display  = isAdmin ? '' : 'none';
-  document.getElementById('group-member-section').style.display = isAdmin ? 'none' : '';
-  if (isAdmin) document.getElementById('group-invite-code').textContent = gdata.inviteCode;
+  document.getElementById('btn-gd-settings').style.display    = '';
+
+  // Build settings dropdown
+  const menu = document.getElementById('gd-settings-menu');
+  menu.innerHTML = '';
+  menu.classList.remove('open');
+
+  if (isAdmin) {
+    // Invite code block
+    const inviteBlock = document.createElement('div');
+    inviteBlock.className = 'gd-invite-block';
+    inviteBlock.innerHTML = `
+      <div class="gd-invite-label">Invite Code — share with your band</div>
+      <div class="gd-invite-row">
+        <span class="gd-invite-code">${esc(gdata.inviteCode || '——')}</span>
+        <button class="gd-copy-btn" id="btn-copy-code">📋 Copy</button>
+      </div>`;
+    menu.appendChild(inviteBlock);
+
+    // Song Library
+    const libItem = document.createElement('div');
+    libItem.className = 'gd-settings-item';
+    libItem.textContent = '📚 Song Library';
+    libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, true); });
+    menu.appendChild(libItem);
+
+    // Rename Group
+    const renameItem = document.createElement('div');
+    renameItem.className = 'gd-settings-item';
+    renameItem.textContent = '✏️ Rename Group';
+    renameItem.addEventListener('click', () => {
+      menu.classList.remove('open');
+      document.getElementById('inp-rename-group').value = currentGroupData.name;
+      document.getElementById('rename-group-modal').classList.add('open');
+      setTimeout(() => document.getElementById('inp-rename-group').select(), 120);
+    });
+    menu.appendChild(renameItem);
+
+    // Delete Group
+    const deleteItem = document.createElement('div');
+    deleteItem.className = 'gd-settings-item danger';
+    deleteItem.textContent = '🗑 Delete Group';
+    deleteItem.addEventListener('click', () => {
+      menu.classList.remove('open');
+      doDeleteGroup();
+    });
+    menu.appendChild(deleteItem);
+  } else {
+    // Song Library (member)
+    const libItem = document.createElement('div');
+    libItem.className = 'gd-settings-item';
+    libItem.textContent = '📚 Song Library';
+    libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, false); });
+    menu.appendChild(libItem);
+
+    // Leave Group
+    const leaveItem = document.createElement('div');
+    leaveItem.className = 'gd-settings-item danger';
+    leaveItem.textContent = '🚪 Leave Group';
+    leaveItem.addEventListener('click', () => {
+      menu.classList.remove('open');
+      doLeaveGroup();
+    });
+    menu.appendChild(leaveItem);
+  }
+
+  // Wire copy button (admin only)
+  const copyBtn = document.getElementById('btn-copy-code');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const code = gdata.inviteCode;
+      if (!code) return;
+      navigator.clipboard.writeText(code).then(() => {
+        copyBtn.textContent = '✓ Copied!';
+        setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+      }).catch(() => hint('Code: ' + code, 6000));
+    });
+  }
+
   document.getElementById('group-detail-screen').classList.add('active');
   document.getElementById('groups-screen').classList.remove('active');
   loadGroupSetlists(gid);
 }
-
-document.getElementById('btn-copy-code').addEventListener('click', () => {
-  const code = document.getElementById('group-invite-code').textContent;
-  if (!code || code === '——') return;
-  navigator.clipboard.writeText(code).then(() => {
-    const btn = document.getElementById('btn-copy-code');
-    btn.textContent = '✓ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy Code', 2000);
-  }).catch(() => {
-    // Fallback for browsers that block clipboard without gesture
-    hint('Code: ' + code, 6000);
-  });
-});
 
 document.getElementById('btn-group-detail-back').addEventListener('click', () => {
   document.getElementById('group-detail-screen').classList.remove('active');
@@ -4613,12 +4746,12 @@ document.getElementById('btn-upload-setlist').addEventListener('click', () => {
 
 
 // ── Rename Group ─────────────────────────────────────────
-document.getElementById('btn-rename-group').addEventListener('click', () => {
+function doRenameGroup() {
   if (!currentGroupData) return;
   document.getElementById('inp-rename-group').value = currentGroupData.name;
   document.getElementById('rename-group-modal').classList.add('open');
   setTimeout(() => document.getElementById('inp-rename-group').select(), 120);
-});
+}
 document.getElementById('btn-rename-group-cancel').addEventListener('click', () => {
   document.getElementById('rename-group-modal').classList.remove('open');
 });
@@ -4642,7 +4775,7 @@ document.getElementById('btn-rename-group-save').addEventListener('click', async
 });
 
 // ── Delete / Leave Group ──────────────────────────────────
-document.getElementById('btn-delete-group').addEventListener('click', () => {
+function doDeleteGroup() {
   if (!currentGroupId || !currentGroupData) return;
   showConfirm(
     `Delete "${currentGroupData.name}"?`,
@@ -4674,9 +4807,9 @@ document.getElementById('btn-delete-group').addEventListener('click', () => {
       }
     }
   );
-});
+}
 
-document.getElementById('btn-leave-group').addEventListener('click', () => {
+function doLeaveGroup() {
   if (!currentGroupId || !currentGroupData) return;
   showConfirm(`Leave "${currentGroupData.name}"?`, '', 'Leave Group', async () => {
     setLoading(true, 'Leaving group…');
@@ -4697,7 +4830,7 @@ document.getElementById('btn-leave-group').addEventListener('click', () => {
       alert('Could not leave group: ' + err.message);
     }
   });
-});
+}
 
 // ─────────────────── Setlist row ctx menu global close ──
 document.addEventListener('click', () => {
@@ -4949,15 +5082,18 @@ async function openLibrarySong(songId, song) {
   }
 }
 
+// ── ⚙ Settings button ────────────────────────────────────
+document.getElementById('btn-gd-settings').addEventListener('click', e => {
+  e.stopPropagation();
+  document.getElementById('gd-settings-menu').classList.toggle('open');
+});
+document.addEventListener('click', e => {
+  const menu = document.getElementById('gd-settings-menu');
+  if (menu && !menu.contains(e.target) && e.target.id !== 'btn-gd-settings')
+    menu.classList.remove('open');
+});
+
 // ── Song Library — event handlers ────────────────────────
-document.getElementById('btn-song-library').addEventListener('click', () => {
-  if (!currentGroupId) return;
-  openSongLibrary(currentGroupId, true);  // this button is only visible to admins
-});
-document.getElementById('btn-song-library-member').addEventListener('click', () => {
-  if (!currentGroupId) return;
-  openSongLibrary(currentGroupId, false);
-});
 document.getElementById('btn-song-library-back').addEventListener('click', () => {
   document.getElementById('song-library-screen').classList.remove('active');
   document.getElementById('group-detail-screen').classList.add('active');

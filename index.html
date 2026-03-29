@@ -3430,7 +3430,7 @@ function compositePage(pg) {
       pageAnns.forEach(ann => {
         const x = ann.xPct * tmp.width;
         const y = ann.yPct * tmp.height;
-        ctx.fillText('● ' + ann.text, x, y);
+        ctx.fillText('\u2022 ' + ann.text, x, y);
       });
     }
   }

@@ -355,6 +355,30 @@
       touch-action: manipulation;
     }
     .btn-ghost:active { opacity: 0.7; }
+    .btn-danger {
+      background: #ff3b30;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 26px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-danger:active { opacity: 0.75; }
+    .btn-primary-sm {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 26px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .btn-primary-sm:active { opacity: 0.72; }
 
     /* ===================== VIEWER ===================== */
     #viewer {
@@ -1461,7 +1485,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.50</div>
+  <div class="version-badge">V 3.51</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1764,6 +1788,18 @@
 </div>
 
 <!-- ==================== DUPLICATE SETLIST MODAL ==================== -->
+<!-- ==================== GENERIC CONFIRM MODAL ==================== -->
+<div class="modal-bg" id="confirm-modal">
+  <div class="modal-box" style="gap:18px;">
+    <div class="modal-title" id="confirm-modal-title">Are you sure?</div>
+    <div id="confirm-modal-msg" style="color:var(--muted);font-size:16px;line-height:1.5;"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-confirm-cancel">Cancel</button>
+      <button class="btn-danger" id="btn-confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="duplicate-setlist-modal">
   <div class="modal-box">
     <div class="modal-title">Duplicate Setlist</div>
@@ -2132,6 +2168,30 @@ function esc(s) {
     c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
 
+// ─────────────────── Generic confirm modal ───────────────
+let _confirmCallback = null;
+function showConfirm(title, msg, label, onConfirm, danger = true) {
+  document.getElementById('confirm-modal-title').textContent = title;
+  const msgEl = document.getElementById('confirm-modal-msg');
+  msgEl.textContent = msg || '';
+  msgEl.style.display = msg ? '' : 'none';
+  const okBtn = document.getElementById('btn-confirm-ok');
+  okBtn.textContent = label || 'Confirm';
+  okBtn.className = danger ? 'btn-danger' : 'btn-primary-sm';
+  _confirmCallback = onConfirm;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+document.getElementById('btn-confirm-cancel').addEventListener('click', () => {
+  document.getElementById('confirm-modal').classList.remove('open');
+  _confirmCallback = null;
+});
+document.getElementById('btn-confirm-ok').addEventListener('click', () => {
+  document.getElementById('confirm-modal').classList.remove('open');
+  const cb = _confirmCallback;
+  _confirmCallback = null;
+  if (cb) cb();
+});
+
 // ─────────────────── Profile (per-device name) ───────────
 function loadProfile() {
   try { return JSON.parse(localStorage.getItem(PROFILE) || 'null'); }
@@ -2256,11 +2316,11 @@ function renderStart() {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const s = app.sessions.find(x => x.id === btn.dataset.del);
-      if (s && confirm(`Delete "${s.name}"?\n\nThis will remove all its notes.`)) {
+      if (s) showConfirm(`Delete "${s.name}"?`, 'This will remove all its notes.', 'Delete', () => {
         app.sessions = app.sessions.filter(x => x.id !== btn.dataset.del);
         saveStore();
         renderStart();
-      }
+      });
     });
   });
 }
@@ -2804,14 +2864,16 @@ function copySelected() {
 
 function deleteSelected() {
   if (!selectedAnnIds.size) return;
-  if (!confirm(`Delete ${selectedAnnIds.size} selected note${selectedAnnIds.size !== 1 ? 's' : ''}?`)) return;
-  const sess = currentSession();
-  if (!sess) return;
-  sess.annotations = sess.annotations.filter(a => !selectedAnnIds.has(a.id));
-  selectedAnnIds.clear();
-  saveCurrentSession();
-  exitSelectMode();
-  redrawAllAnnotations();
+  const count = selectedAnnIds.size;
+  showConfirm(`Delete ${count} selected note${count !== 1 ? 's' : ''}?`, '', 'Delete', () => {
+    const sess = currentSession();
+    if (!sess) return;
+    sess.annotations = sess.annotations.filter(a => !selectedAnnIds.has(a.id));
+    selectedAnnIds.clear();
+    saveCurrentSession();
+    exitSelectMode();
+    redrawAllAnnotations();
+  });
 }
 
 function alignSelected(dir) {
@@ -3403,11 +3465,13 @@ document.getElementById('mi-clear').addEventListener('click', () => {
   closeDropdown();
   const sess = currentSession();
   if (!sess || !sess.annotations.length) { hint('No notes to clear.'); return; }
-  if (!confirm(`Clear all ${sess.annotations.length} note(s) from this session?`)) return;
-  sess.annotations = [];
-  saveCurrentSession();
-  app.pages.forEach(p => p.annLayer.querySelectorAll('.ann-label').forEach(el => el.remove()));
-  hint('All notes cleared.');
+  const noteCount = sess.annotations.length;
+  showConfirm(`Clear all ${noteCount} note${noteCount !== 1 ? 's' : ''}?`, 'This removes all notes from this session.', 'Clear All', () => {
+    sess.annotations = [];
+    saveCurrentSession();
+    app.pages.forEach(p => p.annLayer.querySelectorAll('.ann-label').forEach(el => el.remove()));
+    hint('All notes cleared.');
+  });
 });
 
 document.getElementById('mi-share-notes').addEventListener('click', e => {
@@ -3893,24 +3957,30 @@ async function loadGroupSetlists(gid) {
           document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
           if (!isOpen) row.classList.add('ctx-open');
         });
-        row.querySelector('[data-action="perform"]').addEventListener('click', async e => {
+        row.querySelector('[data-action="perform"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');
           const id = doc.id;
           const nowPerformed = !sl.performed;
-          if (nowPerformed && !confirm(`Mark "${sl.name}" as performed?\n\nThis logs each song's play count.`)) return;
-          setLoading(true, nowPerformed ? 'Marking as performed…' : 'Updating…');
-          try {
-            await db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({
-              performed:   nowPerformed,
-              performedAt: nowPerformed ? Date.now() : null,
-            });
-            setLoading(false);
-            hint(nowPerformed ? '🎤 Marked as performed!' : 'Removed from performed.', 2500);
-            loadGroupSetlists(currentGroupId);
-          } catch (err) {
-            setLoading(false);
-            alert('Could not update: ' + err.message);
+          const doPerform = async () => {
+            setLoading(true, nowPerformed ? 'Marking as performed…' : 'Updating…');
+            try {
+              await db.collection('groups').doc(currentGroupId).collection('setlists').doc(id).update({
+                performed:   nowPerformed,
+                performedAt: nowPerformed ? Date.now() : null,
+              });
+              setLoading(false);
+              hint(nowPerformed ? '🎤 Marked as performed!' : 'Removed from performed.', 2500);
+              loadGroupSetlists(currentGroupId);
+            } catch (err) {
+              setLoading(false);
+              alert('Could not update: ' + err.message);
+            }
+          };
+          if (nowPerformed) {
+            showConfirm(`Mark "${sl.name}" as performed?`, 'This logs each song\'s play count.', 'Mark Performed', doPerform, false);
+          } else {
+            doPerform();
           }
         });
         const editBtn = row.querySelector('[data-action="edit"]');
@@ -3935,20 +4005,22 @@ async function loadGroupSetlists(gid) {
         row.querySelector('[data-action="arch"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');
-          if (!confirm(`Archive "${sl.name}"?\n\nIt will be hidden from the main list. You can restore it any time.`)) return;
-          setLoading(true, 'Archiving…');
-          db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).update({ archived: true })
-            .then(() => { setLoading(false); hint(`"${sl.name}" archived. 📦`, 2500); loadGroupSetlists(currentGroupId); })
-            .catch(err => { setLoading(false); alert('Could not archive: ' + err.message); });
+          showConfirm(`Archive "${sl.name}"?`, 'It will be hidden from the main list. You can restore it any time.', 'Archive', () => {
+            setLoading(true, 'Archiving…');
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).update({ archived: true })
+              .then(() => { setLoading(false); hint(`"${sl.name}" archived. 📦`, 2500); loadGroupSetlists(currentGroupId); })
+              .catch(err => { setLoading(false); alert('Could not archive: ' + err.message); });
+          }, false);
         });
         row.querySelector('[data-action="del"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');
-          if (!confirm(`Delete "${sl.name}"?\n\nThis cannot be undone.`)) return;
-          setLoading(true, 'Deleting…');
-          db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
-            .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
-            .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+          showConfirm(`Delete "${sl.name}"?`, 'This cannot be undone.', 'Delete', () => {
+            setLoading(true, 'Deleting…');
+            db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
+              .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+              .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+          });
         });
       }
       row.addEventListener('click', () => {
@@ -4061,11 +4133,12 @@ async function loadGroupSetlists(gid) {
           row.querySelector('[data-action="del"]').addEventListener('click', e => {
             e.stopPropagation();
             row.classList.remove('ctx-open');
-            if (!confirm(`Delete "${sl.name}"?\n\nThis cannot be undone.`)) return;
-            setLoading(true, 'Deleting…');
-            db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
-              .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
-              .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+            showConfirm(`Delete "${sl.name}"?`, 'This cannot be undone.', 'Delete', () => {
+              setLoading(true, 'Deleting…');
+              db.collection('groups').doc(currentGroupId).collection('setlists').doc(doc.id).delete()
+                .then(() => { setLoading(false); hint(`"${sl.name}" deleted.`, 2500); loadGroupSetlists(currentGroupId); })
+                .catch(err => { setLoading(false); alert('Could not delete: ' + err.message); });
+            });
           });
         }
         row.addEventListener('click', () => {
@@ -4158,12 +4231,20 @@ function shareNotesForCurrentSong() {
   const anns     = sess.annotations.filter(a => a.songId === songId);
   if (!anns.length) { hint('No notes to share for this song.', 2500); return; }
   const name = getProfileName() || 'Someone';
-  if (!confirm(`Share your ${anns.length} note${anns.length !== 1 ? 's' : ''} for “${songName}” with the group?\n\nAnyone in the group will be able to import them.`)) return;
-  db.collection('groups').doc(sess.groupId)
-    .collection('sharedAnnotations').doc(songId)
-    .set({ annotations: anns, sharedBy: name, sharedAt: Date.now(), uid: fbUid })
-    .then(() => hint(`📤 Notes for “${songName}” shared with the group!`, 3000))
-    .catch(() => hint('Could not share — check your connection.', 3000));
+  const annCount = anns.length;
+  showConfirm(
+    `Share notes for "${songName}"?`,
+    `Your ${annCount} note${annCount !== 1 ? 's' : ''} will be visible to anyone in the group.`,
+    'Share',
+    () => {
+      db.collection('groups').doc(sess.groupId)
+        .collection('sharedAnnotations').doc(songId)
+        .set({ annotations: anns, sharedBy: name, sharedAt: Date.now(), uid: fbUid })
+        .then(() => hint(`📤 Notes for "${songName}" shared with the group!`, 3000))
+        .catch(() => hint('Could not share — check your connection.', 3000));
+    },
+    false
+  );
 }
 
 function openSharedNotesModal() {
@@ -4506,54 +4587,61 @@ document.getElementById('btn-rename-group-save').addEventListener('click', async
 });
 
 // ── Delete / Leave Group ──────────────────────────────────
-document.getElementById('btn-delete-group').addEventListener('click', async () => {
+document.getElementById('btn-delete-group').addEventListener('click', () => {
   if (!currentGroupId || !currentGroupData) return;
-  if (!confirm(`Delete "${currentGroupData.name}"?\n\nAll setlists will be removed and members will lose access.`)) return;
-  setLoading(true, 'Deleting group…');
-  try {
-    // Delete setlists sub-collection
-    const setlists = await db.collection('groups').doc(currentGroupId).collection('setlists').get();
-    for (const doc of setlists.docs) {
-      try { await storage.ref(doc.data().storagePath).delete(); } catch (e) {}
-      await doc.ref.delete();
+  showConfirm(
+    `Delete "${currentGroupData.name}"?`,
+    'All setlists will be removed and members will lose access.',
+    'Delete Group',
+    async () => {
+      setLoading(true, 'Deleting group…');
+      try {
+        // Delete setlists sub-collection
+        const setlists = await db.collection('groups').doc(currentGroupId).collection('setlists').get();
+        for (const doc of setlists.docs) {
+          try { await storage.ref(doc.data().storagePath).delete(); } catch (e) {}
+          await doc.ref.delete();
+        }
+        await db.collection('groups').doc(currentGroupId).delete();
+        const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
+          .filter(id => id !== currentGroupId);
+        localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+        setLoading(false);
+        document.getElementById('group-detail-screen').classList.remove('active');
+        document.getElementById('groups-screen').classList.add('active');
+        currentGroupId   = null;
+        currentGroupData = null;
+        hint('Group deleted.', 3000);
+        loadMyGroups();
+      } catch (err) {
+        setLoading(false);
+        alert('Could not delete group: ' + err.message);
+      }
     }
-    await db.collection('groups').doc(currentGroupId).delete();
-    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
-      .filter(id => id !== currentGroupId);
-    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
-    setLoading(false);
-    document.getElementById('group-detail-screen').classList.remove('active');
-    document.getElementById('groups-screen').classList.add('active');
-    currentGroupId   = null;
-    currentGroupData = null;
-    hint('Group deleted.', 3000);
-    loadMyGroups();
-  } catch (err) {
-    setLoading(false);
-    alert('Could not delete group: ' + err.message);
-  }
+  );
 });
 
-document.getElementById('btn-leave-group').addEventListener('click', async () => {
+document.getElementById('btn-leave-group').addEventListener('click', () => {
   if (!currentGroupId || !currentGroupData) return;
-  if (!confirm(`Leave "${currentGroupData.name}"?`)) return;
-  setLoading(true, 'Leaving group…');
-  try {
-    await db.collection('groups').doc(currentGroupId).collection('members').doc(fbUid).delete();
-    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
-      .filter(id => id !== currentGroupId);
-    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
-    setLoading(false);
-    document.getElementById('group-detail-screen').classList.remove('active');
-    document.getElementById('groups-screen').classList.add('active');
-    currentGroupId   = null;
-    currentGroupData = null;
-    hint('You left the group.', 3000);
-    loadMyGroups();
-  } catch (err) {
-    setLoading(false);
-    alert('Could not leave group: ' + err.message);
-  }
+  showConfirm(`Leave "${currentGroupData.name}"?`, '', 'Leave Group', async () => {
+    setLoading(true, 'Leaving group…');
+    try {
+      await db.collection('groups').doc(currentGroupId).collection('members').doc(fbUid).delete();
+      const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]')
+        .filter(id => id !== currentGroupId);
+      localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+      setLoading(false);
+      document.getElementById('group-detail-screen').classList.remove('active');
+      document.getElementById('groups-screen').classList.add('active');
+      currentGroupId   = null;
+      currentGroupData = null;
+      hint('You left the group.', 3000);
+      loadMyGroups();
+    } catch (err) {
+      setLoading(false);
+      alert('Could not leave group: ' + err.message);
+    }
+  });
 });
 
 // ─────────────────── Setlist row ctx menu global close ──
@@ -4704,20 +4792,20 @@ async function loadSongLibrary(gid, isAdmin) {
           document.getElementById('rename-song-modal').classList.add('open');
           setTimeout(() => document.getElementById('inp-rename-song').select(), 120);
         });
-        row.querySelector('[data-action="delete"]').addEventListener('click', async e => {
+        row.querySelector('[data-action="delete"]').addEventListener('click', e => {
           e.stopPropagation();
-          if (!confirm(`Delete "${song.name}"?\n\nThis removes the PDF and all saved notes for this song.`)) return;
-          setLoading(true, 'Deleting…');
-          try {
-            await storage.ref(song.storagePath).delete();
-            await db.collection('groups').doc(gid).collection('songs').doc(doc.id).delete();
-            setLoading(false);
-            hint(`"${song.name}" deleted.`, 2500);
-            loadSongLibrary(gid, isAdmin);
-          } catch (err) {
-            setLoading(false);
-            alert('Could not delete: ' + err.message);
-          }
+          showConfirm(`Delete "${song.name}"?`, 'This removes the PDF and all saved notes for this song.', 'Delete', async () => {
+            setLoading(true, 'Deleting…');
+            try {
+              await storage.ref(song.storagePath).delete();
+              await db.collection('groups').doc(gid).collection('songs').doc(doc.id).delete();
+              setLoading(false);
+              hint(`"${song.name}" deleted.`, 2500);
+              loadSongLibrary(gid, isAdmin);
+            } catch (err) {
+              setLoading(false);
+              alert('Could not delete: ' + err.message);
+            }
         });
       }
       listEl.appendChild(row);

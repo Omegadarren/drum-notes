@@ -1461,7 +1461,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.48</div>
+  <div class="version-badge">V 3.49</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4931,17 +4931,22 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
       const ctx = getAudioCtx();
       const t   = audioTime;
       if (metroSoundMode === 'click') {
-        const bufLen = Math.floor(ctx.sampleRate * 0.04);
+        // Bandpass-filtered noise tick — classic mechanical metronome snap
+        const bufLen = Math.floor(ctx.sampleRate * 0.025);
         const buf    = ctx.createBuffer(1, bufLen, ctx.sampleRate);
         const data   = buf.getChannelData(0);
-        for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1);
+        for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
         const src = ctx.createBufferSource();
         src.buffer = buf;
+        const bpf = ctx.createBiquadFilter();
+        bpf.type = 'bandpass';
+        bpf.frequency.value = 2800;
+        bpf.Q.value = 0.8;
         const env = ctx.createGain();
-        src.connect(env); env.connect(ctx.destination);
-        env.gain.setValueAtTime(1.2, t);
-        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
-        src.start(t); src.stop(t + 0.04);
+        src.connect(bpf); bpf.connect(env); env.connect(ctx.destination);
+        env.gain.setValueAtTime(3.0, t);
+        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+        src.start(t); src.stop(t + 0.025);
       } else if (metroSoundMode === 'beep') {
         const osc = ctx.createOscillator();
         const env = ctx.createGain();
@@ -4952,15 +4957,17 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
         env.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
         osc.start(t); osc.stop(t + 0.06);
       } else if (metroSoundMode === 'wood') {
-        const osc = ctx.createOscillator();
-        const env = ctx.createGain();
-        osc.connect(env); env.connect(ctx.destination);
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, t);
-        osc.frequency.exponentialRampToValueAtTime(400, t + 0.05);
-        env.gain.setValueAtTime(0.7, t);
-        env.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-        osc.start(t); osc.stop(t + 0.05);
+        // Two detuned sine oscillators — hollow woodblock resonance
+        [[175, 0.55], [224, 0.35]].forEach(([freq, gain]) => {
+          const osc = ctx.createOscillator();
+          const env = ctx.createGain();
+          osc.connect(env); env.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          env.gain.setValueAtTime(gain, t);
+          env.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+          osc.start(t); osc.stop(t + 0.07);
+        });
       }
     } catch (e) {}
   }

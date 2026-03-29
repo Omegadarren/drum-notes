@@ -3519,7 +3519,7 @@ async function savePDF(pdfWin) {
         pageAnns.forEach(ann => {
           const x = ann.xPct * dW;
           const y = ann.yPct * dH;
-          doc.text('● ' + ann.text, x, y, { baseline: 'middle' });
+          doc.text('\u2022 ' + ann.text, x, y, { baseline: 'middle' });
         });
       }
     }

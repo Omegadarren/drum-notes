@@ -1296,7 +1296,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.27</div>
+  <div class="version-badge">V 3.28</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3845,7 +3845,7 @@ async function showPlayedSongs(gid) {
     songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
 
     const allSetlists = [];
-    setlistSnap.forEach(d => { if (!d.data().archived) allSetlists.push(d); });
+    setlistSnap.forEach(d => { allSetlists.push(d); });
     allSetlists.sort((a, b) => {
       const ta = a.data().createdAt || a.data().uploadedAt || 0;
       const tb = b.data().createdAt || b.data().uploadedAt || 0;
@@ -3865,8 +3865,9 @@ async function showPlayedSongs(gid) {
       const sl = sldoc.data();
       const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
       const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-      const perfTag = sl.performed ? ' <span style="font-size:12px;font-weight:500;color:#34c759;">🎤</span>' : '';
-      html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
+      const perfTag     = sl.performed ? ' <span style="font-size:12px;font-weight:500;color:#34c759;">🎤</span>' : '';
+      const archiveTag  = sl.archived  ? ' <span style="font-size:11px;color:var(--muted);">📦</span>' : '';
+      html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}${archiveTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
       if (sl.songIds && sl.songIds.length) {
         sl.songIds.forEach(sid => {
           html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`;

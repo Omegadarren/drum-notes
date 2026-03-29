@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>BandNotes — User Manual</title>
+<style>
+/* ── Reset ───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Screen theme (dark, matching app) ───────────────────── */
+:root {
+  --bg:       #1c1c1e;
+  --surface:  #2c2c2e;
+  --border:   #3a3a3c;
+  --text:     #f2f2f7;
+  --muted:    #8e8e93;
+  --accent:   #ff3b30;
+  --blue:     #0a84ff;
+  --green:    #34c759;
+  --purple:   #af52de;
+  --orange:   #ff9500;
+  --radius:   14px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout ──────────────────────────────────────────────── */
+.page-wrap {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+/* ── Cover ───────────────────────────────────────────────── */
+.cover {
+  text-align: center;
+  padding: 48px 0 60px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 52px;
+}
+.cover-icon { font-size: 72px; margin-bottom: 16px; }
+.cover-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #ff3b30, #ff9500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.cover-sub {
+  font-size: 20px;
+  color: var(--muted);
+  margin-top: 8px;
+  font-weight: 400;
+}
+.cover-version {
+  display: inline-block;
+  margin-top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+}
+
+/* ── Table of Contents ───────────────────────────────────── */
+.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  margin-bottom: 52px;
+}
+.toc-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.toc ol {
+  padding-left: 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 32px;
+}
+@media (max-width: 560px) { .toc ol { grid-template-columns: 1fr; } }
+.toc li { font-size: 15px; }
+.toc a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 500;
+}
+.toc a:hover { text-decoration: underline; }
+
+/* ── Section ─────────────────────────────────────────────── */
+section {
+  margin-bottom: 56px;
+  scroll-margin-top: 24px;
+}
+.section-number {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+h2 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 28px 0 10px;
+}
+h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--orange);
+  margin: 20px 0 6px;
+}
+p {
+  color: #c8c8ce;
+  margin-bottom: 14px;
+}
+p:last-child { margin-bottom: 0; }
+
+/* ── Lists ───────────────────────────────────────────────── */
+ul, ol {
+  padding-left: 22px;
+  margin-bottom: 14px;
+}
+li {
+  color: #c8c8ce;
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+li strong { color: var(--text); }
+
+/* ── Callout boxes ───────────────────────────────────────── */
+.callout {
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 20px 0;
+  border-left: 4px solid;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.callout-title {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.callout.tip    { background: rgba(52,199,89,0.1);  border-color: var(--green);  }
+.callout.tip .callout-title    { color: var(--green); }
+.callout.note   { background: rgba(10,132,255,0.1);  border-color: var(--blue);  }
+.callout.note .callout-title   { color: var(--blue); }
+.callout.warn   { background: rgba(255,149,0,0.1);   border-color: var(--orange); }
+.callout.warn .callout-title   { color: var(--orange); }
+.callout p, .callout li { color: var(--text); margin-bottom: 6px; }
+.callout p:last-child, .callout li:last-child { margin-bottom: 0; }
+
+/* ── Gesture badges ──────────────────────────────────────── */
+.gesture-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.gesture-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.gesture-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+.gesture-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.gesture-desc {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── Step list ───────────────────────────────────────────── */
+.step-list { counter-reset: step; list-style: none; padding-left: 0; }
+.step-list li {
+  counter-increment: step;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.step-list li::before {
+  content: counter(step);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.step-list li strong { color: var(--text); }
+
+/* ── Feature table ───────────────────────────────────────── */
+.feature-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+.feature-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.feature-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: #c8c8ce;
+  vertical-align: top;
+}
+.feature-table tr:last-child td { border-bottom: none; }
+.feature-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+/* ── Role badge ──────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.badge-admin  { background: rgba(255,149,0,0.2);   color: var(--orange); }
+.badge-member { background: rgba(10,132,255,0.2);  color: var(--blue); }
+
+/* ── Separator ───────────────────────────────────────────── */
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 40px 0;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+.manual-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Print button ────────────────────────────────────────── */
+.print-btn {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 36px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 36px;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.print-btn:hover { opacity: 0.88; }
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT STYLES — clean white-on-white A4 / Letter layout
+════════════════════════════════════════════════════════════ */
+@media print {
+  body {
+    background: #fff !important;
+    color: #111 !important;
+    font-size: 11pt;
+    line-height: 1.55;
+  }
+  .page-wrap { padding: 0; max-width: 100%; }
+  .print-btn { display: none !important; }
+
+  /* Cover */
+  .cover {
+    border-bottom: 2pt solid #ccc;
+    margin-bottom: 32pt;
+    padding: 32pt 0 40pt;
+    page-break-after: always;
+  }
+  .cover-title {
+    font-size: 36pt;
+    background: none !important;
+    -webkit-text-fill-color: #111 !important;
+    color: #111 !important;
+  }
+  .cover-sub { color: #555 !important; font-size: 14pt; }
+  .cover-version { background: #f0f0f0 !important; border-color: #ccc !important; color: #555 !important; }
+  .cover-icon { font-size: 52pt; }
+
+  /* TOC */
+  .toc {
+    background: #f8f8f8 !important;
+    border-color: #ddd !important;
+    page-break-after: always;
+  }
+  .toc-title { color: #555 !important; }
+  .toc a { color: #0060c0 !important; }
+
+  /* Headings */
+  h2 {
+    font-size: 18pt;
+    color: #111 !important;
+    border-color: #ccc !important;
+    page-break-after: avoid;
+    margin-top: 24pt;
+  }
+  h3 { font-size: 14pt; color: #111 !important; page-break-after: avoid; }
+  h4 { font-size: 12pt; color: #333 !important; page-break-after: avoid; }
+  .section-number { color: #c00 !important; }
+
+  /* Text */
+  p, li { color: #222 !important; }
+
+  /* Callouts */
+  .callout {
+    border-left: 3pt solid #888;
+    background: #f8f8f8 !important;
+    page-break-inside: avoid;
+  }
+  .callout.tip    { border-color: #2a8 !important; }
+  .callout.note   { border-color: #06c !important; }
+  .callout.warn   { border-color: #c80 !important; }
+  .callout-title  { color: #444 !important; }
+  .callout p, .callout li { color: #222 !important; }
+
+  /* Cards */
+  .gesture-card {
+    background: #f4f4f4 !important;
+    border-color: #ccc !important;
+    page-break-inside: avoid;
+  }
+  .gesture-label { color: #111 !important; }
+  .gesture-desc  { color: #555 !important; }
+
+  /* Steps */
+  .step-list li {
+    background: #f8f8f8 !important;
+    border-color: #ccc !important;
+    page-break-inside: avoid;
+  }
+  .step-list li::before { background: #c00 !important; }
+  .step-list li strong { color: #111 !important; }
+
+  /* Tables */
+  .feature-table th {
+    background: #eee !important;
+    color: #444 !important;
+    border-color: #ccc !important;
+  }
+  .feature-table td {
+    color: #333 !important;
+    border-color: #ddd !important;
+  }
+  .feature-table td:first-child { color: #111 !important; }
+
+  /* Badges */
+  .badge-admin  { background: #ffecd0 !important; color: #a05000 !important; }
+  .badge-member { background: #d0e8ff !important; color: #0050a0 !important; }
+
+  /* Footer */
+  .manual-footer { color: #888 !important; border-color: #ccc !important; }
+
+  section { page-break-inside: avoid; }
+  section:nth-child(n+3) { page-break-before: auto; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Print / Save PDF button (screen only) -->
+  <button class="print-btn" onclick="window.print()">🖨️ &nbsp;Print / Save as PDF</button>
+
+  <!-- ═══════════════ COVER ═══════════════ -->
+  <div class="cover">
+    <div class="cover-icon">🥁</div>
+    <div class="cover-title">BandNotes</div>
+    <div class="cover-sub">Sheet music annotations for your whole band</div>
+    <div class="cover-version">User Manual &nbsp;·&nbsp; V 3.33 &nbsp;·&nbsp; March 2026</div>
+  </div>
+
+  <!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
+  <div class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#overview">What is BandNotes?</a></li>
+      <li><a href="#quickstart">Quick Start</a></li>
+      <li><a href="#start-screen">The Start Screen</a></li>
+      <li><a href="#groups">Band Groups</a></li>
+      <li><a href="#songlibrary">Song Library</a></li>
+      <li><a href="#setlists">Setlists</a></li>
+      <li><a href="#viewer">The Viewer</a></li>
+      <li><a href="#annotations">Adding &amp; Managing Notes</a></li>
+      <li><a href="#lasso">Lasso Selection Mode</a></li>
+      <li><a href="#sharing">Sharing Notes</a></li>
+      <li><a href="#print">Print &amp; Export</a></li>
+      <li><a href="#stats">Setlist Statistics</a></li>
+      <li><a href="#offline">Offline Mode</a></li>
+      <li><a href="#backups">Backups &amp; Storage</a></li>
+      <li><a href="#tips">Tips &amp; Troubleshooting</a></li>
+    </ol>
+  </div>
+
+  <!-- ═══════════════ 1. OVERVIEW ═══════════════ -->
+  <section id="overview">
+    <div class="section-number">Section 1</div>
+    <h2>What is BandNotes?</h2>
+    <p>BandNotes is a tablet-first web app designed for musicians, bands, and orchestras who use digital sheet music during rehearsals and performances. It lets you open PDF sheet music, write text annotations directly on the pages (cues, dynamics, bowings, chord names, reminders — anything), and share those notes with your whole band in real time.</p>
+    <p>Everything runs inside a browser with no installation required. For the best experience, add it to your iPad Home Screen so it runs as a full-screen native-style app. All your notes are stored on your device and optionally backed up to the cloud so they follow you if you ever get a new tablet.</p>
+
+    <h3>Core capabilities</h3>
+    <ul>
+      <li><strong>Annotate PDFs</strong> — Place labelled text notes anywhere on a page with a double-tap.</li>
+      <li><strong>Multi-song setlists</strong> — Swipe between songs in a setlist without going back to a menu.</li>
+      <li><strong>Band Groups</strong> — Share setlists and songs across your whole band. Every member keeps their own private notes.</li>
+      <li><strong>Offline-first</strong> — Once a setlist has been opened, it is cached locally and works with no internet connection.</li>
+      <li><strong>Print or export</strong> — Print any session (with your annotations baked in) or save an annotated PDF.</li>
+      <li><strong>Lasso mode</strong> — Select, move, align, copy, or delete multiple notes at once.</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ 2. QUICK START ═══════════════ -->
+  <section id="quickstart">
+    <div class="section-number">Section 2</div>
+    <h2>Quick Start</h2>
+    <ol class="step-list">
+      <li><strong>Set your name.</strong> On the start screen, tap <strong>Change</strong> next to "Playing as" and enter your name. This is stored on-device and shown when you share notes with bandmates.</li>
+      <li><strong>Add to Home Screen (recommended).</strong> In Safari, tap the Share button ⎋ → <em>Add to Home Screen</em>. This makes BandNotes full-screen and keeps it available offline.</li>
+      <li><strong>Create or join a Band Group.</strong> Tap <strong>🎸 Band Groups</strong> → <strong>Create Group</strong> (if you are the admin) or <strong>Join Group</strong> (enter the 6-character invite code from your admin).</li>
+      <li><strong>Add songs to the library (admin).</strong> Inside your group, tap <strong>📚 Song Library</strong> → <strong>⬆ Add Song</strong> and choose one or more PDF files.</li>
+      <li><strong>Create a setlist (admin).</strong> Back in the group, tap <strong>✚ Setlist</strong>, give it a name, and add songs in order.</li>
+      <li><strong>Open the setlist.</strong> Tap the <strong>›</strong> arrow on any setlist row to open it in the viewer. Double-tap a page to add your first note.</li>
+    </ol>
+  </section>
+
+  <!-- ═══════════════ 3. START SCREEN ═══════════════ -->
+  <section id="start-screen">
+    <div class="section-number">Section 3</div>
+    <h2>The Start Screen</h2>
+
+    <h3>Profile bar</h3>
+    <p>At the top of the start screen is the profile bar.</p>
+    <table class="feature-table">
+      <thead><tr><th>Element</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Playing as / Change</td><td>Your per-device display name. Shown to bandmates when you share notes. Tap <strong>Change</strong> to edit it.</td></tr>
+        <tr><td>↺ Refresh</td><td>Reloads the app. Useful if something appears stuck.</td></tr>
+        <tr><td>⛶ Fullscreen</td><td>Enters full-screen mode (see <a href="#tips">Tips</a> for iOS instructions).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Version badge</h3>
+    <p>Shows the current version of BandNotes (e.g. V 3.33). Useful when reporting issues to your admin.</p>
+
+    <h3>🎸 Band Groups button</h3>
+    <p>Opens the Group screen where you can create, join, and manage band groups. This is the main entry point for shared setlists.</p>
+
+    <h3>Private Sessions</h3>
+    <p>Any session you create from a local PDF upload (not via a group) appears here as a private session card. Each card shows the session name, date, and note count. Tap a card to reopen it. Tap <strong>✕</strong> on a card to delete it (after confirmation).</p>
+
+    <div class="callout note">
+      <div class="callout-title">Note</div>
+      <p>Private sessions store the PDF data locally in your browser. Clearing browser storage will delete them. For band use, groups are recommended because they back up to the cloud.</p>
+    </div>
+
+    <h3>Banners</h3>
+    <ul>
+      <li><strong>Desktop warning</strong> — Shown on non-touch devices. BandNotes works on desktop but is designed for tablets.</li>
+      <li><strong>Offline banner</strong> — Appears at the top when you have no internet connection. Previously opened setlists still work offline.</li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ 4. BAND GROUPS ═══════════════ -->
+  <section id="groups">
+    <div class="section-number">Section 4</div>
+    <h2>Band Groups</h2>
+    <p>A Band Group is a shared workspace for your band. One person is the <strong>Admin</strong> who manages songs and setlists. Everyone else joins as a <strong>Member</strong>. Each person's annotations are always private to them.</p>
+
+    <h3>Admin vs Member</h3>
+    <table class="feature-table">
+      <thead><tr><th>Action</th><th>Admin <span class="badge badge-admin">Admin</span></th><th>Member <span class="badge badge-member">Member</span></th></tr></thead>
+      <tbody>
+        <tr><td>View setlists &amp; open songs</td><td>✅</td><td>✅</td></tr>
+        <tr><td>Add / rename / delete songs</td><td>✅</td><td>—</td></tr>
+        <tr><td>Create / edit / delete setlists</td><td>✅</td><td>—</td></tr>
+        <tr><td>Mark setlist as performed</td><td>✅</td><td>—</td></tr>
+        <tr><td>Archive / restore setlists</td><td>✅</td><td>—</td></tr>
+        <tr><td>Duplicate a setlist</td><td>✅</td><td>—</td></tr>
+        <tr><td>Rename the group</td><td>✅</td><td>—</td></tr>
+        <tr><td>Delete the group</td><td>✅</td><td>—</td></tr>
+        <tr><td>Share / import notes</td><td>✅</td><td>✅</td></tr>
+        <tr><td>View Played Songs stats</td><td>✅</td><td>—</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Creating a group <span class="badge badge-admin">Admin</span></h3>
+    <ol class="step-list">
+      <li>Tap <strong>🎸 Band Groups</strong> on the start screen.</li>
+      <li>Tap <strong>Create Group</strong>.</li>
+      <li>Enter a group name and tap <strong>Create →</strong>.</li>
+      <li>Your group is created and a 6-character <strong>invite code</strong> is generated. Share this code with your band members.</li>
+    </ol>
+
+    <h3>Joining a group <span class="badge badge-member">Member</span></h3>
+    <ol class="step-list">
+      <li>Tap <strong>🎸 Band Groups</strong>.</li>
+      <li>Tap <strong>Join Group</strong>.</li>
+      <li>Enter the 6-character invite code from your admin (tap <strong>📋 Paste</strong> if you have it in your clipboard).</li>
+      <li>Tap <strong>Join →</strong>. The group appears in your list.</li>
+    </ol>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Recovering a lost group</div>
+      <p>If you clear browser data and lose your groups, open the app, tap <strong>Band Groups</strong> and BandNotes will automatically search the cloud for any groups you own. Alternatively, tap <strong>Join Group</strong> and enter your original invite code — this works for admins too and will restore your admin status.</p>
+    </div>
+
+    <h3>Group admin actions <span class="badge badge-admin">Admin</span></h3>
+    <p>Inside the group detail screen, the admin section at the bottom provides:</p>
+    <table class="feature-table">
+      <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>📋 Copy Code</td><td>Copies your invite code to share with new members.</td></tr>
+        <tr><td>✏️ Rename Group</td><td>Changes the group's name.</td></tr>
+        <tr><td>🗑 Delete Group</td><td>Permanently deletes the group, all setlists, and all members' access. This cannot be undone.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Leaving a group <span class="badge badge-member">Member</span></h3>
+    <p>Tap <strong>Leave Group</strong> at the bottom of the group detail screen. Your private annotations are kept on your device but you will no longer see the group's setlists.</p>
+  </section>
+
+  <!-- ═══════════════ 5. SONG LIBRARY ═══════════════ -->
+  <section id="songlibrary">
+    <div class="section-number">Section 5</div>
+    <h2>Song Library</h2>
+    <p>The Song Library holds all the PDF sheet music for your group. Songs are uploaded once by an admin and are then available to all members.</p>
+
+    <h3>Opening the library</h3>
+    <ul>
+      <li><strong>Admin:</strong> Tap <strong>📚 Song Library</strong> in the admin section of the group screen.</li>
+      <li><strong>Member:</strong> Tap <strong>📚 Browse Songs</strong> in the member section.</li>
+    </ul>
+
+    <h3>Adding songs <span class="badge badge-admin">Admin</span></h3>
+    <ol class="step-list">
+      <li>Tap <strong>⬆ Add Song</strong> in the library header.</li>
+      <li>Tap the upload zone and select one or more PDF files from your device.</li>
+      <li>Edit the name for each song (the file name is pre-filled — remove the .pdf extension if needed).</li>
+      <li>Tap <strong>Upload</strong>. A progress indicator shows each upload. Songs are available to the whole group immediately.</li>
+    </ol>
+
+    <div class="callout note">
+      <div class="callout-title">Note — File size</div>
+      <p>Uploading large PDFs (over 20 MB) on slow connections may time out after 60 seconds. If that happens, compress the PDF first using a tool like Smallpdf or Adobe Acrobat before retrying.</p>
+    </div>
+
+    <h3>Renaming a song <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap the <strong>✏️</strong> button on any song row, enter the new name, and tap <strong>Save</strong>. The name updates immediately across all setlists.</p>
+
+    <h3>Deleting a song <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap the <strong>🗑</strong> button on a song row and confirm. This permanently removes the PDF from storage and cannot be undone. Consider archiving any setlists that contain the song first.</p>
+
+    <h3>Opening a song directly</h3>
+    <p>Tap the <strong>›</strong> arrow or anywhere on the row (not on the action buttons) to open the song in the viewer. Your annotations for that song are loaded automatically.</p>
+
+    <h3>Play history</h3>
+    <p>If a song has been performed (via a setlist marked as performed), a <strong>🎤</strong> button appears on its row showing the play count. Tap it to see every setlist the song was performed in with the date.</p>
+  </section>
+
+  <!-- ═══════════════ 6. SETLISTS ═══════════════ -->
+  <section id="setlists">
+    <div class="section-number">Section 6</div>
+    <h2>Setlists</h2>
+    <p>Setlists are ordered playlists of songs from your library. Opening a setlist loads every song in sequence so you can swipe between them without interruptions during a performance.</p>
+
+    <h3>Creating a setlist <span class="badge badge-admin">Admin</span></h3>
+    <ol class="step-list">
+      <li>On the group screen, tap <strong>✚ Setlist</strong>.</li>
+      <li>Enter a setlist name.</li>
+      <li>Use the <strong>A–Z letter filter</strong> to quickly find songs, then tap <strong>＋</strong> to add them in order.</li>
+      <li>Use <strong>↑ / ↓</strong> arrows in the selected list to reorder songs. Tap <strong>✕</strong> to remove a song.</li>
+      <li>Tap <strong>Save Setlist ✓</strong> when done.</li>
+    </ol>
+
+    <h3>Editing a setlist <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap <strong>···</strong> on any setlist row → <strong>Edit setlist</strong>. The same builder opens with the existing songs pre-loaded. Note: editing is only available on setlists that have not yet been marked as performed.</p>
+
+    <h3>Setlist context menu (···) <span class="badge badge-admin">Admin</span></h3>
+    <table class="feature-table">
+      <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Mark as performed</td><td>Records that this setlist was performed. Increments each song's play count. Shows a 🎤 badge on the row. Cannot be undone but can be un-marked.</td></tr>
+        <tr><td>Edit setlist</td><td>Opens the setlist builder to change the name or song order. Only shown if not yet performed.</td></tr>
+        <tr><td>Duplicate</td><td>Creates a copy of the setlist with a new name you choose. Useful for recurring gigs.</td></tr>
+        <tr><td>Archive</td><td>Hides the setlist from the main list and moves it to the archived section. The setlist and all data are preserved.</td></tr>
+        <tr><td>Delete</td><td>Permanently deletes the setlist. Only enabled on setlists that have not been performed. Cannot be undone.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Opening a setlist</h3>
+    <p>Tap the <strong>›</strong> arrow on any setlist row. BandNotes downloads all songs (or loads them from cache if offline) and opens the viewer. Your personal annotations are loaded automatically.</p>
+
+    <h3>Archived setlists</h3>
+    <p>Archived setlists are hidden under a collapsible <strong>📦 N archived setlists</strong> section at the bottom of the list. Tap the section header to expand or collapse it. While expanded, a <strong>A→Z / Z→A</strong> sort toggle lets you quickly find setlists by name.</p>
+    <p>To restore an archived setlist to the main list, tap <strong>···</strong> → <strong>Restore</strong>.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Setlist song list tooltip</div>
+      <p>If an older setlist was uploaded with a plain text song list (rather than library song IDs), tapping the row shows a tooltip with the song names. Tap <strong>›</strong> to open it.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 7. THE VIEWER ═══════════════ -->
+  <section id="viewer">
+    <div class="section-number">Section 7</div>
+    <h2>The Viewer</h2>
+    <p>The viewer is the full-screen sheet music display. It renders every page of every song in the setlist at full Retina quality.</p>
+
+    <h3>Viewer header</h3>
+    <table class="feature-table">
+      <thead><tr><th>Element</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>‹ Back</td><td>Saves your notes and returns to the group or start screen.</td></tr>
+        <tr><td>Song name / title</td><td>Shows the name of the currently visible song.</td></tr>
+        <tr><td>◁ / ▷ arrows</td><td>Navigate to the previous / next song in the setlist.</td></tr>
+        <tr><td>1 / 5 counter</td><td>Shows the current song position. Tap it to open the jump menu.</td></tr>
+        <tr><td>Scroll chip</td><td>Shows the current mode: <em>Scroll</em> (normal) or <em>✎ Annotating</em> (note input open).</td></tr>
+        <tr><td>👥 Shared chip</td><td>Appears (purple) when a bandmate has shared notes for a song. Tap to view and import them.</td></tr>
+        <tr><td>⛶ Fullscreen</td><td>Toggles full-screen mode.</td></tr>
+        <tr><td>⋯ Menu</td><td>Opens the dropdown with print, share, note style, and clear options.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Navigating between songs</h3>
+    <div class="gesture-grid">
+      <div class="gesture-card">
+        <div class="gesture-icon">👆</div>
+        <div class="gesture-label">Swipe left / right</div>
+        <div class="gesture-desc">Swipe horizontally on the page area to move to the next or previous song.</div>
+      </div>
+      <div class="gesture-card">
+        <div class="gesture-icon">◁ ▷</div>
+        <div class="gesture-label">Prev / Next buttons</div>
+        <div class="gesture-desc">Tap the arrow buttons in the header to step through the setlist.</div>
+      </div>
+      <div class="gesture-card">
+        <div class="gesture-icon">☰</div>
+        <div class="gesture-label">Jump menu</div>
+        <div class="gesture-desc">Tap the song counter (e.g. "2 / 5") to open a list of all songs. Tap any song to jump straight to it.</div>
+      </div>
+    </div>
+
+    <h3>Scrolling within a song</h3>
+    <p>Scroll vertically within a song in the normal way (swipe up/down). Each page of the PDF is displayed full-width, one after another. Horizontal swipes are reserved for song navigation.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Resistance at the edges</div>
+      <p>If you are on the first or last song and try to swipe past it, the track resists slightly (20% elasticity) to make it obvious you have reached the end of the setlist.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 8. ANNOTATIONS ═══════════════ -->
+  <section id="annotations">
+    <div class="section-number">Section 8</div>
+    <h2>Adding &amp; Managing Notes</h2>
+
+    <h3>Adding a note</h3>
+    <div class="gesture-grid">
+      <div class="gesture-card">
+        <div class="gesture-icon">✌️</div>
+        <div class="gesture-label">Double-tap (touch)</div>
+        <div class="gesture-desc">Double-tap anywhere on a page to open the note input at that position.</div>
+      </div>
+      <div class="gesture-card">
+        <div class="gesture-icon">🖱️</div>
+        <div class="gesture-label">Double-click (mouse)</div>
+        <div class="gesture-desc">Double-click anywhere on a page to open the note input at that position (PC / desktop).</div>
+      </div>
+    </div>
+    <p>A text input and <strong>Done / ✕</strong> buttons appear at the tapped position. Type your note and either tap <strong>Done</strong>, press <strong>Enter</strong>, or tap anywhere else to commit. Tap <strong>✕</strong> or press <strong>Escape</strong> to cancel without saving.</p>
+    <p>On iOS, the keyboard <strong>Done</strong> key also commits the note.</p>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Paste a copied note</div>
+      <p>After copying a note (see below), double-tap anywhere to open input — the copied text is automatically pasted into the field so you can quickly place it at a new position.</p>
+    </div>
+
+    <h3>Editing or deleting a note</h3>
+    <p>Double-tap any existing note label to open the action toast:</p>
+    <table class="feature-table">
+      <thead><tr><th>Button</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>✎ Edit</td><td>Reopens the note input pre-filled with the existing text. Saving replaces the note at the same position.</td></tr>
+        <tr><td>📋 Copy</td><td>Copies the note text. Double-tap elsewhere to paste it as a new note.</td></tr>
+        <tr><td>🗑 Delete</td><td>Removes the note immediately.</td></tr>
+        <tr><td>✕</td><td>Dismisses the toast without changing anything.</td></tr>
+      </tbody>
+    </table>
+    <p>The toast closes automatically after 6 seconds.</p>
+
+    <h3>Dragging a note</h3>
+    <p>Press and hold a note label for <strong>1 second</strong> until the cursor changes, then drag it to a new position on the page. Release to drop. The note's position is saved automatically.</p>
+
+    <h3>Note style</h3>
+    <p>Tap <strong>⋯ menu → ✎ Note style</strong> to open the style panel:</p>
+    <ul>
+      <li><strong>Colour</strong> — Choose from 10 colours including a pure white and a neutral grey.</li>
+      <li><strong>Size</strong> — Use <strong>−</strong> / <strong>+</strong> to adjust font size from 8pt to 36pt in 2pt steps.</li>
+    </ul>
+    <p>Tap <strong>Done</strong> to apply the style. All existing notes and any future notes use the new style.</p>
+
+    <h3>Clearing all notes</h3>
+    <p>Tap <strong>⋯ menu → 🗑 Clear all notes</strong>. After confirming, all annotations for the current session are removed permanently.</p>
+  </section>
+
+  <!-- ═══════════════ 9. LASSO MODE ═══════════════ -->
+  <section id="lasso">
+    <div class="section-number">Section 9</div>
+    <h2>Lasso Selection Mode</h2>
+    <p>Lasso mode lets you select multiple notes at once to move, align, copy, or delete them as a group.</p>
+
+    <h3>Entering lasso mode</h3>
+    <div class="callout note">
+      <div class="callout-title">Gesture</div>
+      <p><strong>Two-finger double-tap</strong> anywhere on the page. Tap once (with two fingers) — pause for less than half a second — then tap again. The page background shifts slightly and the blue selection toolbar appears at the bottom.</p>
+    </div>
+    <p>To exit lasso mode at any time, tap the <strong>Done</strong> button in the toolbar, or perform the two-finger double-tap again.</p>
+
+    <h3>Selecting notes</h3>
+    <p><strong>Draw a box</strong> by pressing and dragging on empty page area. Any notes whose centre falls inside the box are selected and highlighted with a blue glow.</p>
+    <p><strong>Tap individual notes</strong> to add them to the selection one at a time.</p>
+    <p>The toolbar shows the count: e.g. <em>3 notes selected</em>.</p>
+
+    <h3>Lasso toolbar actions</h3>
+    <table class="feature-table">
+      <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>← Align left</td><td>Aligns all selected notes to the left edge of the leftmost note. Requires at least 2 notes selected.</td></tr>
+        <tr><td>→ Align right</td><td>Aligns all selected notes to the right edge of the rightmost note.</td></tr>
+        <tr><td>📋 Copy texts</td><td>Copies all selected note texts to the clipboard (one per line).</td></tr>
+        <tr><td>🗑 Delete</td><td>Deletes all selected notes after confirmation.</td></tr>
+        <tr><td>Done</td><td>Exits lasso mode.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Group drag</h3>
+    <p>With notes selected, press and hold any selected note until the drag starts, then drag all selected notes together to a new position. Release to drop. Positions are saved automatically.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Note on swipe</div>
+      <p>Horizontal swiping between songs is disabled while in lasso mode. Exit lasso mode first, then swipe to a different song.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 10. SHARING NOTES ═══════════════ -->
+  <section id="sharing">
+    <div class="section-number">Section 10</div>
+    <h2>Sharing Notes with Your Band</h2>
+    <p>Any band member can share their annotations for the currently visible song with the whole group. Other members can then view and import those notes into their own session.</p>
+
+    <h3>Sharing your notes</h3>
+    <ol class="step-list">
+      <li>Open a setlist and navigate to the song you want to share.</li>
+      <li>Tap <strong>⋯ menu → 👥 Share notes</strong>.</li>
+      <li>Confirm the share. Your notes for that song are uploaded to the group.</li>
+    </ol>
+    <p>Each song can hold one set of shared notes from any one member at a time. Sharing again overwrites the previous share.</p>
+
+    <h3>Viewing and importing shared notes</h3>
+    <p>When shared notes from a bandmate are available, a <strong>purple 👥 Shared chip</strong> appears in the viewer header. Tap it to open the Shared Notes panel which shows all shared annotations grouped by song, including the sharer's name and date.</p>
+    <p>Tap <strong>Import into my notes</strong> to merge all shared notes into your own session. Imported notes get new IDs so there is no conflict with your existing notes. The chip disappears after importing.</p>
+
+    <div class="callout note">
+      <div class="callout-title">Note — Own notes excluded</div>
+      <p>You will never see your own previously shared notes in the Shared panel — only notes shared by other members.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 11. PRINT & EXPORT ═══════════════ -->
+  <section id="print">
+    <div class="section-number">Section 11</div>
+    <h2>Print &amp; Export</h2>
+    <p>Both options are in <strong>⋯ menu</strong> in the viewer header. Annotations are always baked into the output.</p>
+
+    <h3>Print (all pages)</h3>
+    <p>Tap <strong>⋯ → 🖨️ Print</strong>. BandNotes composites every page with its annotations and sends the result to the system print dialog. Each page is on its own sheet with automatic page breaks.</p>
+
+    <h3>Save as PDF</h3>
+    <p>Tap <strong>⋯ → 📄 Print to PDF</strong>.</p>
+    <ul>
+      <li><strong>On iPad/iPhone (iOS Safari):</strong> A new tab opens with the compiled PDF. Tap the <strong>Share ⎋</strong> button → <em>Save to Files</em> or <em>AirDrop</em> to save it.</li>
+      <li><strong>On desktop Chrome/Edge:</strong> The PDF downloads to your default Downloads folder, or directly to a custom folder if one is set (see <a href="#backups">Backups &amp; Storage</a>).</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Filename</div>
+      <p>The exported PDF is automatically named after the setlist/song (special characters replaced with underscores). For example, <code>Sunday Service Vol 3.pdf</code>.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 12. STATS ═══════════════ -->
+  <section id="stats">
+    <div class="section-number">Section 12</div>
+    <h2>Setlist Statistics</h2>
+    <p>The <strong>Played Songs</strong> button (admin section of the group screen) opens a full history of every setlist and song, filtered to help you track what you've performed.</p>
+
+    <h3>By Setlist view (default)</h3>
+    <p>Each setlist is shown with its date, a 🎤 tag if it was performed, and a 📦 tag if it has been archived. The songs in that setlist are listed beneath it in order.</p>
+
+    <h3>By Song view</h3>
+    <p>Tap <strong>By Song</strong> toggle. All songs are sorted A–Z. Under each song is every setlist that included it, with a play count badge (e.g. <em>4×</em>) and the date of each performance.</p>
+
+    <h3>Song play history modal</h3>
+    <p>In the Song Library, songs that have been performed show a 🎤 button. Tapping it opens a detailed modal listing every setlist the song has appeared in with the date and setlist name.</p>
+  </section>
+
+  <!-- ═══════════════ 13. OFFLINE MODE ═══════════════ -->
+  <section id="offline">
+    <div class="section-number">Section 13</div>
+    <h2>Offline Mode</h2>
+    <p>BandNotes is designed to work at a gig even with no WiFi. Here is exactly what happens in each scenario:</p>
+
+    <table class="feature-table">
+      <thead><tr><th>Scenario</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td>Setlist opened before (with WiFi)</td><td>All PDFs and setlist metadata are cached locally. The setlist opens from cache with full functionality — your notes are saved and load normally.</td></tr>
+        <tr><td>First time opening a setlist, no WiFi</td><td>BandNotes tries to load from IndexedDB. Shows an error if no cache exists and explains that you need to open it once while online.</td></tr>
+        <tr><td>Group setlist screen, no WiFi</td><td>The setlist list is shown from local cache (last known state). Backed-up setlists show "💾" in the metadata.</td></tr>
+        <tr><td>Adding annotations offline</td><td>Notes save to localStorage immediately. They sync to Firestore automatically when connectivity is restored.</td></tr>
+        <tr><td>Sharing / importing notes offline</td><td>Cloud share will fail silently with an error hint. Local notes are unaffected.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-title">Best practice before a gig</div>
+      <p>While on WiFi before any performance, open every setlist you plan to use. This ensures all PDFs are cached and available if you lose connectivity at the venue.</p>
+    </div>
+
+    <h3>Offline indicator</h3>
+    <p>A yellow <strong>📶 No WiFi</strong> banner appears at the top of the screen when BandNotes detects no internet connection. It dismisses automatically when connectivity returns.</p>
+
+    <h3>Service Worker</h3>
+    <p>BandNotes registers a Service Worker (sw.js) which caches the app shell. This means the app itself loads instantly even without network access, as long as it has been opened at least once.</p>
+  </section>
+
+  <!-- ═══════════════ 14. BACKUPS & STORAGE ═══════════════ -->
+  <section id="backups">
+    <div class="section-number">Section 14</div>
+    <h2>Backups &amp; Storage</h2>
+
+    <h3>Local backup indicator (💾)</h3>
+    <p>When a setlist's PDFs have been fully downloaded and cached, the setlist row shows a <strong>💾</strong> badge in its metadata. This confirms the setlist is available offline.</p>
+
+    <h3>Stale backup notification</h3>
+    <p>If a locally cached setlist has not been opened for <strong>30 days</strong>, BandNotes shows a <em>Stale Backups</em> dialog when you open the group. You have three options:</p>
+    <table class="feature-table">
+      <thead><tr><th>Option</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Keep All</td><td>Marks the backups as "keep permanently" — they will never be flagged as stale again.</td></tr>
+        <tr><td>Remind in 30 days</td><td>Snoozes the dialog for another 30 days.</td></tr>
+        <tr><td>Delete Old Backups</td><td>Removes the stale PDF data from device storage, freeing space. The setlists themselves are still in the cloud.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Cloud sync (Firestore)</h3>
+    <p>Your annotations are automatically backed up to Firestore whenever you save changes. If you get a new device or clear browser data, your notes are restored the next time you open a song from the library.</p>
+
+    <h3>Default download folder (desktop Chrome/Edge)</h3>
+    <p>On desktop Chrome or Edge, you can choose a default folder where all exported PDFs are saved automatically. Tap <strong>📁 Default Folder</strong> in the admin section of the group screen (only visible when the File System Access API is supported).</p>
+    <ul>
+      <li>Tap <strong>Choose Folder…</strong> to pick a folder. Chrome will ask for permission once.</li>
+      <li>All future PDF exports go straight to that folder without a save dialog.</li>
+      <li>Tap <strong>Clear Folder</strong> to revert to browser default Downloads.</li>
+    </ul>
+    <p>This feature is not available on iOS/iPad — PDFs open in a new tab for sharing from there.</p>
+
+    <h3>Private session storage</h3>
+    <p>Private sessions (not from a group) store their PDF data in browser localStorage. This is limited in size and will be lost if you clear browser data. For long-term use, group-based sessions with cloud backup are strongly preferred.</p>
+  </section>
+
+  <!-- ═══════════════ 15. TIPS ═══════════════ -->
+  <section id="tips">
+    <div class="section-number">Section 15</div>
+    <h2>Tips &amp; Troubleshooting</h2>
+
+    <h3>Add to Home Screen (recommended)</h3>
+    <p>For the best experience on iPad:</p>
+    <ol class="step-list">
+      <li>Open BandNotes in <strong>Safari</strong> (other browsers don't support this).</li>
+      <li>Tap the <strong>Share button</strong> <span style="font-size:18px">⎋</span> at the bottom of the screen.</li>
+      <li>Scroll down and tap <strong>"Add to Home Screen"</strong>.</li>
+      <li>Tap <strong>Add</strong>. A BandNotes icon will appear on your Home Screen.</li>
+      <li>Open BandNotes from the Home Screen — it now runs full-screen with no browser UI.</li>
+    </ol>
+
+    <h3>Fullscreen on Android tablets</h3>
+    <p>Tap the <strong>⛶</strong> button in the top-right corner of the start screen. On Android Chrome the browser enters full-screen mode natively.</p>
+
+    <h3>Multiple devices / bandmates</h3>
+    <p>Each device connects with an anonymous account. Your invite code identifies the group, not the device. All band members with the code can access the same setlists while keeping entirely separate annotations.</p>
+
+    <h3>My notes disappeared</h3>
+    <p>Notes are saved to both localStorage and Firestore. If localStorage was cleared (e.g. by a browser update), they should restore from Firestore the next time you open the song while online. If Firestore is unreachable, notes load from localStorage only.</p>
+
+    <h3>Setlist won't load offline</h3>
+    <p>Open the setlist once while connected to WiFi. BandNotes will then cache all the PDFs for offline use. Make sure to do this before your rehearsal or gig if you expect limited connectivity.</p>
+
+    <h3>Annotations appear in the wrong place after orientation change</h3>
+    <p>Annotations are stored as percentages of page width/height, so they automatically reposition correctly when you rotate. If the page itself looks offset, try scrolling up/down or rotating back — BandNotes snaps the view back into alignment automatically.</p>
+
+    <h3>The PDF looks blurry</h3>
+    <p>BandNotes renders PDFs at full Retina (2× or 3×) resolution on high-DPI displays. If a PDF looks blurry, it is likely because the source PDF has low-resolution scanned images. Use a vector PDF (exported from Sibelius, Finale, Dorico, etc.) for the sharpest results.</p>
+
+    <h3>The keyboard covers the note input on iOS</h3>
+    <p>BandNotes automatically scrolls the note input into view after the keyboard appears (~350ms delay). If the keyboard still covers the input, try scrolling up slightly on the page after the keyboard opens.</p>
+
+    <h3>Upload failed / timed out</h3>
+    <p>PDF upload has a 60-second timeout per file. If uploads consistently fail, check your internet connection speed and try compressing the PDF (use Adobe Acrobat, Smallpdf.com, or Preview on Mac).</p>
+
+    <h3>I lost my group (cleared browser data)</h3>
+    <p>If you are the admin: open Band Groups — BandNotes will auto-recover groups you own from the cloud. Alternatively tap <strong>Join Group</strong> and enter your original invite code.</p>
+    <p>If you are a member: tap <strong>Join Group</strong> and ask your admin for the invite code again.</p>
+  </section>
+
+  <hr>
+
+  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <div class="manual-footer">
+    <p>BandNotes &nbsp;·&nbsp; V 3.33 &nbsp;·&nbsp; March 2026</p>
+    <p style="margin-top:6px;font-size:12px;">For support, contact your group admin.</p>
+  </div>
+
+</div>
+</body>
+</html>

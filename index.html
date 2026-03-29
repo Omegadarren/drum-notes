@@ -236,6 +236,20 @@
     }
     .btn-primary:active { opacity: 0.72; }
     .btn-primary:disabled { background: #444; color: #777; cursor: default; opacity: 1; }
+    .btn-manual {
+      background: none;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 36px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      touch-action: manipulation;
+      letter-spacing: -0.2px;
+      margin-top: 4px;
+    }
+    .btn-manual:active { opacity: 0.65; }
 
     .sessions-wrap {
       width: 100%;
@@ -1309,7 +1323,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.33</div>
+  <div class="version-badge">V 3.34</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1319,6 +1333,7 @@
   <div class="app-sub">Sheet music annotations for your band</div>
 
   <button class="btn-primary" id="btn-groups">🎸 &nbsp;Band Groups</button>
+  <button class="btn-manual" id="btn-manual">📖 &nbsp;User Manual</button>
   <div class="sessions-wrap" id="sessions-wrap"></div>
 </div>
 
@@ -1980,6 +1995,8 @@ document.getElementById('btn-profile-save').addEventListener('click', () => {
 document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
 
 document.getElementById('btn-refresh').addEventListener('click', () => location.reload());
+
+document.getElementById('btn-manual').addEventListener('click', () => window.open('./manual.html', '_blank'));
 
 // ── Fullscreen toggle ──────────────────────────────────────────────────────
 const fsAvailable = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);

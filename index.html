@@ -1585,7 +1585,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.85</div>
+  <div class="version-badge">V 3.86</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2672,7 +2672,13 @@ function goToSlide(idx) {
   updateSlideNav();
   // Sync metronome to this song's BPM if set
   const slideBpm = app.slides[idx] && app.slides[idx].bpm;
-  if (slideBpm && window.metroApplyBpm) window.metroApplyBpm(slideBpm);
+  if (slideBpm) {
+    if (window.metroApplyBpm) window.metroApplyBpm(slideBpm);
+  } else if (window.metroIsRunning && window.metroIsRunning()) {
+    // Metro is running but this song has no tempo — stop it
+    if (window.metroStop) window.metroStop();
+    hint('Metronome stopped — no tempo set for this song.', 2500);
+  }
   if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(slideBpm || null);
 }
 
@@ -5435,6 +5441,8 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     }
   }
   window.metroApplyBpm = applyBpm;
+  window.metroStop = stopTick;
+  window.metroIsRunning = () => metroRunning;
 
   function flash() {
     dot.classList.add('flash');

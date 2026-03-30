@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.77</div>
+  <div class="version-badge">V 3.78</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5429,12 +5429,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     btnMetro.classList.add('active');
     toggleBtn.classList.add('active');
     toggleBtn.textContent = '⏹ Stop';
-    try {
-      const ctx = getAudioCtx();
-      nextBeatTime = ctx.currentTime;
-    } catch (e) {
-      nextBeatTime = 0;
-    }
+    nextBeatTime = audioCtx ? audioCtx.currentTime : 0;
     scheduler();
   }
 
@@ -5507,8 +5502,11 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
   // Start/stop toggle
   toggleBtn.addEventListener('click', () => {
-    if (metroRunning) stopTick();
-    else { unlockAudioCtx(); startTick(); }
+    if (metroRunning) { stopTick(); return; }
+    // iOS: AudioContext must be created + resumed synchronously within the gesture.
+    // Chain startTick in .then() so ctx.currentTime is valid when scheduling begins.
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume().then(startTick);
   });
 
   // Stop metronome when leaving viewer

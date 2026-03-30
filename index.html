@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.82</div>
+  <div class="version-badge">V 3.83</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4403,6 +4403,7 @@ async function loadGroupSetlists(gid) {
         const row = document.createElement('div');
         row.className = 'setlist-row archived';
         const songCount = sl.songIds ? `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ` : '';
+        const archTooltipHtml = sl.songs ? `<div class="songs-tooltip">${esc(sl.songs)}</div>` : '';
         row.innerHTML = `
           <div class="setlist-row-icon">🎼</div>
           <div class="setlist-row-info">
@@ -4416,7 +4417,8 @@ async function loadGroupSetlists(gid) {
             <div class="setlist-ctx-divider"></div>
             <button data-action="del" class="ctx-danger">Delete</button>
           </div>` : ''}
-          <div class="group-row-arrow" title="Open setlist">›</div>`;
+          <div class="group-row-arrow" title="Open setlist">›</div>
+          ${archTooltipHtml}`;
 
         row.querySelector('.group-row-arrow').addEventListener('click', e => {
           e.stopPropagation();
@@ -4451,7 +4453,13 @@ async function loadGroupSetlists(gid) {
         }
         row.addEventListener('click', () => {
           if (row.classList.contains('ctx-open')) { row.classList.remove('ctx-open'); return; }
-          openGroupSetlist(doc.id, sl);
+          if (sl.songs) {
+            const isOpen = row.classList.contains('tooltip-open');
+            archiveRows.querySelectorAll('.setlist-row.tooltip-open').forEach(r => r.classList.remove('tooltip-open'));
+            if (!isOpen) row.classList.add('tooltip-open');
+          } else {
+            openGroupSetlist(doc.id, sl);
+          }
         });
         archiveRows.appendChild(row);
       }

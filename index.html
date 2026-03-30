@@ -1602,7 +1602,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.88</div>
+  <div class="version-badge">V 3.89</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3760,8 +3760,12 @@ function goBack() {
   document.getElementById('pdf-scroll').innerHTML = '';
   document.getElementById('viewer').classList.remove('active');
   if (fromGroup && currentGroupId) {
-    document.getElementById('group-detail-screen').classList.add('active');
-    loadGroupSetlists(currentGroupId);
+    if (sess && sess.fromLibrary) {
+      document.getElementById('song-library-screen').classList.add('active');
+    } else {
+      document.getElementById('group-detail-screen').classList.add('active');
+      loadGroupSetlists(currentGroupId);
+    }
   } else {
     document.getElementById('start-screen').style.display = '';
     renderStart();
@@ -5294,6 +5298,7 @@ async function openLibrarySong(songId, song) {
       id:          genId(),
       name:        song.name,
       groupId:     currentGroupId,
+      fromLibrary: true,
       songIds:     [songId],
       songPdfs:    [{ songId, songName: song.name, pdfData }],
       annotations,

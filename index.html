@@ -470,19 +470,21 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: none;
-      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.12);
+      border: 1.5px solid rgba(255,255,255,0.45);
       border-radius: 20px;
-      padding: 4px 10px 4px 8px;
+      padding: 5px 12px 5px 9px;
       cursor: pointer;
       touch-action: manipulation;
       flex-shrink: 0;
-      color: var(--fg);
-      font-size: 13px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
       white-space: nowrap;
       line-height: 1;
     }
-    .metro-btn:active { background: var(--press-bg); }
+    .metro-btn:active { background: rgba(255,255,255,0.22); }
+    .metro-btn.active  { background: rgba(48,209,88,0.22); border-color: #30d158; color: #30d158; }
     .metro-dot {
       width: 14px;
       height: 14px;
@@ -492,7 +494,6 @@
       flex-shrink: 0;
     }
     .metro-btn.active .metro-dot   { background: #30d158; box-shadow: 0 0 6px #30d158; }
-    .metro-btn.active              { border-color: #30d158; color: #30d158; }
     .metro-dot.flash               { background: #ffffff !important; box-shadow: 0 0 0 3px rgba(255,60,40,0.5), 0 0 16px 4px rgba(255,60,40,0.85) !important; }
     .vhdr.metro-flash {
       background: rgba(255, 50, 30, 0.55) !important;
@@ -570,6 +571,22 @@
       touch-action: manipulation;
       width: 100%;
     }
+    .metro-tap-btn {
+      width: 100%;
+      padding: 18px 0;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.08);
+      border: 2px solid var(--border);
+      color: var(--fg);
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+      letter-spacing: 1px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .metro-tap-btn:active { background: rgba(255,255,255,0.18); }
     .metro-toggle-btn.active {
       background: rgba(48,209,88,0.15);
       border-color: #30d158;
@@ -1585,7 +1602,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.87</div>
+  <div class="version-badge">V 3.88</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1925,6 +1942,7 @@
         <button class="metro-bpm-btn" id="metro-bpm-up">＋</button>
       </div>
       <button class="metro-toggle-btn" id="metro-toggle">▶ Start</button>
+      <button class="metro-tap-btn" id="metro-tap">Tap</button>
       <div class="metro-sound-row">
         <span class="metro-sound-label">🔊</span>
         <div class="metro-sound-opts">
@@ -5606,6 +5624,27 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   }
   makeHoldBtn(btnDown, -1);
   makeHoldBtn(btnUp,   +1);
+
+  // Tap tempo
+  const tapBtn = document.getElementById('metro-tap');
+  let tapTimes = [];
+  let tapTimer = null;
+  tapBtn.addEventListener('click', () => {
+    const now = Date.now();
+    // Reset if gap > 3 seconds
+    if (tapTimes.length && now - tapTimes[tapTimes.length - 1] > 3000) tapTimes = [];
+    tapTimes.push(now);
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => { tapTimes = []; }, 3000);
+    if (tapTimes.length < 2) return;
+    // Average the intervals between the last 8 taps
+    const recent = tapTimes.slice(-8);
+    let totalInterval = 0;
+    for (let i = 1; i < recent.length; i++) totalInterval += recent[i] - recent[i - 1];
+    const avgInterval = totalInterval / (recent.length - 1);
+    const bpm = Math.round(60000 / avgInterval);
+    applyBpm(bpm);
+  });
 
   // Start/stop toggle
   toggleBtn.addEventListener('click', () => {

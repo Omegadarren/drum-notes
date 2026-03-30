@@ -704,7 +704,13 @@
       color: var(--muted);
       white-space: nowrap;
       flex-shrink: 0;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 8px;
+      user-select: none;
+      -webkit-user-select: none;
     }
+    .slide-counter:active { background: var(--press-bg); }
     .btn-jump-to {
       background: none;
       border: 1px solid var(--border);
@@ -1579,7 +1585,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.83</div>
+  <div class="version-badge">V 3.84</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1904,7 +1910,6 @@
     <button class="btn-slide-nav" id="btn-slide-prev" style="display:none" disabled>◀</button>
     <span class="slide-counter" id="slide-counter" style="display:none"></span>
     <button class="btn-slide-nav" id="btn-slide-next" style="display:none" disabled>▶</button>
-    <button class="btn-jump-to" id="btn-jump-to" style="display:none">Jump to ▾</button>
     <div class="jump-dropdown" id="jump-dropdown"></div>
     <div class="vhdr-chip" id="shared-notes-chip" style="display:none;background:#5e5ce6;cursor:pointer;">👥 Shared</div>
     <button class="metro-btn" id="btn-metro" title="Metronome">
@@ -2684,8 +2689,7 @@ function updateSlideNav() {
     counter.style.display = 'none';
     if (prevBtn) prevBtn.style.display = 'none';
     if (nextBtn) nextBtn.style.display = 'none';
-    const jumpBtnS = document.getElementById('btn-jump-to');
-    if (jumpBtnS) jumpBtnS.style.display = 'none';
+
     if (total === 1 && app.slides[0]) {
       document.getElementById('view-title').textContent = app.slides[0].songName || '';
     }
@@ -2702,8 +2706,6 @@ function updateSlideNav() {
     nextBtn.style.display = '';
     nextBtn.disabled = app.slideIdx === total - 1;
   }
-  const jumpBtn = document.getElementById('btn-jump-to');
-  if (jumpBtn) jumpBtn.style.display = '';
   buildJumpMenu();
   // Show current song name in title
   document.getElementById('view-title').textContent = app.slides[app.slideIdx].songName || '';
@@ -3422,7 +3424,7 @@ document.getElementById('btn-back').addEventListener('touchend', e => {
 document.getElementById('btn-slide-prev').addEventListener('click', () => goToSlide(app.slideIdx - 1));
 document.getElementById('btn-slide-next').addEventListener('click', () => goToSlide(app.slideIdx + 1));
 
-document.getElementById('btn-jump-to').addEventListener('click', e => {
+document.getElementById('slide-counter').addEventListener('click', e => {
   e.stopPropagation();
   buildJumpMenu();
   document.getElementById('jump-dropdown').classList.toggle('open');
@@ -3446,14 +3448,14 @@ function buildJumpMenu() {
 
 document.addEventListener('click', e => {
   const menu = document.getElementById('jump-dropdown');
-  if (menu && !document.getElementById('btn-jump-to').contains(e.target)) {
+  if (menu && !document.getElementById('slide-counter').contains(e.target)) {
     menu.classList.remove('open');
   }
 });
 document.addEventListener('touchstart', e => {
   const menu = document.getElementById('jump-dropdown');
   if (menu && menu.classList.contains('open') &&
-      !document.getElementById('btn-jump-to').contains(e.target) &&
+      !document.getElementById('slide-counter').contains(e.target) &&
       !menu.contains(e.target)) {
     menu.classList.remove('open');
   }

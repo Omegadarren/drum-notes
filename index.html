@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.70</div>
+  <div class="version-badge">V 3.71</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2911,6 +2911,7 @@ function cancelAnn() {
 let selectMode       = false;
 const selectedAnnIds = new Set();
 let annSelectBar     = null;
+let annClipboard     = [];  // in-memory annotation clipboard
 
 function enterSelectMode() {
   if (selectMode) return;
@@ -2923,7 +2924,8 @@ function enterSelectMode() {
     '<button class="sel-action-btn" id="btn-sel-align-l" title="Align left">←</button>' +
     '<button class="sel-action-btn" id="btn-sel-align-c" title="Align center">↔</button>' +
     '<button class="sel-action-btn" id="btn-sel-align-r" title="Align right">→</button>' +
-    '<button class="sel-action-btn" id="btn-sel-copy"    title="Copy texts">📋</button>' +
+    '<button class="sel-action-btn" id="btn-sel-copy"    title="Copy selection">📋 Copy</button>' +
+    '<button class="sel-action-btn" id="btn-sel-paste"   title="Paste copied notes" style="display:none;">📋 Paste</button>' +
     '<button class="sel-action-btn danger" id="btn-sel-delete" title="Delete selected">🗑</button>' +
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
@@ -2932,6 +2934,7 @@ function enterSelectMode() {
   document.getElementById('btn-sel-align-c').addEventListener('click', () => alignSelected('center'));
   document.getElementById('btn-sel-align-r').addEventListener('click', () => alignSelected('right'));
   document.getElementById('btn-sel-copy').addEventListener('click', copySelected);
+  document.getElementById('btn-sel-paste').addEventListener('click', pasteClipboard);
   document.getElementById('btn-sel-delete').addEventListener('click', deleteSelected);
   updateSelCount();
 }
@@ -2950,9 +2953,12 @@ function updateSelCount() {
   if (!el) return;
   const n = selectedAnnIds.size;
   el.textContent = n === 0 ? 'Draw a box to select notes' : `${n} note${n !== 1 ? 's' : ''} selected`;
-  // Show/hide action buttons
   document.querySelectorAll('.sel-action-btn').forEach(btn => {
-    btn.classList.toggle('visible', n > 0);
+    if (btn.id === 'btn-sel-paste') {
+      btn.style.display = annClipboard.length ? '' : 'none';
+    } else {
+      btn.classList.toggle('visible', n > 0);
+    }
   });
 }
 
@@ -2960,13 +2966,33 @@ function updateSelCount() {
 function copySelected() {
   const sess = currentSession();
   if (!sess) return;
-  const texts = sess.annotations
-    .filter(a => selectedAnnIds.has(a.id))
-    .map(a => a.text);
-  if (!texts.length) return;
-  navigator.clipboard.writeText(texts.join('\n')).then(() => {
-    hint(`Copied ${texts.length} note${texts.length !== 1 ? 's' : ''} to clipboard`, 2500);
-  }).catch(() => hint('Could not access clipboard', 2500));
+  const toCopy = sess.annotations.filter(a => selectedAnnIds.has(a.id));
+  if (!toCopy.length) return;
+  annClipboard = toCopy.map(a => ({ ...a }));
+  updateSelCount();
+  hint(`${toCopy.length} note${toCopy.length !== 1 ? 's' : ''} copied — tap Paste to duplicate`, 2500);
+}
+
+function pasteClipboard() {
+  if (!annClipboard.length) return;
+  const sess = currentSession();
+  if (!sess) return;
+  const newAnns = annClipboard.map(a => ({
+    ...a,
+    id:   genId(),
+    xPct: Math.min(0.97, a.xPct + 0.03),
+    yPct: Math.min(0.97, a.yPct + 0.03),
+  }));
+  sess.annotations.push(...newAnns);
+  selectedAnnIds.clear();
+  newAnns.forEach(a => selectedAnnIds.add(a.id));
+  saveCurrentSession();
+  redrawAllAnnotations();
+  document.querySelectorAll('.ann-label').forEach(lbl => {
+    if (lbl._ann && selectedAnnIds.has(lbl._ann.id)) lbl.classList.add('ann-selected');
+  });
+  updateSelCount();
+  hint(`${newAnns.length} note${newAnns.length !== 1 ? 's' : ''} pasted — drag to reposition`, 2500);
 }
 
 function deleteSelected() {
@@ -3016,6 +3042,7 @@ function initLassoLayer(pg) {
   // ── Group drag state ───────────────────────────────────
   let groupDrag = false;
   let gStartX = 0, gStartY = 0, gMoved = false;
+  let gPointerId = null;
   let gSnapshots = {};   // annId → { xPct, yPct }
 
   lassoLayer.addEventListener('pointerdown', e => {
@@ -3027,11 +3054,11 @@ function initLassoLayer(pg) {
       const ann = lbl._ann;
       if (selectedAnnIds.has(ann.id)) {
         // Start group drag of all selected notes
-        groupDrag = true;
-        gMoved    = false;
-        gStartX   = e.clientX;
-        gStartY   = e.clientY;
-        lassoLayer.setPointerCapture(e.pointerId);
+        groupDrag  = true;
+        gMoved     = false;
+        gPointerId = e.pointerId;
+        gStartX    = e.clientX;
+        gStartY    = e.clientY;
         gSnapshots = {};
         const sess = currentSession();
         if (sess) {
@@ -3050,11 +3077,11 @@ function initLassoLayer(pg) {
 
     // No label hit — if notes are selected drag the whole group, else draw a new lasso
     if (selectedAnnIds.size > 0) {
-      groupDrag = true;
-      gMoved    = false;
-      gStartX   = e.clientX;
-      gStartY   = e.clientY;
-      lassoLayer.setPointerCapture(e.pointerId);
+      groupDrag  = true;
+      gMoved     = false;
+      gPointerId = e.pointerId;
+      gStartX    = e.clientX;
+      gStartY    = e.clientY;
       gSnapshots = {};
       const sess = currentSession();
       if (sess) {
@@ -3083,6 +3110,7 @@ function initLassoLayer(pg) {
       const dx = e.clientX - gStartX;
       const dy = e.clientY - gStartY;
       if (!gMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+      if (!gMoved) try { lassoLayer.setPointerCapture(gPointerId); } catch(_) {}
       gMoved = true;
       const r = lassoLayer.getBoundingClientRect();
       const dxPct = dx / r.width;

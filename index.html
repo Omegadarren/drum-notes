@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.67</div>
+  <div class="version-badge">V 3.68</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2990,11 +2990,12 @@ function alignSelected(dir) {
   const xs = selected.map(a => a.xPct);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
-  let target;
-  if (dir === 'left')        target = minX;
-  else if (dir === 'right')  target = maxX;
-  else                       target = (minX + maxX) / 2;
-  selected.forEach(a => { a.xPct = target; });
+  // Shift the whole group as a unit; relative positions preserved
+  let delta;
+  if (dir === 'left')        delta = 0.02 - minX;
+  else if (dir === 'right')  delta = 0.97 - maxX;
+  else                       delta = 0.5 - (minX + maxX) / 2;
+  selected.forEach(a => { a.xPct = Math.max(0, Math.min(1, a.xPct + delta)); });
   saveCurrentSession();
   redrawAllAnnotations();
   // Re-apply selection highlight after redraw

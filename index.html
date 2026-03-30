@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.73</div>
+  <div class="version-badge">V 3.74</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5275,6 +5275,22 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     return audioCtx;
   }
 
+  // iOS requires AudioContext to be unlocked synchronously within a user gesture.
+  // Call this in a direct click/tap handler; never call it from async code.
+  function unlockAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      try {
+        const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+      } catch (_) {}
+      audioCtx.resume();
+    }
+  }
+
   function playClick() {
     // Preview: schedule at current time immediately
     try { scheduleClick(getAudioCtx().currentTime); } catch(e) {}
@@ -5398,14 +5414,13 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     schedTimer = setTimeout(scheduler, SCHEDULE_MS);
   }
 
-  async function startTick() {
+  function startTick() {
     metroRunning = true;
     btnMetro.classList.add('active');
     toggleBtn.classList.add('active');
     toggleBtn.textContent = '⏹ Stop';
     try {
       const ctx = getAudioCtx();
-      await ctx.resume();
       nextBeatTime = ctx.currentTime;
     } catch (e) {
       nextBeatTime = 0;
@@ -5441,6 +5456,8 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   btnMetro.addEventListener('click', e => {
     e.stopPropagation();
     const isOpen = popover.classList.contains('open');
+    // Pre-unlock AudioContext on first open — must happen synchronously in the gesture
+    if (!isOpen) unlockAudioCtx();
     // Close any other open overlays
     document.getElementById('dropdown').classList.remove('open');
     document.getElementById('jump-dropdown').classList.remove('open');

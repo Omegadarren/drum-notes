@@ -1566,7 +1566,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.80</div>
+  <div class="version-badge">V 3.81</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1903,7 +1903,7 @@
       <div class="metro-popover-title">Metronome</div>
       <div class="metro-bpm-row">
         <button class="metro-bpm-btn" id="metro-bpm-down">−</button>
-        <input class="metro-bpm-input" id="metro-bpm-input" type="number" min="20" max="300" value="120">
+        <input class="metro-bpm-input" id="metro-bpm-input" type="text" inputmode="numeric" pattern="[0-9]*" min="20" max="300" value="120">
         <button class="metro-bpm-btn" id="metro-bpm-up">＋</button>
       </div>
       <button class="metro-toggle-btn" id="metro-toggle">▶ Start</button>
@@ -5434,7 +5434,6 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     document.getElementById('dropdown').classList.remove('open');
     document.getElementById('jump-dropdown').classList.remove('open');
     popover.classList.toggle('open', !isOpen);
-    if (!isOpen) setTimeout(() => bpmInput.select(), 50);
   });
 
   // Close popover on outside tap
@@ -5446,6 +5445,10 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
   // BPM input
   bpmInput.addEventListener('change', () => applyBpm(parseInt(bpmInput.value, 10)));
+  bpmInput.addEventListener('input', () => {
+    const v = parseInt(bpmInput.value, 10);
+    if (!isNaN(v) && v >= 20 && v <= 300) applyBpm(v);
+  });
   bpmInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') { bpmInput.blur(); applyBpm(parseInt(bpmInput.value, 10)); }
   });

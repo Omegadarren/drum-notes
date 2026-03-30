@@ -1617,7 +1617,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.61</div>
+  <div class="version-badge">V 3.62</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2089,12 +2089,12 @@ async function cacheSongPdf(gid, songId, songName, pdfData) {
 async function getCachedSongPdf(gid, songId) {
   return idbGet(IDB_STORE, `${gid}/${songId}`);
 }
-async function cacheSetlistMeta(gid, setlistId, name, songIds) {
+async function cacheSetlistMeta(gid, setlistId, name, songIds, extra = {}) {
   const existing = await getCachedSetlist(gid, setlistId);
   const preserved = existing
     ? { keepPermanently: existing.keepPermanently, snoozedUntil: existing.snoozedUntil }
     : {};
-  await idbPut(IDB_META, `${gid}/${setlistId}`, { ...preserved, name, songIds, cachedAt: Date.now() });
+  await idbPut(IDB_META, `${gid}/${setlistId}`, { ...preserved, ...extra, name, songIds, cachedAt: Date.now() });
 }
 async function getCachedSetlist(gid, setlistId) {
   return idbGet(IDB_META, `${gid}/${setlistId}`);
@@ -4199,6 +4199,15 @@ async function loadGroupSetlists(gid) {
                 performed:   nowPerformed,
                 performedAt: nowPerformed ? Date.now() : null,
               });
+              // Patch IDB cache so offline stats stay current
+              const cached = await getCachedSetlist(currentGroupId, id);
+              if (cached) {
+                await cacheSetlistMeta(currentGroupId, id, cached.name, cached.songIds || [], {
+                  ...cached,
+                  performed:   nowPerformed,
+                  performedAt: nowPerformed ? Date.now() : null,
+                });
+              }
               setLoading(false);
               hint(nowPerformed ? '🎤 Marked as performed!' : 'Removed from performed.', 2500);
               loadGroupSetlists(currentGroupId);
@@ -4587,25 +4596,65 @@ async function showPlayedSongs(gid) {
   const listEl = document.getElementById('played-songs-list');
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
   modal.classList.add('open');
-  try {
-    const [songSnap, setlistSnap] = await Promise.all([
-      db.collection('groups').doc(gid).collection('songs').get(),
-      db.collection('groups').doc(gid).collection('setlists').get()
-    ]);
-    const songMap = {};
-    songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
-    const allSetlists = [];
-    setlistSnap.forEach(d => { allSetlists.push(d); });
-    allSetlists.sort((a, b) => {
-      const ta = a.data().createdAt || a.data().uploadedAt || 0;
-      const tb = b.data().createdAt || b.data().uploadedAt || 0;
-      return ta - tb;
-    });
-    _psData = { songMap, allSetlists };
-    renderPlayedSongs();
-  } catch (err) {
-    listEl.innerHTML = `<div class="groups-empty">Could not load: ${esc(err.message)}</div>`;
+
+  let songMap     = {};
+  let allSetlists = [];
+  let fromCache   = false;
+
+  if (navigator.onLine) {
+    try {
+      const [songSnap, setlistSnap] = await Promise.all([
+        db.collection('groups').doc(gid).collection('songs').get(),
+        db.collection('groups').doc(gid).collection('setlists').get()
+      ]);
+      songSnap.forEach(d => { songMap[d.id] = d.data().name || d.id; });
+      setlistSnap.forEach(d => {
+        allSetlists.push(d);
+        const sl = d.data();
+        // Cache full data for offline use
+        cacheSetlistMeta(gid, d.id, sl.name, sl.songIds || [], {
+          performed:   sl.performed   || false,
+          performedAt: sl.performedAt || null,
+          archived:    sl.archived    || false,
+          createdAt:   sl.createdAt   || null,
+          uploadedAt:  sl.uploadedAt  || null,
+        });
+      });
+    } catch (_) { /* fall through to IDB */ }
   }
+
+  // Offline or live fetch failed — load from IDB
+  if (!allSetlists.length) {
+    fromCache = true;
+    const [allMeta, allPdfs] = await Promise.all([
+      idbGetAll(IDB_META),
+      idbGetAll(IDB_STORE),
+    ]);
+    // Build songMap from cached PDFs
+    allPdfs.forEach(({ key, value }) => {
+      if (!key.startsWith(gid + '/')) return;
+      const songId = key.slice(gid.length + 1);
+      if (value.songName) songMap[songId] = value.songName;
+    });
+    // Build fake Firestore-doc-shaped objects from IDB meta
+    allMeta.forEach(({ key, value }) => {
+      if (!key.startsWith(gid + '/')) return;
+      allSetlists.push({ id: key.slice(gid.length + 1), data: () => value });
+    });
+    if (!allSetlists.length) {
+      listEl.innerHTML = '<div class="groups-empty">No cached data — open this group once while online to enable offline stats.</div>';
+      return;
+    }
+  }
+
+  allSetlists.sort((a, b) => {
+    const ta = a.data().createdAt || a.data().uploadedAt || 0;
+    const tb = b.data().createdAt || b.data().uploadedAt || 0;
+    return ta - tb;
+  });
+  _psData = { songMap, allSetlists };
+  renderPlayedSongs();
+  if (fromCache) hint('Showing cached data — connect to refresh', 3000);
 }
 
 async function openGroupSetlist(setlistId, sl) {

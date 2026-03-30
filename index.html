@@ -477,7 +477,7 @@
       cursor: pointer;
       touch-action: manipulation;
       flex-shrink: 0;
-      color: var(--muted);
+      color: var(--fg);
       font-size: 13px;
       white-space: nowrap;
       line-height: 1;
@@ -487,7 +487,7 @@
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      background: #444;
+      background: var(--muted);
       transition: background 0.04s, box-shadow 0.04s;
       flex-shrink: 0;
     }
@@ -1585,7 +1585,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.84</div>
+  <div class="version-badge">V 3.85</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2673,6 +2673,7 @@ function goToSlide(idx) {
   // Sync metronome to this song's BPM if set
   const slideBpm = app.slides[idx] && app.slides[idx].bpm;
   if (slideBpm && window.metroApplyBpm) window.metroApplyBpm(slideBpm);
+  if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(slideBpm || null);
 }
 
 // ─────────────────── Update song nav in header ───────────
@@ -5340,6 +5341,20 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   // Init display
   bpmInput.value = metroBpm;
   bpmLabel.textContent = metroBpm;
+
+  function updateBpmLabel(bpm) {
+    if (bpm) {
+      bpmLabel.textContent = bpm;
+      bpmLabel.style.opacity = '';
+    } else {
+      bpmLabel.textContent = 'Set BPM';
+      bpmLabel.style.opacity = '0.55';
+    }
+  }
+  window.metroUpdateBpmLabel = updateBpmLabel;
+  // Reflect current slide on load
+  const initSlide = app.slides && app.slides[app.slideIdx];
+  updateBpmLabel(initSlide && initSlide.bpm ? initSlide.bpm : null);
   const infoLabel = document.getElementById('metro-info-label');
   function refreshSoundOpts() {
     soundOpts.forEach(b => b.classList.toggle('active', b.dataset.sound === metroSoundMode));
@@ -5407,6 +5422,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     metroBpm = Math.min(300, Math.max(20, val || 120));
     bpmInput.value = metroBpm;
     bpmLabel.textContent = metroBpm;
+    bpmLabel.style.opacity = '';
     localStorage.setItem(METRO_KEY, metroBpm);
     if (metroRunning) restartTick();
     // Update in-memory BPM for current slide immediately

@@ -1617,7 +1617,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.60</div>
+  <div class="version-badge">V 3.61</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4830,10 +4830,17 @@ function doDeleteGroup() {
     async () => {
       setLoading(true, 'Deleting group…');
       try {
-        // Delete setlists sub-collection
+        // Delete setlists sub-collection (and any legacy single-PDF storage paths)
         const setlists = await db.collection('groups').doc(currentGroupId).collection('setlists').get();
         for (const doc of setlists.docs) {
           try { await storage.ref(doc.data().storagePath).delete(); } catch (e) {}
+          await doc.ref.delete();
+        }
+        // Delete songs sub-collection + their Storage files + IDB cache
+        const songs = await db.collection('groups').doc(currentGroupId).collection('songs').get();
+        for (const doc of songs.docs) {
+          try { await storage.ref(doc.data().storagePath).delete(); } catch (e) {}
+          await idbDelete(IDB_STORE, `${currentGroupId}/${doc.id}`);
           await doc.ref.delete();
         }
         await db.collection('groups').doc(currentGroupId).delete();
@@ -5513,6 +5520,9 @@ document.getElementById('btn-rename-song-save').addEventListener('click', async 
   setLoading(true, 'Renaming…');
   try {
     await db.collection('groups').doc(gid).collection('songs').doc(songId).update({ name });
+    // Update IDB cache so offline shows the new name immediately
+    const cached = await getCachedSongPdf(gid, songId);
+    if (cached) await cacheSongPdf(gid, songId, name, cached.pdfData);
     document.getElementById('rename-song-modal').classList.remove('open');
     setLoading(false);
     hint(`Renamed to "${name}"`, 2500);

@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.72</div>
+  <div class="version-badge">V 3.73</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2955,7 +2955,7 @@ function updateSelCount() {
   el.textContent = n === 0 ? 'Draw a box to select notes' : `${n} note${n !== 1 ? 's' : ''} selected`;
   document.querySelectorAll('.sel-action-btn').forEach(btn => {
     if (btn.id === 'btn-sel-paste') {
-      btn.style.display = annClipboard.length ? '' : 'none';
+      btn.style.display = annClipboard.length ? 'block' : 'none';
     } else {
       btn.classList.toggle('visible', n > 0);
     }
@@ -3046,6 +3046,11 @@ function initLassoLayer(pg) {
   let gSnapshots = {};   // annId → { xPct, yPct }
 
   lassoLayer.addEventListener('pointerdown', e => {
+    // Never intercept taps that land on the floating selection toolbar
+    if (annSelectBar) {
+      const br = annSelectBar.getBoundingClientRect();
+      if (e.clientY >= br.top) return;
+    }
     // Check if the tap landed on an annotation label
     const hit = document.elementFromPoint(e.clientX, e.clientY);
     const lbl = hit && hit.closest('.ann-label');

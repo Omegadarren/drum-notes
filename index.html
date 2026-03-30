@@ -441,19 +441,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .vhdr-chip {
-      font-size: 12px;
-      padding: 5px 12px;
-      border-radius: 20px;
-      background: var(--press-bg);
-      color: var(--muted);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .vhdr-chip.editing {
-      background: var(--accent-glow);
-      color: var(--accent);
-    }
     .vhdr-menu {
       font-size: 24px;
       padding: 4px 8px;
@@ -1579,7 +1566,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.79</div>
+  <div class="version-badge">V 3.80</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1906,7 +1893,6 @@
     <button class="btn-slide-nav" id="btn-slide-next" style="display:none" disabled>▶</button>
     <button class="btn-jump-to" id="btn-jump-to" style="display:none">Jump to ▾</button>
     <div class="jump-dropdown" id="jump-dropdown"></div>
-    <div class="vhdr-chip" id="mode-chip">Scroll</div>
     <div class="vhdr-chip" id="shared-notes-chip" style="display:none;background:#5e5ce6;cursor:pointer;">👥 Shared</div>
     <button class="metro-btn" id="btn-metro" title="Metronome">
       <span class="metro-dot" id="metro-dot"></span>
@@ -3721,16 +3707,7 @@ document.getElementById('mi-reorder').addEventListener('click', () => {
 });
 
 // ─────────────────── UI helpers ──────────────────────────
-function setChip(mode) {
-  const chip = document.getElementById('mode-chip');
-  if (mode === 'edit') {
-    chip.textContent = '✎ Annotating';
-    chip.className   = 'vhdr-chip editing';
-  } else {
-    chip.textContent = 'Scroll';
-    chip.className   = 'vhdr-chip';
-  }
-}
+function setChip(_mode) {}
 
 let hintTimer;
 function hint(msg, dur = 2800) {

@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.78</div>
+  <div class="version-badge">V 3.79</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2921,18 +2921,14 @@ function enterSelectMode() {
   annSelectBar.className = 'ann-select-bar';
   annSelectBar.innerHTML =
     '<span id="sel-count">Draw a box to select notes</span>' +
-    '<button class="sel-action-btn" id="btn-sel-align-l" title="Align left">←</button>' +
-    '<button class="sel-action-btn" id="btn-sel-align-c" title="Align center">↔</button>' +
-    '<button class="sel-action-btn" id="btn-sel-align-r" title="Align right">→</button>' +
+    '<button class="sel-action-btn" id="btn-sel-align-l" title="Align left">← Align</button>' +
     '<button class="sel-action-btn" id="btn-sel-copy"    title="Copy selection">📋 Copy</button>' +
     '<button class="sel-action-btn" id="btn-sel-paste"   title="Paste copied notes" style="display:none;">📋 Paste</button>' +
     '<button class="sel-action-btn danger" id="btn-sel-delete" title="Delete selected">🗑</button>' +
     '<button id="btn-sel-done">Done</button>';
   document.getElementById('viewer').appendChild(annSelectBar);
   document.getElementById('btn-sel-done').addEventListener('click', exitSelectMode);
-  document.getElementById('btn-sel-align-l').addEventListener('click', () => alignSelected('left'));
-  document.getElementById('btn-sel-align-c').addEventListener('click', () => alignSelected('center'));
-  document.getElementById('btn-sel-align-r').addEventListener('click', () => alignSelected('right'));
+  document.getElementById('btn-sel-align-l').addEventListener('click', alignSelected);
   document.getElementById('btn-sel-copy').addEventListener('click', copySelected);
   document.getElementById('btn-sel-paste').addEventListener('click', pasteClipboard);
   document.getElementById('btn-sel-delete').addEventListener('click', deleteSelected);
@@ -3019,21 +3015,15 @@ function deleteSelected() {
   });
 }
 
-function alignSelected(dir) {
+function alignSelected() {
   const sess = currentSession();
   if (!sess || !selectedAnnIds.size) return;
   const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
   if (!selected.length) return;
-  const xs = selected.map(a => a.xPct);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const targetX = dir === 'left' ? minX
-                : dir === 'right' ? maxX
-                : (minX + maxX) / 2;
+  const targetX = Math.min(...selected.map(a => a.xPct));
   selected.forEach(a => { a.xPct = targetX; });
   saveCurrentSession();
   redrawAllAnnotations();
-  // Re-apply selection highlight after redraw
   document.querySelectorAll('.ann-label').forEach(lbl => {
     if (lbl._ann && selectedAnnIds.has(lbl._ann.id)) lbl.classList.add('ann-selected');
   });

@@ -4864,13 +4864,40 @@ document.getElementById('btn-rename-group-save').addEventListener('click', async
 // ── Delete / Leave Group ──────────────────────────────────
 function doDeleteGroup() {
   if (!currentGroupId || !currentGroupData) return;
-  showConfirm(
-    `Delete "${currentGroupData.name}"?`,
-    'All setlists will be removed and members will lose access.',
-    'Delete Group',
-    async () => {
-      setLoading(true, 'Deleting group…');
-      try {
+
+  // Build a type-to-confirm prompt instead of a simple OK button
+  const modal = document.createElement('div');
+  modal.className = 'modal-bg';
+  modal.style.cssText = 'display:flex;';
+  modal.innerHTML =
+    '<div class="modal-box" style="gap:18px;">' +
+      '<div class="modal-title">Delete \u201c' + currentGroupData.name + '\u201d?</div>' +
+      '<div style="color:var(--muted);font-size:15px;line-height:1.5;">All setlists will be removed and members will lose access.<br><br>Type <strong style="color:var(--text);">Delete</strong> to confirm:</div>' +
+      '<input id="delete-group-confirm-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false" ' +
+        'style="background:var(--press-bg);border:1px solid var(--border);border-radius:10px;color:var(--text);' +
+        'font-size:17px;padding:10px 14px;width:100%;text-align:center;">' +
+      '<div class="modal-actions">' +
+        '<button class="btn-ghost" id="btn-dgc-cancel">Cancel</button>' +
+        '<button class="btn-danger" id="btn-dgc-ok" disabled style="opacity:0.4;">Delete Group</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+
+  const input  = modal.querySelector('#delete-group-confirm-input');
+  const okBtn  = modal.querySelector('#btn-dgc-ok');
+  const close  = () => modal.remove();
+
+  input.addEventListener('input', () => {
+    const match = input.value.trim() === 'Delete';
+    okBtn.disabled = !match;
+    okBtn.style.opacity = match ? '1' : '0.4';
+  });
+  modal.querySelector('#btn-dgc-cancel').addEventListener('click', close);
+  okBtn.addEventListener('click', async () => {
+    if (input.value.trim() !== 'Delete') return;
+    close();
+    setLoading(true, 'Deleting group…');
+    try {
         // Delete setlists sub-collection (and any legacy single-PDF storage paths)
         const setlists = await db.collection('groups').doc(currentGroupId).collection('setlists').get();
         for (const doc of setlists.docs) {
@@ -4899,8 +4926,7 @@ function doDeleteGroup() {
         setLoading(false);
         alert('Could not delete group: ' + err.message);
       }
-    }
-  );
+  });
 }
 
 function doLeaveGroup() {

@@ -441,6 +441,19 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .btn-undo-redo {
+      background: none;
+      border: none;
+      color: var(--fg);
+      font-size: 20px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .btn-undo-redo:active { background: var(--press-bg); }
     .vhdr-menu {
       font-size: 24px;
       padding: 4px 8px;
@@ -1566,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.81</div>
+  <div class="version-badge">V 3.82</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1924,6 +1937,8 @@
         </div>
       </div>
     </div>
+    <button class="btn-undo-redo" id="btn-undo" title="Undo (Ctrl+Z)" disabled style="opacity:0.35;">↩</button>
+    <button class="btn-undo-redo" id="btn-redo" title="Redo (Ctrl+Y)" disabled style="opacity:0.35;">↪</button>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
   </div>
@@ -2868,6 +2883,7 @@ function commitAnn() {
       ? { id: genId(), songId: pg.songId, songPage: pg.songPageIndex, xPct, yPct, text }
       : { id: genId(), page: pageIdx, xPct, yPct, text };
     const sess = currentSession();
+    pushUndo();
     sess.annotations.push(ann);
     saveCurrentSession();
     drawAnnotation(annLayer, ann);
@@ -2898,6 +2914,9 @@ let selectMode       = false;
 const selectedAnnIds = new Set();
 let annSelectBar     = null;
 let annClipboard     = [];  // in-memory annotation clipboard
+let undoStack        = [];  // annotation snapshots for undo
+let redoStack        = [];  // annotation snapshots for redo
+const UNDO_LIMIT     = 20;
 
 function enterSelectMode() {
   if (selectMode) return;
@@ -2975,6 +2994,7 @@ function pasteClipboard() {
   }));
   // Update clipboard so successive pastes keep moving instead of stacking
   annClipboard = newAnns.map(a => ({ ...a }));
+  pushUndo();
   sess.annotations.push(...newAnns);
   selectedAnnIds.clear();
   newAnns.forEach(a => selectedAnnIds.add(a.id));
@@ -2993,6 +3013,7 @@ function deleteSelected() {
   showConfirm(`Delete ${count} selected note${count !== 1 ? 's' : ''}?`, '', 'Delete', () => {
     const sess = currentSession();
     if (!sess) return;
+    pushUndo();
     sess.annotations = sess.annotations.filter(a => !selectedAnnIds.has(a.id));
     selectedAnnIds.clear();
     saveCurrentSession();
@@ -3007,6 +3028,7 @@ function alignSelected() {
   const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
   if (!selected.length) return;
   const targetX = Math.min(...selected.map(a => a.xPct));
+  pushUndo();
   selected.forEach(a => { a.xPct = targetX; });
   saveCurrentSession();
   redrawAllAnnotations();
@@ -3014,6 +3036,43 @@ function alignSelected() {
     if (lbl._ann && selectedAnnIds.has(lbl._ann.id)) lbl.classList.add('ann-selected');
   });
   updateSelCount();
+}
+
+function pushUndo() {
+  const sess = currentSession();
+  if (!sess) return;
+  undoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  updateUndoRedoBtns();
+}
+function undoAnnotation() {
+  if (!undoStack.length) return;
+  const sess = currentSession();
+  if (!sess) return;
+  redoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
+  sess.annotations = undoStack.pop();
+  saveCurrentSession();
+  redrawAllAnnotations();
+  updateUndoRedoBtns();
+  hint('Undone', 1200);
+}
+function redoAnnotation() {
+  if (!redoStack.length) return;
+  const sess = currentSession();
+  if (!sess) return;
+  undoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
+  sess.annotations = redoStack.pop();
+  saveCurrentSession();
+  redrawAllAnnotations();
+  updateUndoRedoBtns();
+  hint('Redone', 1200);
+}
+function updateUndoRedoBtns() {
+  const u = document.getElementById('btn-undo');
+  const r = document.getElementById('btn-redo');
+  if (u) { u.disabled = !undoStack.length; u.style.opacity = undoStack.length ? '1' : '0.35'; }
+  if (r) { r.disabled = !redoStack.length; r.style.opacity = redoStack.length ? '1' : '0.35'; }
 }
 
 // ─────────────────── Lasso drawing (per page) ────────────
@@ -3102,6 +3161,7 @@ function initLassoLayer(pg) {
       const dy = e.clientY - gStartY;
       if (!gMoved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
       if (!gMoved) try { lassoLayer.setPointerCapture(gPointerId); } catch(_) {}
+      if (!gMoved) pushUndo();
       gMoved = true;
       const r = lassoLayer.getBoundingClientRect();
       const dxPct = dx / r.width;
@@ -3223,6 +3283,7 @@ function drawAnnotation(annLayer, ann) {
     startTop     = ann.yPct * r.height;
     holdTimer = setTimeout(() => {
       holdTimer = null;
+      pushUndo();
       dragReady = true;
       dragging  = true;
       try { label.setPointerCapture(capturedPointerId); } catch(_) {}
@@ -3315,6 +3376,7 @@ function showDeleteConfirm(ann, labelEl) {
     labelEl.remove();
     // Remove from session temporarily (re-added on commit)
     const sess = currentSession();
+    pushUndo();
     sess.annotations = sess.annotations.filter(a => a.id !== ann.id);
     saveCurrentSession();
     // Open input at original position
@@ -3339,6 +3401,7 @@ function showDeleteConfirm(ann, labelEl) {
     clearTimeout(autoClose);
     labelEl.remove();
     const sess = currentSession();
+    pushUndo();
     sess.annotations = sess.annotations.filter(a => a.id !== ann.id);
     saveCurrentSession();
     toast.remove();
@@ -3613,6 +3676,7 @@ document.getElementById('mi-clear').addEventListener('click', () => {
   if (!sess || !sess.annotations.length) { hint('No notes to clear.'); return; }
   const noteCount = sess.annotations.length;
   showConfirm(`Clear all ${noteCount} note${noteCount !== 1 ? 's' : ''}?`, 'This removes all notes from this session.', 'Clear All', () => {
+    pushUndo();
     sess.annotations = [];
     saveCurrentSession();
     app.pages.forEach(p => p.annLayer.querySelectorAll('.ann-label').forEach(el => el.remove()));
@@ -3635,9 +3699,19 @@ document.getElementById('btn-shared-import').addEventListener('click', () => {
   importSharedAnnotations();
 });
 
+document.getElementById('btn-undo').addEventListener('click', undoAnnotation);
+document.getElementById('btn-redo').addEventListener('click', redoAnnotation);
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('viewer').classList.contains('active')) return;
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); undoAnnotation(); }
+  if ((e.metaKey || e.ctrlKey) && ((e.shiftKey && e.key === 'z') || e.key === 'y')) { e.preventDefault(); redoAnnotation(); }
+});
+
 function goBack() {
   if (app.pendingAnn) cancelAnn();
   exitSelectMode();
+  undoStack = []; redoStack = []; updateUndoRedoBtns();
   saveCurrentSession();
   const sess = currentSession();
   const fromGroup = sess && (sess.groupSetlistId || sess.groupId);

@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.68</div>
+  <div class="version-badge">V 3.69</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2985,17 +2985,16 @@ function deleteSelected() {
 
 function alignSelected(dir) {
   const sess = currentSession();
-  if (!sess || selectedAnnIds.size < 2) return;
+  if (!sess || !selectedAnnIds.size) return;
   const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
+  if (!selected.length) return;
   const xs = selected.map(a => a.xPct);
   const minX = Math.min(...xs);
   const maxX = Math.max(...xs);
-  // Shift the whole group as a unit; relative positions preserved
-  let delta;
-  if (dir === 'left')        delta = 0.02 - minX;
-  else if (dir === 'right')  delta = 0.97 - maxX;
-  else                       delta = 0.5 - (minX + maxX) / 2;
-  selected.forEach(a => { a.xPct = Math.max(0, Math.min(1, a.xPct + delta)); });
+  const targetX = dir === 'left' ? minX
+                : dir === 'right' ? maxX
+                : (minX + maxX) / 2;
+  selected.forEach(a => { a.xPct = targetX; });
   saveCurrentSession();
   redrawAllAnnotations();
   // Re-apply selection highlight after redraw

@@ -1576,7 +1576,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.63</div>
+  <div class="version-badge">V 3.64</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1908,6 +1908,7 @@
     <button class="metro-btn" id="btn-metro" title="Metronome">
       <span class="metro-dot" id="metro-dot"></span>
       <span id="metro-bpm-label">120</span>
+      <span id="metro-info-label" style="font-size:11px;opacity:0.7;margin-left:1px;"></span>
     </button>
     <div class="metro-popover" id="metro-popover">
       <div class="metro-popover-title">Metronome</div>
@@ -5196,14 +5197,21 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   // Init display
   bpmInput.value = metroBpm;
   bpmLabel.textContent = metroBpm;
+  const infoLabel = document.getElementById('metro-info-label');
   function refreshSoundOpts() {
     soundOpts.forEach(b => b.classList.toggle('active', b.dataset.sound === metroSoundMode));
   }
   function refreshSubdivOpts() {
     subdivOpts.forEach(b => b.classList.toggle('active', b.dataset.subdiv === metroSubdiv));
   }
+  function refreshMetroBtnInfo() {
+    const soundLabel = { off: 'Off', click: 'Click', beep: 'Beep', wood: 'Wood' }[metroSoundMode] || metroSoundMode;
+    const subdivLabel = metroSubdiv === 'eighth' ? '\u266a 1/8' : '\u2669 1/4';
+    infoLabel.textContent = soundLabel + ' \u00b7 ' + subdivLabel;
+  }
   refreshSoundOpts();
   refreshSubdivOpts();
+  refreshMetroBtnInfo();
 
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -5222,6 +5230,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
       metroSoundMode = btn.dataset.sound;
       localStorage.setItem(METRO_SOUND_KEY, metroSoundMode);
       refreshSoundOpts();
+      refreshMetroBtnInfo();
       if (metroSoundMode !== 'off') playClick();
     });
   });
@@ -5230,6 +5239,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
       metroSubdiv = btn.dataset.subdiv;
       localStorage.setItem(METRO_SUBDIV_KEY, metroSubdiv);
       refreshSubdivOpts();
+      refreshMetroBtnInfo();
       if (metroRunning) restartTick();
     });
   });

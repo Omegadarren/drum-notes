@@ -1,6 +1,6 @@
 # BandNotes 🎸
 
-**V3.63** — iPad-optimised shared sheet music viewer and annotator for bands.  
+**V3.64** — iPad-optimised shared sheet music viewer and annotator for bands.  
 Each band member opens the same app, joins a shared group, and sees the same setlists — with their own personal annotations saved per song.
 
 ---
@@ -227,7 +227,7 @@ Changes apply to newly created notes and to the dot indicator on existing notes.
 
 ## 9. Metronome
 
-Tap the **BPM button** (e.g. `120`) in the viewer header to open the metronome popover.
+Tap the **metronome button** in the viewer header to open the metronome popover. The button always shows the current BPM, sound mode, and subdivision at a glance (e.g. `120 Click · ♩ 1/4`).
 
 | Control | Description |
 |---------|-------------|

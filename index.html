@@ -1585,7 +1585,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.86</div>
+  <div class="version-badge">V 3.87</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2487,7 +2487,9 @@ async function launchViewer(session) {
     }
     updateSlideNav();
     drawAllAnnotations();
-    hint('Double-tap anywhere to add a note  ·  Tap a note to delete it', 4500);
+    // Sync BPM label to first slide
+    const firstBpm = app.slides[0] && app.slides[0].bpm;
+    if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(firstBpm || null);
     if (!localStorage.getItem('bn_lasso_hint_seen')) {
       localStorage.setItem('bn_lasso_hint_seen', '1');
       setTimeout(() => hint('💡 Two-finger double-tap anywhere to enter lasso selection mode', 5000), 5200);
@@ -3721,6 +3723,7 @@ function goBack() {
   if (app.pendingAnn) cancelAnn();
   exitSelectMode();
   undoStack = []; redoStack = []; updateUndoRedoBtns();
+  if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(null);
   saveCurrentSession();
   const sess = currentSession();
   const fromGroup = sess && (sess.groupSetlistId || sess.groupId);

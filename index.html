@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.71</div>
+  <div class="version-badge">V 3.72</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5315,7 +5315,6 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   function flash() {
     dot.classList.add('flash');
     vhdr.classList.add('metro-flash');
-    playClick();
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
       dot.classList.remove('flash');
@@ -5394,13 +5393,14 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     schedTimer = setTimeout(scheduler, SCHEDULE_MS);
   }
 
-  function startTick() {
+  async function startTick() {
     metroRunning = true;
     btnMetro.classList.add('active');
     toggleBtn.classList.add('active');
     toggleBtn.textContent = '⏹ Stop';
     try {
       const ctx = getAudioCtx();
+      await ctx.resume();
       nextBeatTime = ctx.currentTime;
     } catch (e) {
       nextBeatTime = 0;

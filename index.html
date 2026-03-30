@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.69</div>
+  <div class="version-badge">V 3.70</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -3048,7 +3048,24 @@ function initLassoLayer(pg) {
       return;
     }
 
-    // No label hit — start lasso draw
+    // No label hit — if notes are selected drag the whole group, else draw a new lasso
+    if (selectedAnnIds.size > 0) {
+      groupDrag = true;
+      gMoved    = false;
+      gStartX   = e.clientX;
+      gStartY   = e.clientY;
+      lassoLayer.setPointerCapture(e.pointerId);
+      gSnapshots = {};
+      const sess = currentSession();
+      if (sess) {
+        sess.annotations.forEach(a => {
+          if (selectedAnnIds.has(a.id)) gSnapshots[a.id] = { xPct: a.xPct, yPct: a.yPct };
+        });
+      }
+      return;
+    }
+
+    // Start lasso draw
     active = true;
     lassoLayer.setPointerCapture(e.pointerId);
     const r = lassoLayer.getBoundingClientRect();

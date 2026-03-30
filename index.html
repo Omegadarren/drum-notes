@@ -1100,47 +1100,6 @@
       border-radius: 14px;
       overflow: hidden;
       z-index: 100;
-      min-width: 250px;
-      display: none;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    }
-    .gd-settings-menu.open { display: block; }
-    .gd-settings-item {
-      padding: 16px 20px;
-      font-size: 16px;
-      cursor: pointer;
-      border-bottom: 1px solid var(--border);
-      touch-action: manipulation;
-      color: var(--text);
-    }
-    .gd-settings-item:last-child { border-bottom: none; }
-    .gd-settings-item:active { background: var(--press-bg); }
-    .gd-settings-item.danger { color: var(--accent); }
-    .gd-invite-block {
-      padding: 14px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    .gd-invite-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-    .gd-invite-row { display: flex; align-items: center; gap: 10px; }
-    .gd-invite-code { font-size: 22px; font-weight: 700; letter-spacing: 2px; color: var(--text); flex: 1; }
-    .gd-copy-btn {
-      font-size: 13px; font-weight: 600;
-      color: #60a5fa; border: 1.5px solid #60a5fa;
-      background: transparent; border-radius: 8px;
-      padding: 5px 12px; cursor: pointer; touch-action: manipulation; white-space: nowrap;
-    }
-    .gd-copy-btn:active { opacity: 0.7; }
-
-    /* Group detail settings dropdown */
-    .gd-settings-menu {
-      position: absolute;
-      top: calc(var(--hdr) + 6px);
-      right: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      z-index: 100;
       min-width: 240px;
       display: none;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
@@ -1617,7 +1576,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.62</div>
+  <div class="version-badge">V 3.63</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4203,9 +4162,11 @@ async function loadGroupSetlists(gid) {
               const cached = await getCachedSetlist(currentGroupId, id);
               if (cached) {
                 await cacheSetlistMeta(currentGroupId, id, cached.name, cached.songIds || [], {
-                  ...cached,
                   performed:   nowPerformed,
                   performedAt: nowPerformed ? Date.now() : null,
+                  archived:    cached.archived    || false,
+                  createdAt:   cached.createdAt   || null,
+                  uploadedAt:  cached.uploadedAt  || null,
                 });
               }
               setLoading(false);
@@ -4620,7 +4581,10 @@ async function showPlayedSongs(gid) {
           uploadedAt:  sl.uploadedAt  || null,
         });
       });
-    } catch (_) { /* fall through to IDB */ }
+    } catch (fetchErr) {
+      // Network error while online — fall through to IDB
+      console.warn('showPlayedSongs: live fetch failed, trying IDB', fetchErr);
+    }
   }
 
   // Offline or live fetch failed — load from IDB
@@ -4841,12 +4805,6 @@ document.getElementById('btn-upload-setlist').addEventListener('click', () => {
 
 
 // ── Rename Group ─────────────────────────────────────────
-function doRenameGroup() {
-  if (!currentGroupData) return;
-  document.getElementById('inp-rename-group').value = currentGroupData.name;
-  document.getElementById('rename-group-modal').classList.add('open');
-  setTimeout(() => document.getElementById('inp-rename-group').select(), 120);
-}
 document.getElementById('btn-rename-group-cancel').addEventListener('click', () => {
   document.getElementById('rename-group-modal').classList.remove('open');
 });

@@ -455,7 +455,7 @@ hr {
   <div class="cover">
     <div class="cover-title">BandNotes</div>
     <div class="cover-sub">Sheet music annotations for your whole band</div>
-    <div class="cover-version">User Manual &nbsp;·&nbsp; V 3.81 &nbsp;·&nbsp; March 2026</div>
+    <div class="cover-version">User Manual &nbsp;·&nbsp; V 3.89 &nbsp;·&nbsp; March 2026</div>
   </div>
 
   <!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
@@ -637,7 +637,7 @@ hr {
     <p>Tap the <strong>🗑</strong> button on a song row and confirm. This permanently removes the PDF from storage and cannot be undone. Consider archiving any setlists that contain the song first.</p>
 
     <h3>Opening a song directly</h3>
-    <p>Tap the <strong>›</strong> arrow or anywhere on the row (not on the action buttons) to open the song in the viewer. Your annotations for that song are loaded automatically.</p>
+    <p>Tap the <strong>›</strong> arrow or anywhere on the row (not on the action buttons) to open the song in the viewer. Your annotations for that song are loaded automatically. Tapping <strong>‹ Back</strong> in the viewer returns you directly to the Song Library (not to the setlist screen).</p>
 
     <h3>Play history</h3>
     <p>If a song has been performed (via a setlist marked as performed), a <strong>🎤</strong> button appears on its row showing the play count (e.g. <em>🎤 Played 4×</em>). Tap it to see every setlist the song was performed in with the date. This is visible to <strong>all members</strong>, not just admins. The <strong>🎤 Played</strong> button in the song library header also opens the full group-wide Played Songs history from this screen.</p>
@@ -678,6 +678,7 @@ hr {
 
     <h3>Archived setlists</h3>
     <p>Archived setlists are hidden under a collapsible <strong>📦 N archived setlists</strong> section at the bottom of the list. Tap the section header to expand or collapse it. While expanded, a <strong>A→Z / Z→A</strong> sort toggle lets you quickly find setlists by name.</p>
+    <p>Archived setlists behave identically to active ones: <strong>tap the row</strong> to see the song list tooltip (if available), and <strong>tap the › arrow</strong> to open the setlist in the viewer.</p>
     <p>To restore an archived setlist to the main list, tap <strong>···</strong> → <strong>Restore</strong>.</p>
 
     <div class="callout tip">
@@ -700,6 +701,7 @@ hr {
         <tr><td>Song name / title</td><td>Shows the name of the currently visible song.</td></tr>
         <tr><td>◁ / ▷ arrows</td><td>Navigate to the previous / next song in the setlist.</td></tr>
         <tr><td>1 / 5 counter</td><td>Shows the current song position. Tap it to open the jump menu.</td></tr>
+        <tr><td>↩ / ↪ Undo / Redo</td><td>Undo or redo the last annotation change (add, delete, edit, move, paste, align, clear). Greyed out when no history is available. Keyboard: <strong>Ctrl+Z</strong> / <strong>Ctrl+Shift+Z</strong> (or <strong>Ctrl+Y</strong>) on desktop.</td></tr>
         <tr><td>👥 Shared chip</td><td>Appears (purple) when a bandmate has shared notes for a song. Tap to view and import them.</td></tr>
         <tr><td>⛶ Fullscreen</td><td>Toggles full-screen mode.</td></tr>
         <tr><td>BPM / Metronome</td><td>Opens the metronome popover. Set BPM with − / + or type it in. Tap ▶ Start / ■ Stop to run the click track. The header flashes red on each beat. BPM is saved per song and syncs when you swipe.</td></tr>
@@ -739,17 +741,18 @@ hr {
   <section id="metronome">
     <div class="section-number">Metronome</div>
     <h2>Metronome</h2>
-    <p>The metronome is a built-in click track that lives in the viewer header. Tap the <strong>BPM button</strong> to open the popover.</p>
+    <p>The metronome is a built-in click track that lives in the viewer header. The button shows the current BPM — or <strong>Set BPM</strong> (dimmed) when no tempo has been saved for the current song. Tap it to open the popover.</p>
     <table class="feature-table">
       <thead><tr><th>Control</th><th>What it does</th></tr></thead>
       <tbody>
         <tr><td>− / + buttons</td><td>Decrease or increase BPM by 1. Hold down to repeat continuously.</td></tr>
         <tr><td>Number input</td><td>Tap the number to focus it and type a BPM value directly. Press Enter or tap elsewhere to apply.</td></tr>
+        <tr><td>Tap</td><td>Large oversized button. Tap it in time with the song to set the tempo by feel. After 2 taps BandNotes starts averaging the interval (up to the last 8 taps). The BPM updates live as you tap. Resets automatically after a 3-second pause.</td></tr>
         <tr><td>▶ Start / ■ Stop</td><td>Starts or stops the click track. While running, the viewer header flashes red on every beat.</td></tr>
       </tbody>
     </table>
     <p>BPM is <strong>saved per song</strong> in the cloud. When you swipe to a song that has a saved BPM, the metronome updates to that tempo automatically. Manually changing the BPM while viewing a song writes it back immediately.</p>
-    <p>Songs with no saved BPM leave the metronome at its current tempo when swiped to.</p>
+    <p>If you navigate to a song with no saved BPM while the metronome is running, it <strong>stops automatically</strong> and a hint appears. The button label reverts to <strong>Set BPM</strong> so you know to set one.</p>
     <div class="callout tip">
       <div class="callout-title">Tip — Auto-stop</div>
       <p>The metronome stops automatically when you tap ‹ Back to leave the viewer.</p>
@@ -808,6 +811,14 @@ hr {
 
     <h3>Clearing all notes</h3>
     <p>Tap <strong>⋯ menu → 🗑 Clear all notes</strong>. After confirming, all annotations for the current session are removed permanently.</p>
+
+    <h3>Undo and Redo</h3>
+    <p>The viewer header contains <strong>↩ Undo</strong> and <strong>↪ Redo</strong> buttons. Every annotation change &mdash; adding, deleting, editing, moving, pasting, aligning, or clearing notes &mdash; can be undone up to <strong>20 steps</strong>. After undoing, the Redo button becomes available to step forward again.</p>
+    <p>Keyboard shortcuts: <strong>Ctrl+Z</strong> (or <strong>Cmd+Z</strong> on Mac) to undo; <strong>Ctrl+Shift+Z</strong> or <strong>Ctrl+Y</strong> to redo. The buttons are greyed out when there is no history.</p>
+    <div class="callout note">
+      <div class="callout-title">Note</div>
+      <p>The undo history is per-session in memory only &mdash; it clears when you leave the viewer. It does not persist across browser sessions.</p>
+    </div>
   </section>
 
   <!-- ═══════════════ 9. LASSO MODE ═══════════════ -->
@@ -1025,7 +1036,7 @@ hr {
 
   <!-- ═══════════════ FOOTER ═══════════════ -->
   <div class="manual-footer">
-    <p>BandNotes &nbsp;·&nbsp; V 3.45 &nbsp;·&nbsp; March 2026</p>
+    <p>BandNotes &nbsp;·&nbsp; V 3.89 &nbsp;·&nbsp; March 2026</p>
     <p style="margin-top:6px;font-size:12px;">For support, contact your group admin.</p>
   </div>
 

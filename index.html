@@ -601,6 +601,31 @@
       color: #30d158;
       background: rgba(48,209,88,0.12);
     }
+    .metro-subdiv-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .metro-subdiv-label { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    .metro-subdiv-opts { display: flex; gap: 5px; }
+    .metro-subdiv-opt {
+      background: var(--press-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .metro-subdiv-opt.active {
+      border-color: #30d158;
+      color: #30d158;
+      background: rgba(48,209,88,0.12);
+    }
 
     /* Dropdown */
 
@@ -1592,7 +1617,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.59</div>
+  <div class="version-badge">V 3.60</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1940,6 +1965,13 @@
           <button class="metro-sound-opt" data-sound="click">Click</button>
           <button class="metro-sound-opt" data-sound="beep">Beep</button>
           <button class="metro-sound-opt" data-sound="wood">Wood</button>
+        </div>
+      </div>
+      <div class="metro-subdiv-row">
+        <span class="metro-subdiv-label">♪</span>
+        <div class="metro-subdiv-opts">
+          <button class="metro-subdiv-opt" data-subdiv="quarter">♩ 1/4</button>
+          <button class="metro-subdiv-opt" data-subdiv="eighth">♪ 1/8</button>
         </div>
       </div>
     </div>
@@ -5127,8 +5159,10 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 (function() {
   const METRO_KEY        = 'bandnotes_metro_bpm';
   const METRO_SOUND_KEY  = 'bandnotes_metro_sound';
-  let metroBpm     = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
+  const METRO_SUBDIV_KEY = 'bandnotes_metro_subdiv';
+  let metroBpm       = Math.min(300, Math.max(20, parseInt(localStorage.getItem(METRO_KEY) || '120', 10)));
   let metroSoundMode = localStorage.getItem(METRO_SOUND_KEY) || 'click';  // 'off'|'click'|'beep'|'wood'
+  let metroSubdiv    = localStorage.getItem(METRO_SUBDIV_KEY) || 'quarter'; // 'quarter'|'eighth'
   let metroRunning = false;
   let flashTimer   = null;
   let audioCtx     = null;
@@ -5143,6 +5177,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   const btnDown     = document.getElementById('metro-bpm-down');
   const toggleBtn   = document.getElementById('metro-toggle');
   const soundOpts   = popover.querySelectorAll('.metro-sound-opt');
+  const subdivOpts  = popover.querySelectorAll('.metro-subdiv-opt');
 
   // Init display
   bpmInput.value = metroBpm;
@@ -5150,7 +5185,11 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   function refreshSoundOpts() {
     soundOpts.forEach(b => b.classList.toggle('active', b.dataset.sound === metroSoundMode));
   }
+  function refreshSubdivOpts() {
+    subdivOpts.forEach(b => b.classList.toggle('active', b.dataset.subdiv === metroSubdiv));
+  }
   refreshSoundOpts();
+  refreshSubdivOpts();
 
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -5170,6 +5209,14 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
       localStorage.setItem(METRO_SOUND_KEY, metroSoundMode);
       refreshSoundOpts();
       if (metroSoundMode !== 'off') playClick();
+    });
+  });
+  subdivOpts.forEach(btn => {
+    btn.addEventListener('click', () => {
+      metroSubdiv = btn.dataset.subdiv;
+      localStorage.setItem(METRO_SUBDIV_KEY, metroSubdiv);
+      refreshSubdivOpts();
+      if (metroRunning) restartTick();
     });
   });
 
@@ -5260,7 +5307,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     if (!metroRunning) return;
     try {
       const ctx      = getAudioCtx();
-      const interval = 60 / metroBpm;
+      const interval = (60 / metroBpm) / (metroSubdiv === 'eighth' ? 2 : 1);
       while (nextBeatTime < ctx.currentTime + LOOKAHEAD) {
         scheduleClick(nextBeatTime);
         // Schedule visual flash at the right moment

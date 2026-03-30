@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.65</div>
+  <div class="version-badge">V 3.66</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2988,9 +2988,9 @@ function alignSelected(dir) {
   if (!sess || selectedAnnIds.size < 2) return;
   const selected = sess.annotations.filter(a => selectedAnnIds.has(a.id));
   let target;
-  if (dir === 'left')        target = Math.min(...selected.map(a => a.xPct));
-  else if (dir === 'right')  target = Math.max(...selected.map(a => a.xPct));
-  else                       target = selected.reduce((sum, a) => sum + a.xPct, 0) / selected.length;
+  if (dir === 'left')        target = 0.02;
+  else if (dir === 'right')  target = 0.95;
+  else                       target = 0.5;
   selected.forEach(a => { a.xPct = target; });
   saveCurrentSession();
   redrawAllAnnotations();

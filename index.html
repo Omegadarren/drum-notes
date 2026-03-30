@@ -1579,7 +1579,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.75</div>
+  <div class="version-badge">V 3.76</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5507,7 +5507,8 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
   // Start/stop toggle
   toggleBtn.addEventListener('click', () => {
-    if (metroRunning) stopTick(); else startTick();
+    if (metroRunning) stopTick();
+    else { unlockAudioCtx(); startTick(); }
   });
 
   // Stop metronome when leaving viewer

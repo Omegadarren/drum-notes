@@ -318,6 +318,22 @@ hr {
   touch-action: manipulation;
 }
 .print-btn:hover { opacity: 0.88; }
+.close-btn {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 36px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.close-btn:active { opacity: 0.65; }
 
 /* ═══════════════════════════════════════════════════════════
    PRINT STYLES — clean white-on-white A4 / Letter layout
@@ -331,6 +347,7 @@ hr {
   }
   .page-wrap { padding: 0; max-width: 100%; }
   .print-btn { display: none !important; }
+  .close-btn  { display: none !important; }
 
   /* Cover */
   .cover {
@@ -431,6 +448,8 @@ hr {
 
   <!-- Print / Save PDF button (screen only) -->
   <button class="print-btn" onclick="window.print()">🖨️ &nbsp;Print / Save as PDF</button>
+  <!-- Close button — handy when manual is opened as a new tab on iOS with no browser chrome -->
+  <button class="close-btn" onclick="window.close()">✕ &nbsp;Close Manual</button>
 
   <!-- ═══════════════ COVER ═══════════════ -->
   <div class="cover">

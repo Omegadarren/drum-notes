@@ -3741,6 +3741,7 @@ function goBack() {
   if (app.pendingAnn) cancelAnn();
   exitSelectMode();
   undoStack = []; redoStack = []; updateUndoRedoBtns();
+  if (window.metroStop) window.metroStop();
   if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(null);
   saveCurrentSession();
   const sess = currentSession();

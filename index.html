@@ -1597,14 +1597,25 @@
     font-size:13px; color:var(--muted); text-align:center; padding:10px 16px 6px;
     line-height:1.5;
   }
-  .arr-thumb-row { position:relative; }
-  .arr-thumb-img  { display:block; width:100%; }
-  .arr-split-zone { display:flex; align-items:center; padding:6px 12px; }
-  .arr-split-btn {
-    flex:1; background:none; border:1px dashed var(--border); border-radius:8px;
-    color:var(--muted); font-size:13px; padding:7px 0; cursor:pointer; touch-action:manipulation;
+  .arr-thumb-row { position:relative; cursor:crosshair; }
+  .arr-thumb-img  { display:block; width:100%; pointer-events:none; }
+  /* Click-anywhere cut overlays */
+  .arr-cut { position:absolute; left:0; right:0; z-index:4; pointer-events:none; }
+  .arr-cut-bar { height:3px; background:var(--accent); }
+  .arr-cut-tag {
+    display:flex; align-items:center; gap:4px; pointer-events:auto;
+    background:var(--accent); padding:3px 6px 3px 8px;
+    font-size:11px; font-weight:700; width:fit-content; max-width:min(260px,80%);
   }
-  .arr-split-btn:active { background:var(--surface); }
+  .arr-cut-tag .arr-section-name-input {
+    font-size:12px; border-bottom-color:rgba(255,255,255,0.4);
+    font-weight:700; color:#fff; min-width:60px;
+  }
+  .arr-cut-tag .arr-section-remove-btn { color:rgba(255,255,255,0.8); font-size:15px; }
+  .arr-hover-line {
+    position:absolute; left:0; right:0; height:2px;
+    background:rgba(229,57,53,0.55); pointer-events:none; z-index:3; display:none;
+  }
   .arr-section-header {
     display:flex; align-items:center; gap:8px; padding:7px 12px;
     background:rgba(229,57,53,0.07); border-left:3px solid var(--accent); margin:4px 0;
@@ -1686,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.90</div>
+  <div class="version-badge">V 3.91</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5482,7 +5493,7 @@ async function openArrangeScreen(songId, song, pdfData) {
     arrState.numPages = arrState.pdfDoc.numPages;
     // Initial state: one section = the whole song
     const firstId = genId();
-    arrState.sections    = [{ id: firstId, name: song.name, startPage: 0 }];
+    arrState.sections    = [{ id: firstId, name: song.name, startPage: 0, startY: 0 }];
     arrState.arrangement = [{ instanceId: genId(), sectionId: firstId }];
     await arrRenderThumbs();
     setLoading(false);
@@ -5515,17 +5526,37 @@ async function arrRenderThumbs() {
 
 // Returns sorted sections for internal use
 function arrSortedSections() {
-  return [...arrState.sections].sort((a, b) => a.startPage - b.startPage);
+  return [...arrState.sections].sort((a, b) =>
+    a.startPage !== b.startPage ? a.startPage - b.startPage : (a.startY || 0) - (b.startY || 0)
+  );
 }
 
-// Returns 0-based page indexes belonging to a section
-function arrGetSectionPages(sec) {
-  const sorted = arrSortedSections();
-  const i      = sorted.findIndex(s => s.id === sec.id);
-  const end    = i < sorted.length - 1 ? sorted[i + 1].startPage - 1 : arrState.numPages - 1;
-  const pages  = [];
-  for (let p = sec.startPage; p <= end; p++) pages.push(p);
-  return pages;
+// Returns [{pageIndex, topY, bottomY}] where topY/bottomY are fractions 0.0–1.0 from top
+function arrGetSectionCrops(sec) {
+  const sorted    = arrSortedSections();
+  const i         = sorted.findIndex(s => s.id === sec.id);
+  const next      = i < sorted.length - 1 ? sorted[i + 1] : null;
+  const startPage = sec.startPage;
+  const startY    = sec.startY || 0;
+  const result    = [];
+  if (!next) {
+    result.push({ pageIndex: startPage, topY: startY, bottomY: 1.0 });
+    for (let p = startPage + 1; p < arrState.numPages; p++)
+      result.push({ pageIndex: p, topY: 0, bottomY: 1.0 });
+  } else {
+    const endPage = next.startPage;
+    const endY    = next.startY || 0;
+    if (startPage === endPage) {
+      result.push({ pageIndex: startPage, topY: startY, bottomY: endY });
+    } else {
+      result.push({ pageIndex: startPage, topY: startY, bottomY: 1.0 });
+      for (let p = startPage + 1; p < endPage; p++)
+        result.push({ pageIndex: p, topY: 0, bottomY: 1.0 });
+      if (endY > 0)
+        result.push({ pageIndex: endPage, topY: 0, bottomY: endY });
+    }
+  }
+  return result;
 }
 
 function arrShowTab(tab) {
@@ -5544,73 +5575,125 @@ function arrBuildSlicerPanel(body) {
 
   const hintEl = document.createElement('div');
   hintEl.className   = 'arr-slicer-hint';
-  hintEl.textContent = 'Name the first section below, then tap ÷ Split between pages to cut more sections.';
+  hintEl.textContent = 'Click anywhere on a page to add a section split. Click a split\'s ✕ to remove it.';
   wrap.appendChild(hintEl);
 
-  const sorted = arrSortedSections();
+  // First section header — always shown above page 0
+  const sorted0    = arrSortedSections();
+  const firstSec   = sorted0[0];
+  const firstHdr   = document.createElement('div');
+  firstHdr.className = 'arr-section-header';
+  const firstInp   = document.createElement('input');
+  firstInp.className   = 'arr-section-name-input';
+  firstInp.value       = firstSec.name;
+  firstInp.placeholder = 'Section name…';
+  firstInp.addEventListener('input',   e => { firstSec.name = e.target.value; });
+  firstInp.addEventListener('keydown', e => e.stopPropagation());
+  firstHdr.appendChild(firstInp);
+  wrap.appendChild(firstHdr);
 
   for (let pi = 0; pi < arrState.numPages; pi++) {
-    // Section header if a section starts on this page
-    const sec = sorted.find(s => s.startPage === pi);
-    if (sec) {
-      const hdr = document.createElement('div');
-      hdr.className = 'arr-section-header';
-
-      const inp = document.createElement('input');
-      inp.className   = 'arr-section-name-input';
-      inp.value       = sec.name;
-      inp.placeholder = 'Section name…';
-      inp.addEventListener('input',   e => { sec.name = e.target.value; });
-      inp.addEventListener('keydown', e => e.stopPropagation());
-      hdr.appendChild(inp);
-
-      if (sec.startPage !== 0) {
-        // First section cannot be removed
-        const rmBtn = document.createElement('button');
-        rmBtn.className   = 'arr-section-remove-btn';
-        rmBtn.title       = 'Remove this split';
-        rmBtn.textContent = '✕';
-        rmBtn.addEventListener('click', () => {
-          arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
-          arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
-          if (!arrState.arrangement.length)
-            arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
-          arrShowTab('slice');
-        });
-        hdr.appendChild(rmBtn);
-      }
-      wrap.appendChild(hdr);
-    }
-
-    // Page thumbnail
     const row = document.createElement('div');
     row.className = 'arr-thumb-row';
+
+    // Page image — pointer-events:none so clicks reach the row div
     const img = document.createElement('img');
     img.className = 'arr-thumb-img';
     img.src       = arrState.pageThumbs[pi];
     img.alt       = `Page ${pi + 1}`;
     row.appendChild(img);
-    wrap.appendChild(row);
 
-    // Split zone after every page except the last
-    if (pi < arrState.numPages - 1) {
-      const nextSec = sorted.find(s => s.startPage === pi + 1);
-      if (!nextSec) {
-        const zone = document.createElement('div');
-        zone.className = 'arr-split-zone';
-        const btn = document.createElement('button');
-        btn.className   = 'arr-split-btn';
-        btn.textContent = `÷  Split after page ${pi + 1}`;
-        btn.addEventListener('click', () => {
-          const newSec = { id: genId(), name: `Section ${arrState.sections.length + 1}`, startPage: pi + 1 };
-          arrState.sections.push(newSec);
-          arrState.arrangement.push({ instanceId: genId(), sectionId: newSec.id });
-          arrShowTab('slice');
-        });
-        zone.appendChild(btn);
-        wrap.appendChild(zone);
-      }
-    }
+    // Hover preview line
+    const hoverLine = document.createElement('div');
+    hoverLine.className = 'arr-hover-line';
+    row.appendChild(hoverLine);
+
+    // Overlay cut lines for every section starting on this page (skip first section)
+    const sorted = arrSortedSections();
+    sorted.forEach(sec => {
+      if (sec.startPage !== pi || sec.id === sorted[0].id) return;
+      const cutDiv  = document.createElement('div');
+      cutDiv.className  = 'arr-cut';
+      cutDiv.style.top  = `${(sec.startY || 0) * 100}%`;
+
+      const bar = document.createElement('div');
+      bar.className = 'arr-cut-bar';
+      cutDiv.appendChild(bar);
+
+      const tag      = document.createElement('div');
+      tag.className  = 'arr-cut-tag';
+
+      const nameInp  = document.createElement('input');
+      nameInp.className   = 'arr-section-name-input';
+      nameInp.value       = sec.name;
+      nameInp.placeholder = 'Section name…';
+      nameInp.addEventListener('input',     e => { sec.name = e.target.value; });
+      nameInp.addEventListener('keydown',   e => e.stopPropagation());
+      nameInp.addEventListener('click',     e => e.stopPropagation());
+      nameInp.addEventListener('mousedown', e => e.stopPropagation());
+      nameInp.addEventListener('touchstart',e => e.stopPropagation());
+
+      const rmBtn    = document.createElement('button');
+      rmBtn.className   = 'arr-section-remove-btn';
+      rmBtn.textContent = '✕';
+      rmBtn.title       = 'Remove this split';
+      rmBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
+        arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
+        if (!arrState.arrangement.length)
+          arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
+        arrShowTab('slice');
+      });
+
+      tag.appendChild(nameInp);
+      tag.appendChild(rmBtn);
+      cutDiv.appendChild(tag);
+      row.appendChild(cutDiv);
+    });
+
+    // Mouse: show hover line
+    row.addEventListener('mousemove', e => {
+      const rect = row.getBoundingClientRect();
+      hoverLine.style.top     = `${e.clientY - rect.top}px`;
+      hoverLine.style.display = 'block';
+    });
+    row.addEventListener('mouseleave', () => { hoverLine.style.display = 'none'; });
+
+    // Touch: show hover line
+    row.addEventListener('touchmove', e => {
+      const rect  = row.getBoundingClientRect();
+      const touch = e.touches[0];
+      hoverLine.style.top     = `${touch.clientY - rect.top}px`;
+      hoverLine.style.display = 'block';
+    }, { passive: true });
+    row.addEventListener('touchend', () => { hoverLine.style.display = 'none'; });
+
+    // Click / tap: add a split
+    row.addEventListener('click', e => {
+      const rect = row.getBoundingClientRect();
+      let yFrac  = (e.clientY - rect.top) / rect.height;
+      yFrac = Math.max(0, Math.min(1, yFrac));
+      if (yFrac < 0.03) yFrac = 0.0;
+
+      // Don't add if a section already exists within 2.5% of this position on this page
+      const tooClose = arrState.sections.some(
+        s => s.startPage === pi && Math.abs((s.startY || 0) - yFrac) < 0.025
+      );
+      if (tooClose) return;
+
+      const newSec = {
+        id:        genId(),
+        name:      `Section ${arrState.sections.length + 1}`,
+        startPage: pi,
+        startY:    yFrac,
+      };
+      arrState.sections.push(newSec);
+      arrState.arrangement.push({ instanceId: genId(), sectionId: newSec.id });
+      arrShowTab('slice');
+    });
+
+    wrap.appendChild(row);
   }
   body.appendChild(wrap);
 }
@@ -5654,7 +5737,7 @@ function arrRenderSectionList() {
   arrState.arrangement.forEach((item, idx) => {
     const sec = arrState.sections.find(s => s.id === item.sectionId);
     if (!sec) return;
-    const pageCount = arrGetSectionPages(sec).length;
+    const pageCount = arrGetSectionCrops(sec).length;
 
     const card = document.createElement('div');
     card.className   = 'arr-section-card';
@@ -5718,12 +5801,12 @@ function arrRenderPreview(previewEl) {
     lbl.className   = 'arr-preview-section-label';
     lbl.textContent = sec.name;
     previewEl.appendChild(lbl);
-    arrGetSectionPages(sec).forEach(pi => {
+    arrGetSectionCrops(sec).forEach(crop => {
       const img = document.createElement('img');
       img.className     = 'arr-preview-img';
       img.style.cssText = 'display:block;width:100%;';
-      img.src           = arrState.pageThumbs[pi];
-      img.alt           = `Page ${pi + 1}`;
+      img.src           = arrState.pageThumbs[crop.pageIndex];
+      img.alt           = `Page ${crop.pageIndex + 1}`;
       previewEl.appendChild(img);
     });
   });
@@ -5744,17 +5827,43 @@ async function arrSaveArrangement() {
     const srcDoc = await PDFDocument.load(srcBytes);
     const newDoc = await PDFDocument.create();
 
-    // Collect page indexes in arrangement order
-    const pageIdxs = [];
     for (const item of arrState.arrangement) {
       const sec = arrState.sections.find(s => s.id === item.sectionId);
-      if (sec) arrGetSectionPages(sec).forEach(pi => pageIdxs.push(pi));
+      if (!sec) continue;
+      for (const crop of arrGetSectionCrops(sec)) {
+        const [page] = await newDoc.copyPages(srcDoc, [crop.pageIndex]);
+        if (crop.topY > 0 || crop.bottomY < 1) {
+          const { width, height } = page.getSize();
+          // PDF y=0 is bottom-left; screen topY=0 maps to PDF y=height
+          const pdfBottom  = (1 - crop.bottomY) * height;
+          const cropHeight = (crop.bottomY - crop.topY) * height;
+          page.setMediaBox(0, pdfBottom, width, cropHeight);
+        }
+        newDoc.addPage(page);
+      }
     }
 
-    const copied = await newDoc.copyPages(srcDoc, pageIdxs);
-    copied.forEach(p => newDoc.addPage(p));
-
     const pdfBytes = await newDoc.save();
+
+    setLoading(true, 'Uploading…');
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    await storage.ref(arrState.song.storagePath).put(blob, { contentType: 'application/pdf' });
+
+    // Update local cache
+    let binary = '';
+    for (let i = 0; i < pdfBytes.length; i += 8192)
+      binary += String.fromCharCode(...pdfBytes.subarray(i, i + 8192));
+    const newPdfData = 'data:application/pdf;base64,' + btoa(binary);
+    cacheSongPdf(currentGroupId, arrState.songId, arrState.song.name, newPdfData);
+
+    setLoading(false);
+    hint(`✓ "${arrState.song.name}" saved with new arrangement!`, 3500);
+    closeArrangeScreen();
+  } catch (err) {
+    setLoading(false);
+    alert('Save failed: ' + err.message);
+  }
+}
 
     setLoading(true, 'Uploading…');
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });

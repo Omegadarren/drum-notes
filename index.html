@@ -9,6 +9,7 @@
   <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <!-- Firebase v10 compat (no bundler needed) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1575,6 +1576,89 @@
     }
   }
 
+  /* ==================== ARRANGEMENT SCREEN ==================== */
+  #arrange-screen { display:none; position:fixed; inset:0; background:var(--bg); z-index:130; flex-direction:column; }
+  #arrange-screen.active { display:flex; }
+
+  .arrange-tabs {
+    display:flex; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .arrange-tab {
+    flex:1; border:none; background:none; color:var(--muted); font-size:15px; font-weight:600;
+    padding:11px 0; cursor:pointer; border-bottom:3px solid transparent; touch-action:manipulation;
+  }
+  .arrange-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  .arrange-body { display:flex; flex:1; overflow:hidden; }
+
+  /* Slicer panel */
+  .arr-slicer-wrap { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .arr-slicer-hint {
+    font-size:13px; color:var(--muted); text-align:center; padding:10px 16px 6px;
+    line-height:1.5;
+  }
+  .arr-thumb-row { position:relative; }
+  .arr-thumb-img  { display:block; width:100%; }
+  .arr-split-zone { display:flex; align-items:center; padding:6px 12px; }
+  .arr-split-btn {
+    flex:1; background:none; border:1px dashed var(--border); border-radius:8px;
+    color:var(--muted); font-size:13px; padding:7px 0; cursor:pointer; touch-action:manipulation;
+  }
+  .arr-split-btn:active { background:var(--surface); }
+  .arr-section-header {
+    display:flex; align-items:center; gap:8px; padding:7px 12px;
+    background:rgba(229,57,53,0.07); border-left:3px solid var(--accent); margin:4px 0;
+  }
+  .arr-section-name-input {
+    flex:1; background:none; border:none; border-bottom:1px solid var(--border);
+    color:var(--text); font-size:15px; font-weight:700; outline:none; padding:2px 4px;
+  }
+  .arr-section-name-input:focus { border-bottom-color:var(--accent); }
+  .arr-section-remove-btn {
+    background:none; border:none; color:var(--muted); font-size:18px;
+    cursor:pointer; padding:4px 8px; touch-action:manipulation;
+  }
+  .arr-section-remove-btn:active { color:var(--accent); }
+
+  /* Arranger — left section list */
+  .arr-left {
+    width:44%; flex-shrink:0; border-right:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .arr-left-label {
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--muted); padding:8px 14px; border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .arr-section-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:4px 0; }
+  .arr-section-card {
+    display:flex; align-items:center; gap:8px; padding:11px 12px;
+    border-bottom:1px solid var(--border); background:var(--bg); user-select:none;
+    cursor:grab; touch-action:manipulation;
+  }
+  .arr-section-card.dragging   { opacity:0.35; }
+  .arr-section-card.drag-over  { border-top:2px solid var(--accent); }
+  .arr-drag-handle { color:var(--muted); font-size:18px; flex-shrink:0; }
+  .arr-card-name   { flex:1; font-size:15px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .arr-card-meta   { font-size:11px; color:var(--muted); flex-shrink:0; }
+  .arr-card-btn {
+    background:none; border:1px solid var(--border); border-radius:6px; color:var(--muted);
+    font-size:14px; padding:4px 8px; cursor:pointer; flex-shrink:0; touch-action:manipulation;
+  }
+  .arr-card-btn:active { background:var(--surface); }
+
+  /* Arranger — right preview */
+  .arr-right { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; background:var(--pdf-bg); }
+  .arr-preview-label {
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--muted); padding:8px 14px; border-bottom:1px solid var(--border);
+    background:var(--bg); position:sticky; top:0; z-index:2;
+  }
+  .arr-preview-section-label {
+    font-size:12px; font-weight:700; color:var(--accent); padding:5px 10px;
+    background:rgba(229,57,53,0.08); border-left:3px solid var(--accent);
+    position:sticky; top:34px; z-index:1;
+  }
+
   </style>
 </head>
 <body>
@@ -1602,7 +1686,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.89</div>
+  <div class="version-badge">V 3.90</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1801,6 +1885,20 @@
     <div class="groups-section-label">All Songs</div>
     <div id="song-library-list"><div class="groups-empty">Loading…</div></div>
   </div>
+</div>
+
+<!-- ==================== ARRANGE SCREEN ==================== -->
+<div id="arrange-screen">
+  <div class="ghdr">
+    <div class="ghdr-back" id="btn-arrange-back">‹</div>
+    <div class="ghdr-title" id="arrange-title">Arrange</div>
+    <button class="ghdr-action" id="btn-arrange-save">💾 Save</button>
+  </div>
+  <div class="arrange-tabs">
+    <button class="arrange-tab active" id="arr-tab-slice">1 · Slice</button>
+    <button class="arrange-tab" id="arr-tab-arrange">2 · Arrange</button>
+  </div>
+  <div class="arrange-body" id="arrange-body"></div>
 </div>
 
 <!-- ==================== UPLOAD SONG MODAL ==================== -->
@@ -5186,6 +5284,7 @@ async function loadSongLibrary(gid, isAdmin) {
           <div class="song-row-meta">${count > 0 ? `🎤 Played ${count}×` : 'Tap to open'}</div>
         </div>
         ${count > 0 ? `<button class="song-action-btn" data-action="history" title="View setlist history">🎤</button>` : ''}
+        ${isAdmin ? `<button class="song-action-btn" data-action="arrange" title="Arrange sections">✂️</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="rename" title="Rename">✏️</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="delete" title="Delete">🗑</button>` : ''}
         <div class="group-row-arrow">›</div>`;
@@ -5209,6 +5308,10 @@ async function loadSongLibrary(gid, isAdmin) {
       }
 
       if (isAdmin) {
+        row.querySelector('[data-action="arrange"]').addEventListener('click', e => {
+          e.stopPropagation();
+          openArrangeForSong(doc.id, song);
+        });
         row.querySelector('[data-action="rename"]').addEventListener('click', e => {
           e.stopPropagation();
           document.getElementById('inp-rename-song').value = song.name;
@@ -5319,6 +5422,372 @@ async function openLibrarySong(songId, song) {
     setLoading(false);
   }
 }
+
+// ─────────────────── Arrangement ─────────────────────────
+let arrState = null;
+
+// Open the arrange screen: fetch PDF then launch slicer
+async function openArrangeForSong(songId, song) {
+  setLoading(true, 'Loading song…');
+  try {
+    let pdfData = null;
+    try {
+      const url = await storage.ref(song.storagePath).getDownloadURL();
+      const buf = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onload  = () => xhr.status === 200 ? resolve(xhr.response) : reject(new Error('HTTP ' + xhr.status));
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.send();
+      });
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192)
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      pdfData = 'data:application/pdf;base64,' + btoa(binary);
+    } catch {
+      const cached = await getCachedSongPdf(currentGroupId, songId);
+      if (cached) pdfData = cached.pdfData;
+    }
+    if (!pdfData) { setLoading(false); alert('Could not load PDF (no cached copy available).'); return; }
+    setLoading(false);
+    openArrangeScreen(songId, song, pdfData);
+  } catch (err) {
+    setLoading(false);
+    alert('Error loading song: ' + err.message);
+  }
+}
+
+async function openArrangeScreen(songId, song, pdfData) {
+  arrState = {
+    songId, song, pdfData,
+    pdfDoc:     null,
+    numPages:   0,
+    pageThumbs: [],   // data-URL per page
+    sections:   [],   // [{ id, name, startPage }] sorted by startPage
+    arrangement:[],   // [{ instanceId, sectionId }] — the play order
+  };
+  document.getElementById('arrange-title').textContent = song.name;
+  document.getElementById('song-library-screen').classList.remove('active');
+  document.getElementById('arrange-screen').classList.add('active');
+
+  setLoading(true, 'Rendering pages…');
+  try {
+    const base64 = pdfData.replace(/^data:application\/pdf;base64,/, '');
+    const bStr   = atob(base64);
+    const bytes  = new Uint8Array(bStr.length);
+    for (let i = 0; i < bStr.length; i++) bytes[i] = bStr.charCodeAt(i);
+    arrState.pdfDoc   = await pdfjsLib.getDocument({ data: bytes }).promise;
+    arrState.numPages = arrState.pdfDoc.numPages;
+    // Initial state: one section = the whole song
+    const firstId = genId();
+    arrState.sections    = [{ id: firstId, name: song.name, startPage: 0 }];
+    arrState.arrangement = [{ instanceId: genId(), sectionId: firstId }];
+    await arrRenderThumbs();
+    setLoading(false);
+    arrShowTab('slice');
+  } catch (err) {
+    setLoading(false);
+    alert('Could not parse PDF: ' + err.message);
+    closeArrangeScreen();
+  }
+}
+
+async function arrRenderThumbs() {
+  arrState.pageThumbs = [];
+  const bodyW  = document.getElementById('arrange-body').clientWidth || window.innerWidth;
+  const thumbW = Math.min(700, bodyW);
+  const DPR    = window.devicePixelRatio || 1;
+  for (let i = 1; i <= arrState.numPages; i++) {
+    const page   = await arrState.pdfDoc.getPage(i);
+    const vp0    = page.getViewport({ scale: 1 });
+    const scale  = (thumbW / vp0.width) * DPR;
+    const vp     = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width  = vp.width;
+    canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    arrState.pageThumbs.push(canvas.toDataURL('image/jpeg', 0.82));
+    canvas.width = canvas.height = 0; // free GPU memory
+  }
+}
+
+// Returns sorted sections for internal use
+function arrSortedSections() {
+  return [...arrState.sections].sort((a, b) => a.startPage - b.startPage);
+}
+
+// Returns 0-based page indexes belonging to a section
+function arrGetSectionPages(sec) {
+  const sorted = arrSortedSections();
+  const i      = sorted.findIndex(s => s.id === sec.id);
+  const end    = i < sorted.length - 1 ? sorted[i + 1].startPage - 1 : arrState.numPages - 1;
+  const pages  = [];
+  for (let p = sec.startPage; p <= end; p++) pages.push(p);
+  return pages;
+}
+
+function arrShowTab(tab) {
+  document.getElementById('arr-tab-slice').classList.toggle('active',   tab === 'slice');
+  document.getElementById('arr-tab-arrange').classList.toggle('active', tab === 'arrange');
+  const body = document.getElementById('arrange-body');
+  body.innerHTML = '';
+  if (tab === 'slice') arrBuildSlicerPanel(body);
+  else                 arrBuildArrangerPanel(body);
+}
+
+// ── Slicer tab ──
+function arrBuildSlicerPanel(body) {
+  const wrap = document.createElement('div');
+  wrap.className = 'arr-slicer-wrap';
+
+  const hintEl = document.createElement('div');
+  hintEl.className   = 'arr-slicer-hint';
+  hintEl.textContent = 'Name the first section below, then tap ÷ Split between pages to cut more sections.';
+  wrap.appendChild(hintEl);
+
+  const sorted = arrSortedSections();
+
+  for (let pi = 0; pi < arrState.numPages; pi++) {
+    // Section header if a section starts on this page
+    const sec = sorted.find(s => s.startPage === pi);
+    if (sec) {
+      const hdr = document.createElement('div');
+      hdr.className = 'arr-section-header';
+
+      const inp = document.createElement('input');
+      inp.className   = 'arr-section-name-input';
+      inp.value       = sec.name;
+      inp.placeholder = 'Section name…';
+      inp.addEventListener('input',   e => { sec.name = e.target.value; });
+      inp.addEventListener('keydown', e => e.stopPropagation());
+      hdr.appendChild(inp);
+
+      if (sec.startPage !== 0) {
+        // First section cannot be removed
+        const rmBtn = document.createElement('button');
+        rmBtn.className   = 'arr-section-remove-btn';
+        rmBtn.title       = 'Remove this split';
+        rmBtn.textContent = '✕';
+        rmBtn.addEventListener('click', () => {
+          arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
+          arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
+          if (!arrState.arrangement.length)
+            arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
+          arrShowTab('slice');
+        });
+        hdr.appendChild(rmBtn);
+      }
+      wrap.appendChild(hdr);
+    }
+
+    // Page thumbnail
+    const row = document.createElement('div');
+    row.className = 'arr-thumb-row';
+    const img = document.createElement('img');
+    img.className = 'arr-thumb-img';
+    img.src       = arrState.pageThumbs[pi];
+    img.alt       = `Page ${pi + 1}`;
+    row.appendChild(img);
+    wrap.appendChild(row);
+
+    // Split zone after every page except the last
+    if (pi < arrState.numPages - 1) {
+      const nextSec = sorted.find(s => s.startPage === pi + 1);
+      if (!nextSec) {
+        const zone = document.createElement('div');
+        zone.className = 'arr-split-zone';
+        const btn = document.createElement('button');
+        btn.className   = 'arr-split-btn';
+        btn.textContent = `÷  Split after page ${pi + 1}`;
+        btn.addEventListener('click', () => {
+          const newSec = { id: genId(), name: `Section ${arrState.sections.length + 1}`, startPage: pi + 1 };
+          arrState.sections.push(newSec);
+          arrState.arrangement.push({ instanceId: genId(), sectionId: newSec.id });
+          arrShowTab('slice');
+        });
+        zone.appendChild(btn);
+        wrap.appendChild(zone);
+      }
+    }
+  }
+  body.appendChild(wrap);
+}
+
+// ── Arranger tab ──
+function arrBuildArrangerPanel(body) {
+  // Left: draggable section list
+  const left = document.createElement('div');
+  left.className = 'arr-left';
+  const leftLabel = document.createElement('div');
+  leftLabel.className   = 'arr-left-label';
+  leftLabel.textContent = 'Order — drag to rearrange · + to repeat';
+  left.appendChild(leftLabel);
+  const listEl = document.createElement('div');
+  listEl.className = 'arr-section-list';
+  listEl.id        = 'arr-list-inner';
+  left.appendChild(listEl);
+  body.appendChild(left);
+
+  // Right: preview
+  const right = document.createElement('div');
+  right.className = 'arr-right';
+  right.id        = 'arr-preview-pane';
+  const previewLabel = document.createElement('div');
+  previewLabel.className   = 'arr-preview-label';
+  previewLabel.textContent = 'Preview';
+  right.appendChild(previewLabel);
+  body.appendChild(right);
+
+  arrRenderSectionList();
+}
+
+function arrRenderSectionList() {
+  const listEl    = document.getElementById('arr-list-inner');
+  const previewEl = document.getElementById('arr-preview-pane');
+  if (!listEl || !previewEl) return;
+  listEl.innerHTML = '';
+
+  let dragSrcIdx = null;
+
+  arrState.arrangement.forEach((item, idx) => {
+    const sec = arrState.sections.find(s => s.id === item.sectionId);
+    if (!sec) return;
+    const pageCount = arrGetSectionPages(sec).length;
+
+    const card = document.createElement('div');
+    card.className   = 'arr-section-card';
+    card.draggable   = true;
+    card.dataset.idx = String(idx);
+    card.innerHTML = `
+      <span class="arr-drag-handle" title="Drag to reorder">⣿</span>
+      <span class="arr-card-name">${esc(sec.name)}</span>
+      <span class="arr-card-meta">${pageCount}p</span>
+      <button class="arr-card-btn" data-role="dup"  title="Add another copy">+</button>
+      <button class="arr-card-btn" data-role="del"  title="Remove from arrangement">✕</button>`;
+
+    card.addEventListener('dragstart', e => {
+      dragSrcIdx = idx;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      listEl.querySelectorAll('.arr-section-card').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      listEl.querySelectorAll('.arr-section-card').forEach(c => c.classList.remove('drag-over'));
+      if (idx !== dragSrcIdx) card.classList.add('drag-over');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrcIdx === null || dragSrcIdx === idx) return;
+      const moved = arrState.arrangement.splice(dragSrcIdx, 1)[0];
+      arrState.arrangement.splice(idx, 0, moved);
+      dragSrcIdx = null;
+      arrRenderSectionList();
+    });
+
+    card.querySelector('[data-role="dup"]').addEventListener('click', e => {
+      e.stopPropagation();
+      arrState.arrangement.splice(idx + 1, 0, { instanceId: genId(), sectionId: item.sectionId });
+      arrRenderSectionList();
+    });
+    card.querySelector('[data-role="del"]').addEventListener('click', e => {
+      e.stopPropagation();
+      if (arrState.arrangement.length <= 1) { hint('At least one section must remain in the arrangement.'); return; }
+      arrState.arrangement.splice(idx, 1);
+      arrRenderSectionList();
+    });
+
+    listEl.appendChild(card);
+  });
+
+  arrRenderPreview(previewEl);
+}
+
+function arrRenderPreview(previewEl) {
+  previewEl.querySelectorAll('.arr-preview-section-label, .arr-preview-img').forEach(el => el.remove());
+  arrState.arrangement.forEach(item => {
+    const sec = arrState.sections.find(s => s.id === item.sectionId);
+    if (!sec) return;
+    const lbl = document.createElement('div');
+    lbl.className   = 'arr-preview-section-label';
+    lbl.textContent = sec.name;
+    previewEl.appendChild(lbl);
+    arrGetSectionPages(sec).forEach(pi => {
+      const img = document.createElement('img');
+      img.className     = 'arr-preview-img';
+      img.style.cssText = 'display:block;width:100%;';
+      img.src           = arrState.pageThumbs[pi];
+      img.alt           = `Page ${pi + 1}`;
+      previewEl.appendChild(img);
+    });
+  });
+}
+
+// ── Save ──
+async function arrSaveArrangement() {
+  if (!arrState) return;
+  setLoading(true, 'Building PDF…');
+  try {
+    const { PDFDocument } = window.PDFLib;
+
+    const base64  = arrState.pdfData.replace(/^data:application\/pdf;base64,/, '');
+    const bStr    = atob(base64);
+    const srcBytes = new Uint8Array(bStr.length);
+    for (let i = 0; i < bStr.length; i++) srcBytes[i] = bStr.charCodeAt(i);
+
+    const srcDoc = await PDFDocument.load(srcBytes);
+    const newDoc = await PDFDocument.create();
+
+    // Collect page indexes in arrangement order
+    const pageIdxs = [];
+    for (const item of arrState.arrangement) {
+      const sec = arrState.sections.find(s => s.id === item.sectionId);
+      if (sec) arrGetSectionPages(sec).forEach(pi => pageIdxs.push(pi));
+    }
+
+    const copied = await newDoc.copyPages(srcDoc, pageIdxs);
+    copied.forEach(p => newDoc.addPage(p));
+
+    const pdfBytes = await newDoc.save();
+
+    setLoading(true, 'Uploading…');
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    await storage.ref(arrState.song.storagePath).put(blob, { contentType: 'application/pdf' });
+
+    // Update local cache
+    let binary = '';
+    for (let i = 0; i < pdfBytes.length; i += 8192)
+      binary += String.fromCharCode(...pdfBytes.subarray(i, i + 8192));
+    const newPdfData = 'data:application/pdf;base64,' + btoa(binary);
+    cacheSongPdf(currentGroupId, arrState.songId, arrState.song.name, newPdfData);
+
+    setLoading(false);
+    hint(`✓ "${arrState.song.name}" saved with new arrangement!`, 3500);
+    closeArrangeScreen();
+  } catch (err) {
+    setLoading(false);
+    alert('Save failed: ' + err.message);
+  }
+}
+
+function closeArrangeScreen() {
+  document.getElementById('arrange-screen').classList.remove('active');
+  document.getElementById('song-library-screen').classList.add('active');
+  arrState = null;
+}
+
+document.getElementById('btn-arrange-back').addEventListener('click', () => {
+  showConfirm('Discard arrangement?', 'Go back without saving. The original PDF is unchanged.', 'Discard', closeArrangeScreen);
+});
+document.getElementById('btn-arrange-save').addEventListener('click', arrSaveArrangement);
+document.getElementById('arr-tab-slice').addEventListener('click',   () => arrShowTab('slice'));
+document.getElementById('arr-tab-arrange').addEventListener('click', () => arrShowTab('arrange'));
 
 // ── ⚙ Settings button ────────────────────────────────────
 document.getElementById('btn-gd-settings').addEventListener('click', e => {

@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.95</div>
+  <div class="version-badge">V 3.96</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5446,6 +5446,7 @@ async function openLibrarySong(songId, song) {
 
 // ─────────────────── Arrangement ─────────────────────────
 let arrState = null;
+let _previewGen = 0;
 
 // Open the arrange screen: fetch PDF then launch slicer
 async function openArrangeForSong(songId, song) {
@@ -5832,10 +5833,18 @@ function arrCropThumb(dataUrl, topY, bottomY) {
 }
 
 async function arrRenderPreview(previewEl) {
-  previewEl.querySelectorAll('.arr-preview-section-label, .arr-preview-img').forEach(el => el.remove());
-  for (const item of arrState.arrangement) {
-    const sec = arrState.sections.find(s => s.id === item.sectionId);
-    if (!sec) continue;
+  // Claim this generation — any older in-flight render will see a newer gen and abort
+  const myGen = ++_previewGen;
+
+  // Snapshot arrangement+sections NOW (synchronously) so names are always consistent
+  const items = arrState.arrangement.map(item => ({
+    item,
+    sec: arrState.sections.find(s => s.id === item.sectionId),
+  })).filter(x => x.sec);
+
+  // Build DOM elements synchronously so labels appear instantly with correct names
+  previewEl.querySelectorAll('.arr-preview-section-label, .arr-preview-img, .arr-preview-img-wrap').forEach(el => el.remove());
+  for (const { sec } of items) {
     const lbl = document.createElement('div');
     lbl.className   = 'arr-preview-section-label';
     lbl.textContent = sec.name;
@@ -5844,11 +5853,27 @@ async function arrRenderPreview(previewEl) {
       const img = document.createElement('img');
       img.className     = 'arr-preview-img';
       img.style.cssText = 'display:block;width:100%;';
-      img.src = (crop.topY > 0.001 || crop.bottomY < 0.999)
-        ? await arrCropThumb(arrState.pageThumbs[crop.pageIndex], crop.topY, crop.bottomY)
-        : arrState.pageThumbs[crop.pageIndex];
+      img.src = arrState.pageThumbs[crop.pageIndex]; // full thumb immediately
       img.alt = `Page ${crop.pageIndex + 1}`;
+      img.dataset.gen       = String(myGen);
+      img.dataset.topY      = String(crop.topY);
+      img.dataset.bottomY   = String(crop.bottomY);
+      img.dataset.pageIndex = String(crop.pageIndex);
       previewEl.appendChild(img);
+    }
+  }
+
+  // Now async-replace with cropped versions (abort if a newer render has started)
+  const imgEls = previewEl.querySelectorAll('.arr-preview-img');
+  for (const img of imgEls) {
+    if (_previewGen !== myGen) return; // newer render started — stop
+    if (img.dataset.gen !== String(myGen)) continue;
+    const topY    = parseFloat(img.dataset.topY);
+    const bottomY = parseFloat(img.dataset.bottomY);
+    if (topY > 0.001 || bottomY < 0.999) {
+      const cropped = await arrCropThumb(arrState.pageThumbs[parseInt(img.dataset.pageIndex)], topY, bottomY);
+      if (_previewGen !== myGen) return; // abort after await
+      if (img.isConnected) img.src = cropped;
     }
   }
 }

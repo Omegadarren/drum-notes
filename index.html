@@ -4972,6 +4972,12 @@ async function openGroupSetlist(setlistId, sl) {
           }
         } catch {}
 
+        // localStorage fallback: covers members whose Firestore write was denied
+        if (!songBpm && currentGroupId) {
+          const stored = localStorage.getItem('bandnotes_song_bpm_' + currentGroupId + '_' + songId);
+          if (stored) songBpm = parseInt(stored, 10) || null;
+        }
+
         return { sp: { songId, songName, pdfData, bpm: songBpm }, anns, fromCache };
       }));
       for (const result of songResults) {
@@ -6246,8 +6252,10 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     // Update in-memory BPM for current slide immediately
     const slide = app.slides && app.slides[app.slideIdx];
     if (slide) slide.bpm = metroBpm;
-    // Save BPM back to current song in Firestore
+    // Always save BPM locally per-song so it persists even if Firestore write is denied
     if (slide && slide.songId && currentGroupId) {
+      localStorage.setItem('bandnotes_song_bpm_' + currentGroupId + '_' + slide.songId, metroBpm);
+      // Also try to save to Firestore (may silently fail if user is a member, not admin)
       db.collection('groups').doc(currentGroupId).collection('songs')
         .doc(slide.songId).update({ bpm: metroBpm }).catch(() => {});
     }

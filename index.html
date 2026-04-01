@@ -1700,7 +1700,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.01</div>
+  <div class="version-badge">V 4.02</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5638,6 +5638,7 @@ function arrMakeCutEl(sec, row) {
   rmBtn.title       = 'Remove this split';
   rmBtn.addEventListener('click', e => {
     e.stopPropagation();
+    if (arrState.sections.length <= 1) { hint('At least one section must remain.'); return; }
     arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
     arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
     if (!arrState.arrangement.length)
@@ -5674,6 +5675,29 @@ function arrBuildSlicerPanel(body) {
   firstInp.addEventListener('input',   e => { firstSec.name = e.target.value; });
   firstInp.addEventListener('keydown', e => e.stopPropagation());
   firstHdr.appendChild(firstInp);
+  // Allow deleting the first section (if 2+ sections exist);
+  // the next section inherits the start position (page 0, y 0).
+  if (arrState.sections.length > 1) {
+    const rmFirst = document.createElement('button');
+    rmFirst.className   = 'arr-section-remove-btn';
+    rmFirst.textContent = '✕';
+    rmFirst.title       = 'Remove this section (next section will start from the beginning)';
+    rmFirst.addEventListener('click', e => {
+      e.stopPropagation();
+      arrState.sections    = arrState.sections.filter(s => s.id !== firstSec.id);
+      arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== firstSec.id);
+      // Promote the new first sorted section to start from the very beginning
+      const newFirst = arrSortedSections()[0];
+      if (newFirst) { newFirst.startPage = 0; newFirst.startY = 0; }
+      if (!arrState.arrangement.length)
+        arrState.arrangement = [{ instanceId: genId(), sectionId: newFirst ? newFirst.id : arrState.sections[0].id }];
+      // Rebuild the panel so the header reflects the new first section
+      const panelBody = document.getElementById('arrange-body');
+      panelBody.innerHTML = '';
+      arrBuildSlicerPanel(panelBody);
+    });
+    firstHdr.appendChild(rmFirst);
+  }
   wrap.appendChild(firstHdr);
 
   for (let pi = 0; pi < arrState.numPages; pi++) {
@@ -5727,6 +5751,7 @@ function arrBuildSlicerPanel(body) {
       rmBtn.title       = 'Remove this split';
       rmBtn.addEventListener('click', e => {
         e.stopPropagation();
+        if (arrState.sections.length <= 1) { hint('At least one section must remain.'); return; }
         arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
         arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
         if (!arrState.arrangement.length)

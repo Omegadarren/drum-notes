@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.98</div>
+  <div class="version-badge">V 3.99</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5601,6 +5601,54 @@ function arrShowTab(tab) {
   else                 arrBuildArrangerPanel(body);
 }
 
+// Builds and returns a cut-line element for a given section, attached to `row`.
+// `row` is the .arr-thumb-row element for sec.startPage.
+function arrMakeCutEl(sec, row) {
+  const cutDiv = document.createElement('div');
+  cutDiv.className       = 'arr-cut';
+  cutDiv.style.top       = `${(sec.startY || 0) * 100}%`;
+  cutDiv.dataset.secId   = sec.id;
+  cutDiv.addEventListener('click',      e => e.stopPropagation());
+  cutDiv.addEventListener('mousedown',  e => e.stopPropagation());
+  cutDiv.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+
+  const bar = document.createElement('div');
+  bar.className = 'arr-cut-bar';
+  cutDiv.appendChild(bar);
+
+  const tag = document.createElement('div');
+  tag.className = 'arr-cut-tag';
+
+  const nameInp = document.createElement('input');
+  nameInp.className   = 'arr-section-name-input';
+  nameInp.value       = sec.name;
+  nameInp.placeholder = 'Section name…';
+  nameInp.addEventListener('input',     e => { sec.name = e.target.value; });
+  nameInp.addEventListener('keydown',   e => e.stopPropagation());
+  nameInp.addEventListener('click',     e => e.stopPropagation());
+  nameInp.addEventListener('mousedown', e => e.stopPropagation());
+  nameInp.addEventListener('touchstart',e => e.stopPropagation(), { passive: true });
+
+  const rmBtn = document.createElement('button');
+  rmBtn.className   = 'arr-section-remove-btn';
+  rmBtn.textContent = '✕';
+  rmBtn.title       = 'Remove this split';
+  rmBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
+    arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
+    if (!arrState.arrangement.length)
+      arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
+    // Remove just this cut element — no full rebuild, no scroll jump
+    cutDiv.remove();
+  });
+
+  tag.appendChild(nameInp);
+  tag.appendChild(rmBtn);
+  cutDiv.appendChild(tag);
+  return cutDiv;
+}
+
 // ── Slicer tab ──
 function arrBuildSlicerPanel(body) {
   const wrap = document.createElement('div');
@@ -5680,7 +5728,8 @@ function arrBuildSlicerPanel(body) {
         arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
         if (!arrState.arrangement.length)
           arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
-        arrShowTab('slice');
+        // Remove just this cut element — no full rebuild, no scroll jump
+        cutDiv.remove();
       });
 
       tag.appendChild(nameInp);
@@ -5743,7 +5792,8 @@ function arrBuildSlicerPanel(body) {
       const insertAt = parentArrIdx >= 0 ? parentArrIdx + 1 : arrState.arrangement.length;
       arrState.arrangement.splice(insertAt, 0, { instanceId: genId(), sectionId: newSec.id });
 
-      arrShowTab('slice');
+      // Insert cut element directly — no full panel rebuild, no scroll jump
+      row.appendChild(arrMakeCutEl(newSec, row));
     });
 
     wrap.appendChild(row);

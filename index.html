@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.97</div>
+  <div class="version-badge">V 3.98</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5506,10 +5506,21 @@ async function openArrangeScreen(songId, song, pdfData) {
     arrState.numPages = arrState.pdfDoc.numPages;
     // Restore saved sections/arrangement, or initialise fresh
     if (song.arrSections && song.arrSections.length) {
-      arrState.sections    = song.arrSections;
-      arrState.arrangement = (song.arrArrangement && song.arrArrangement.length)
-        ? song.arrArrangement
-        : [{ instanceId: genId(), sectionId: song.arrSections[0].id }];
+      arrState.sections = song.arrSections;
+      // Validate: strip arrangement entries whose sectionId no longer exists in sections
+      let restoredArr = (song.arrArrangement || []).filter(a =>
+        arrState.sections.some(s => s.id === a.sectionId)
+      );
+      // Also ensure every section appears at least once in the arrangement
+      const allPresent = arrState.sections.every(s => restoredArr.some(a => a.sectionId === s.id));
+      if (!restoredArr.length || !allPresent) {
+        // Fall back to page order — one entry per section
+        const sorted = [...arrState.sections].sort((a, b) =>
+          a.startPage !== b.startPage ? a.startPage - b.startPage : (a.startY || 0) - (b.startY || 0)
+        );
+        restoredArr = sorted.map(s => ({ instanceId: genId(), sectionId: s.id }));
+      }
+      arrState.arrangement = restoredArr;
     } else {
       const firstId = genId();
       arrState.sections    = [{ id: firstId, name: song.name, startPage: 0, startY: 0 }];
@@ -5637,6 +5648,10 @@ function arrBuildSlicerPanel(body) {
       const cutDiv  = document.createElement('div');
       cutDiv.className  = 'arr-cut';
       cutDiv.style.top  = `${(sec.startY || 0) * 100}%`;
+      // Stop clicks on the cut line from bubbling to the row (which would add a new section)
+      cutDiv.addEventListener('click',      e => e.stopPropagation());
+      cutDiv.addEventListener('mousedown',  e => e.stopPropagation());
+      cutDiv.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
 
       const bar = document.createElement('div');
       bar.className = 'arr-cut-bar';
@@ -5850,7 +5865,11 @@ function arrMakeCropEl(crop) {
     'position:absolute',
     'width:100%',
     'display:block',
-    `top:${-crop.topY * aspect * 100}%`,
+    // top% is relative to CONTAINER height, not image height.
+    // container height = visibleFraction * aspect * W
+    // needed offset   = topY * aspect * W
+    // as % of container = topY / visibleFraction * 100
+    `top:${-(crop.topY / (visibleFraction || 1)) * 100}%`,
   ].join(';');
   img.src = arrState.pageThumbs[crop.pageIndex];
   img.alt = `Page ${crop.pageIndex + 1}`;

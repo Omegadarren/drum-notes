@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.93</div>
+  <div class="version-badge">V 3.94</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5779,7 +5779,9 @@ function arrRenderSectionList() {
       e.preventDefault();
       if (dragSrcIdx === null || dragSrcIdx === idx) return;
       const moved = arrState.arrangement.splice(dragSrcIdx, 1)[0];
-      arrState.arrangement.splice(idx, 0, moved);
+      // When dragging downward, removal shifts indices down by 1 — adjust target
+      const insertIdx = dragSrcIdx < idx ? idx - 1 : idx;
+      arrState.arrangement.splice(insertIdx, 0, moved);
       dragSrcIdx = null;
       arrRenderSectionList();
     });

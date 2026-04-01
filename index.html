@@ -5875,26 +5875,6 @@ async function arrSaveArrangement() {
   }
 }
 
-    setLoading(true, 'Uploading…');
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    await storage.ref(arrState.song.storagePath).put(blob, { contentType: 'application/pdf' });
-
-    // Update local cache
-    let binary = '';
-    for (let i = 0; i < pdfBytes.length; i += 8192)
-      binary += String.fromCharCode(...pdfBytes.subarray(i, i + 8192));
-    const newPdfData = 'data:application/pdf;base64,' + btoa(binary);
-    cacheSongPdf(currentGroupId, arrState.songId, arrState.song.name, newPdfData);
-
-    setLoading(false);
-    hint(`✓ "${arrState.song.name}" saved with new arrangement!`, 3500);
-    closeArrangeScreen();
-  } catch (err) {
-    setLoading(false);
-    alert('Save failed: ' + err.message);
-  }
-}
-
 function closeArrangeScreen() {
   document.getElementById('arrange-screen').classList.remove('active');
   document.getElementById('song-library-screen').classList.add('active');

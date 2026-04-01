@@ -3998,12 +3998,22 @@ auth.onAuthStateChanged(user => {
 function waitForAuth() {
   return new Promise((resolve, reject) => {
     if (fbUid) { resolve(fbUid); return; }
+    let settled = false;
     const unsub = auth.onAuthStateChanged(user => {
-      unsub();
-      if (user) { resolve(user.uid); }
-      else { reject(new Error('Not signed in')); }
+      if (user) {
+        settled = true;
+        unsub();
+        resolve(user.uid);
+      } else {
+        // Anonymous sign-in may still be in progress — trigger it and keep waiting
+        auth.signInAnonymously().catch(err => {
+          if (!settled) { settled = true; unsub(); reject(err); }
+        });
+      }
     });
-    setTimeout(() => reject(new Error('Auth timeout')), 10000);
+    setTimeout(() => {
+      if (!settled) { settled = true; unsub(); reject(new Error('Auth timeout')); }
+    }, 10000);
   });
 }
 

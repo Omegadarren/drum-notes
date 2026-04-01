@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.94</div>
+  <div class="version-badge">V 3.95</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5452,8 +5452,10 @@ async function openArrangeForSong(songId, song) {
   setLoading(true, 'Loading song…');
   try {
     let pdfData = null;
+    // Always load the untouched original if we have one, so slices are always relative to the source PDF
+    const srcPath = song.originalStoragePath || song.storagePath;
     try {
-      const url = await storage.ref(song.storagePath).getDownloadURL();
+      const url = await storage.ref(srcPath).getDownloadURL();
       const buf = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url, true);
@@ -5501,10 +5503,17 @@ async function openArrangeScreen(songId, song, pdfData) {
     for (let i = 0; i < bStr.length; i++) bytes[i] = bStr.charCodeAt(i);
     arrState.pdfDoc   = await pdfjsLib.getDocument({ data: bytes }).promise;
     arrState.numPages = arrState.pdfDoc.numPages;
-    // Initial state: one section = the whole song
-    const firstId = genId();
-    arrState.sections    = [{ id: firstId, name: song.name, startPage: 0, startY: 0 }];
-    arrState.arrangement = [{ instanceId: genId(), sectionId: firstId }];
+    // Restore saved sections/arrangement, or initialise fresh
+    if (song.arrSections && song.arrSections.length) {
+      arrState.sections    = song.arrSections;
+      arrState.arrangement = (song.arrArrangement && song.arrArrangement.length)
+        ? song.arrArrangement
+        : [{ instanceId: genId(), sectionId: song.arrSections[0].id }];
+    } else {
+      const firstId = genId();
+      arrState.sections    = [{ id: firstId, name: song.name, startPage: 0, startY: 0 }];
+      arrState.arrangement = [{ instanceId: genId(), sectionId: firstId }];
+    }
     await arrRenderThumbs();
     setLoading(false);
     arrShowTab('slice');
@@ -5804,24 +5813,44 @@ function arrRenderSectionList() {
   arrRenderPreview(previewEl);
 }
 
-function arrRenderPreview(previewEl) {
+// Creates a cropped thumbnail data-URL from a full page thumb
+function arrCropThumb(dataUrl, topY, bottomY) {
+  return new Promise(resolve => {
+    const src = new Image();
+    src.onload = () => {
+      const sw = src.width, sh = src.height;
+      const cy = Math.floor(topY * sh);
+      const ch = Math.max(1, Math.ceil((bottomY - topY) * sh));
+      const c  = document.createElement('canvas');
+      c.width  = sw; c.height = ch;
+      c.getContext('2d').drawImage(src, 0, cy, sw, ch, 0, 0, sw, ch);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    src.onerror = () => resolve(dataUrl); // fallback: full page
+    src.src = dataUrl;
+  });
+}
+
+async function arrRenderPreview(previewEl) {
   previewEl.querySelectorAll('.arr-preview-section-label, .arr-preview-img').forEach(el => el.remove());
-  arrState.arrangement.forEach(item => {
+  for (const item of arrState.arrangement) {
     const sec = arrState.sections.find(s => s.id === item.sectionId);
-    if (!sec) return;
+    if (!sec) continue;
     const lbl = document.createElement('div');
     lbl.className   = 'arr-preview-section-label';
     lbl.textContent = sec.name;
     previewEl.appendChild(lbl);
-    arrGetSectionCrops(sec).forEach(crop => {
+    for (const crop of arrGetSectionCrops(sec)) {
       const img = document.createElement('img');
       img.className     = 'arr-preview-img';
       img.style.cssText = 'display:block;width:100%;';
-      img.src           = arrState.pageThumbs[crop.pageIndex];
-      img.alt           = `Page ${crop.pageIndex + 1}`;
+      img.src = (crop.topY > 0.001 || crop.bottomY < 0.999)
+        ? await arrCropThumb(arrState.pageThumbs[crop.pageIndex], crop.topY, crop.bottomY)
+        : arrState.pageThumbs[crop.pageIndex];
+      img.alt = `Page ${crop.pageIndex + 1}`;
       previewEl.appendChild(img);
-    });
-  });
+    }
+  }
 }
 
 // ── Save ──
@@ -5857,9 +5886,25 @@ async function arrSaveArrangement() {
 
     const pdfBytes = await newDoc.save();
 
+    // Preserve the original (source) PDF on first save so we can always re-arrange from scratch
+    if (!arrState.song.originalStoragePath) {
+      setLoading(true, 'Preserving original…');
+      const origPath = arrState.song.storagePath.replace(/\.pdf$/i, '_orig.pdf');
+      const origBlob = new Blob([srcBytes], { type: 'application/pdf' });
+      await storage.ref(origPath).put(origBlob, { contentType: 'application/pdf' });
+      arrState.song.originalStoragePath = origPath;
+    }
+
     setLoading(true, 'Uploading…');
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     await storage.ref(arrState.song.storagePath).put(blob, { contentType: 'application/pdf' });
+
+    // Persist arrangement metadata to Firestore so sections/order survive reopen
+    await db.collection('groups').doc(currentGroupId).collection('songs').doc(arrState.songId).update({
+      originalStoragePath: arrState.song.originalStoragePath,
+      arrSections:         arrState.sections,
+      arrArrangement:      arrState.arrangement,
+    });
 
     // Update local cache
     let binary = '';

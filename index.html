@@ -1612,6 +1612,8 @@
     font-weight:700; color:#fff; min-width:60px;
   }
   .arr-cut-tag .arr-section-remove-btn { color:rgba(255,255,255,0.8); font-size:15px; }
+  .arr-cut-arrow { font-size:10px; opacity:0.8; flex-shrink:0; }
+  .arr-section-header-arrow { font-size:12px; opacity:0.7; flex-shrink:0; }
   .arr-hover-line {
     position:absolute; left:0; right:0; height:2px;
     background:rgba(229,57,53,0.55); pointer-events:none; z-index:3; display:none;
@@ -5623,6 +5625,12 @@ function arrMakeCutEl(sec, row) {
   const tag = document.createElement('div');
   tag.className = 'arr-cut-tag';
 
+  const arrow = document.createElement('span');
+  arrow.className   = 'arr-cut-arrow';
+  arrow.textContent = '▼';
+  arrow.title       = 'Names the section that starts below this line';
+  tag.appendChild(arrow);
+
   const nameInp = document.createElement('input');
   nameInp.className   = 'arr-section-name-input';
   nameInp.value       = sec.name;
@@ -5661,7 +5669,7 @@ function arrBuildSlicerPanel(body) {
 
   const hintEl = document.createElement('div');
   hintEl.className   = 'arr-slicer-hint';
-  hintEl.textContent = 'Click anywhere on a page to add a section split. Click a split\'s ✕ to remove it.';
+  hintEl.textContent = 'Click anywhere on a page to mark the start of a new section. Each label names the section that begins below the cut line.';
   wrap.appendChild(hintEl);
 
   // First section header — always shown above page 0
@@ -5669,6 +5677,11 @@ function arrBuildSlicerPanel(body) {
   const firstSec   = sorted0[0];
   const firstHdr   = document.createElement('div');
   firstHdr.className = 'arr-section-header';
+  const firstArrow = document.createElement('span');
+  firstArrow.className   = 'arr-section-header-arrow';
+  firstArrow.textContent = '▼';
+  firstArrow.title       = 'Names the section from the very beginning';
+  firstHdr.appendChild(firstArrow);
   const firstInp   = document.createElement('input');
   firstInp.className   = 'arr-section-name-input';
   firstInp.value       = firstSec.name;
@@ -5721,50 +5734,7 @@ function arrBuildSlicerPanel(body) {
     const sorted = arrSortedSections();
     sorted.forEach(sec => {
       if (sec.startPage !== pi || sec.id === sorted[0].id) return;
-      const cutDiv  = document.createElement('div');
-      cutDiv.className  = 'arr-cut';
-      cutDiv.style.top  = `${(sec.startY || 0) * 100}%`;
-      // Stop clicks on the cut line from bubbling to the row (which would add a new section)
-      cutDiv.addEventListener('click',      e => e.stopPropagation());
-      cutDiv.addEventListener('mousedown',  e => e.stopPropagation());
-      cutDiv.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
-
-      const bar = document.createElement('div');
-      bar.className = 'arr-cut-bar';
-      cutDiv.appendChild(bar);
-
-      const tag      = document.createElement('div');
-      tag.className  = 'arr-cut-tag';
-
-      const nameInp  = document.createElement('input');
-      nameInp.className   = 'arr-section-name-input';
-      nameInp.value       = sec.name;
-      nameInp.placeholder = 'Section name…';
-      nameInp.addEventListener('input',     e => { sec.name = e.target.value; });
-      nameInp.addEventListener('keydown',   e => e.stopPropagation());
-      nameInp.addEventListener('click',     e => e.stopPropagation());
-      nameInp.addEventListener('mousedown', e => e.stopPropagation());
-      nameInp.addEventListener('touchstart',e => e.stopPropagation());
-
-      const rmBtn    = document.createElement('button');
-      rmBtn.className   = 'arr-section-remove-btn';
-      rmBtn.textContent = '✕';
-      rmBtn.title       = 'Remove this split';
-      rmBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        if (arrState.sections.length <= 1) { hint('At least one section must remain.'); return; }
-        arrState.sections    = arrState.sections.filter(s => s.id !== sec.id);
-        arrState.arrangement = arrState.arrangement.filter(a => a.sectionId !== sec.id);
-        if (!arrState.arrangement.length)
-          arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
-        // Remove just this cut element — no full rebuild, no scroll jump
-        cutDiv.remove();
-      });
-
-      tag.appendChild(nameInp);
-      tag.appendChild(rmBtn);
-      cutDiv.appendChild(tag);
-      row.appendChild(cutDiv);
+      row.appendChild(arrMakeCutEl(sec, row));
     });
 
     // Mouse: show hover line

@@ -1647,7 +1647,8 @@
     cursor:grab; touch-action:manipulation;
   }
   .arr-section-card.dragging   { opacity:0.35; }
-  .arr-section-card.drag-over  { border-top:2px solid var(--accent); }
+  .arr-section-card.drag-over-above { border-top:2px solid var(--accent); }
+  .arr-section-card.drag-over-below { border-bottom:2px solid var(--accent); }
   .arr-drag-handle { color:var(--muted); font-size:18px; flex-shrink:0; }
   .arr-card-name   { flex:1; font-size:15px; font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .arr-card-meta   { font-size:11px; color:var(--muted); flex-shrink:0; }
@@ -1697,7 +1698,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.99</div>
+  <div class="version-badge">V 4.0</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5833,13 +5834,22 @@ function arrRenderSectionList() {
   const listEl    = document.getElementById('arr-list-inner');
   const previewEl = document.getElementById('arr-preview-pane');
   if (!listEl || !previewEl) return;
+
+  // Purge arrangement entries with no matching section — prevents idx mismatch during drag
+  arrState.arrangement = arrState.arrangement.filter(
+    a => arrState.sections.some(s => s.id === a.sectionId)
+  );
+  if (!arrState.arrangement.length && arrState.sections.length)
+    arrState.arrangement = [{ instanceId: genId(), sectionId: arrState.sections[0].id }];
+
   listEl.innerHTML = '';
 
-  let dragSrcIdx = null;
+  let dragSrcIdx   = null;
+  let _lastDropPos = '';
 
   arrState.arrangement.forEach((item, idx) => {
     const sec = arrState.sections.find(s => s.id === item.sectionId);
-    if (!sec) return;
+    if (!sec) return; // should never fire after purge, but guard anyway
     const pageCount = arrGetSectionCrops(sec).length;
 
     const card = document.createElement('div');
@@ -5854,27 +5864,53 @@ function arrRenderSectionList() {
       <button class="arr-card-btn" data-role="del"  title="Remove from arrangement">✕</button>`;
 
     card.addEventListener('dragstart', e => {
-      dragSrcIdx = idx;
+      dragSrcIdx   = idx;
+      _lastDropPos = '';
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
     card.addEventListener('dragend', () => {
+      dragSrcIdx = null;
+      _lastDropPos = '';
       card.classList.remove('dragging');
-      listEl.querySelectorAll('.arr-section-card').forEach(c => c.classList.remove('drag-over'));
+      listEl.querySelectorAll('.arr-section-card').forEach(c =>
+        c.classList.remove('drag-over-above', 'drag-over-below'));
+      arrRenderPreview(previewEl); // restore actual arrangement in preview
     });
     card.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      listEl.querySelectorAll('.arr-section-card').forEach(c => c.classList.remove('drag-over'));
-      if (idx !== dragSrcIdx) card.classList.add('drag-over');
+      listEl.querySelectorAll('.arr-section-card').forEach(c =>
+        c.classList.remove('drag-over-above', 'drag-over-below'));
+      if (dragSrcIdx !== null && idx !== dragSrcIdx) {
+        const rect    = card.getBoundingClientRect();
+        const isBelow = e.clientY > rect.top + rect.height / 2;
+        card.classList.add(isBelow ? 'drag-over-below' : 'drag-over-above');
+        // Real-time preview — only re-render when effective drop position changes
+        const dropPos = `${idx}:${isBelow}`;
+        if (dropPos !== _lastDropPos) {
+          _lastDropPos = dropPos;
+          const hyp = [...arrState.arrangement];
+          const mv  = hyp.splice(dragSrcIdx, 1)[0];
+          let   di  = dragSrcIdx < idx ? idx - 1 : idx;
+          if (isBelow) di++;
+          hyp.splice(di, 0, mv);
+          arrRenderPreview(previewEl, hyp);
+        }
+      }
     });
     card.addEventListener('drop', e => {
       e.preventDefault();
+      const isBelow = card.classList.contains('drag-over-below');
+      listEl.querySelectorAll('.arr-section-card').forEach(c =>
+        c.classList.remove('drag-over-above', 'drag-over-below'));
       if (dragSrcIdx === null || dragSrcIdx === idx) return;
       const moved = arrState.arrangement.splice(dragSrcIdx, 1)[0];
-      // When dragging downward, removal shifts indices down by 1 — adjust target
-      const insertIdx = dragSrcIdx < idx ? idx - 1 : idx;
-      arrState.arrangement.splice(insertIdx, 0, moved);
+      // After removing src, target shifts down by 1 when dragging forward
+      let destIdx = dragSrcIdx < idx ? idx - 1 : idx;
+      // Drop on lower half = insert after; upper half = insert before
+      if (isBelow) destIdx++;
+      arrState.arrangement.splice(destIdx, 0, moved);
       dragSrcIdx = null;
       arrRenderSectionList();
     });
@@ -5928,9 +5964,10 @@ function arrMakeCropEl(crop) {
   return wrap;
 }
 
-function arrRenderPreview(previewEl) {
+function arrRenderPreview(previewEl, arrangement) {
+  const arr = arrangement || arrState.arrangement;
   previewEl.querySelectorAll('.arr-preview-section-label, .arr-crop-wrap').forEach(el => el.remove());
-  arrState.arrangement.forEach(item => {
+  arr.forEach(item => {
     const sec = arrState.sections.find(s => s.id === item.sectionId);
     if (!sec) return;
     const lbl = document.createElement('div');

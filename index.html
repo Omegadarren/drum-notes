@@ -1700,7 +1700,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.02</div>
+  <div class="version-badge">V 4.03</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5449,6 +5449,7 @@ async function openLibrarySong(songId, song) {
 
 // ─────────────────── Arrangement ─────────────────────────
 let arrState = null;
+let _arrDragController = null; // cleans up accumulated drag listeners on each re-render
 
 // Open the arrange screen: fetch PDF then launch slicer
 async function openArrangeForSong(songId, song) {
@@ -5871,6 +5872,11 @@ function arrRenderSectionList() {
 
   listEl.innerHTML = '';
 
+  // Abort any drag listeners from previous renders so they don't accumulate
+  if (_arrDragController) _arrDragController.abort();
+  _arrDragController = new AbortController();
+  const { signal: _dragSignal } = _arrDragController;
+
   let dragSrcIdx   = null;
   let _lastDropPos = '';
   const total = arrState.arrangement.length;
@@ -5898,28 +5904,39 @@ function arrRenderSectionList() {
       hyp.splice(di, 0, mv);
       arrRenderPreview(previewEl, hyp);
     }
-  });
+  }, { signal: _dragSignal });
   listEl.addEventListener('dragleave', e => {
     if (!listEl.contains(e.relatedTarget))
       listEl.querySelectorAll('.arr-section-card').forEach(c =>
         c.classList.remove('drag-over-above', 'drag-over-below'));
-  });
+  }, { signal: _dragSignal });
   listEl.addEventListener('drop', e => {
     e.preventDefault();
     const targetCard = e.target.closest('.arr-section-card');
+    if (!targetCard || dragSrcIdx === null) {
+      listEl.querySelectorAll('.arr-section-card').forEach(c =>
+        c.classList.remove('drag-over-above', 'drag-over-below'));
+      dragSrcIdx = null;
+      return;
+    }
+    const ti = parseInt(targetCard.dataset.idx, 10);
+    if (isNaN(ti) || ti === dragSrcIdx) {
+      listEl.querySelectorAll('.arr-section-card').forEach(c =>
+        c.classList.remove('drag-over-above', 'drag-over-below'));
+      dragSrcIdx = null;
+      return;
+    }
+    // Capture isBelow BEFORE clearing the indicator classes
+    const isBelow = targetCard.classList.contains('drag-over-below');
     listEl.querySelectorAll('.arr-section-card').forEach(c =>
       c.classList.remove('drag-over-above', 'drag-over-below'));
-    if (!targetCard || dragSrcIdx === null) { dragSrcIdx = null; return; }
-    const ti = parseInt(targetCard.dataset.idx, 10);
-    if (isNaN(ti) || ti === dragSrcIdx) { dragSrcIdx = null; return; }
-    const isBelow = targetCard.classList.contains('drag-over-below');
     const moved = arrState.arrangement.splice(dragSrcIdx, 1)[0];
     let destIdx = dragSrcIdx < ti ? ti - 1 : ti;
     if (isBelow) destIdx++;
     arrState.arrangement.splice(destIdx, 0, moved);
     dragSrcIdx = null;
     arrRenderSectionList();
-  });
+  }, { signal: _dragSignal });
 
   arrState.arrangement.forEach((item, idx) => {
     const sec = arrState.sections.find(s => s.id === item.sectionId);
@@ -6107,6 +6124,7 @@ async function arrSaveArrangement() {
 function closeArrangeScreen() {
   document.getElementById('arrange-screen').classList.remove('active');
   document.getElementById('song-library-screen').classList.add('active');
+  if (_arrDragController) { _arrDragController.abort(); _arrDragController = null; }
   arrState = null;
 }
 

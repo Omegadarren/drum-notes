@@ -1697,7 +1697,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 3.96</div>
+  <div class="version-badge">V 3.97</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5446,7 +5446,6 @@ async function openLibrarySong(songId, song) {
 
 // ─────────────────── Arrangement ─────────────────────────
 let arrState = null;
-let _previewGen = 0;
 
 // Open the arrange screen: fetch PDF then launch slicer
 async function openArrangeForSong(songId, song) {
@@ -5486,11 +5485,12 @@ async function openArrangeForSong(songId, song) {
 async function openArrangeScreen(songId, song, pdfData) {
   arrState = {
     songId, song, pdfData,
-    pdfDoc:     null,
-    numPages:   0,
-    pageThumbs: [],   // data-URL per page
-    sections:   [],   // [{ id, name, startPage }] sorted by startPage
-    arrangement:[],   // [{ instanceId, sectionId }] — the play order
+    pdfDoc:      null,
+    numPages:    0,
+    pageThumbs:  [],   // data-URL per page
+    pageAspects: [],   // height/width ratio per page (for CSS crop)
+    sections:    [],   // [{ id, name, startPage, startY }]
+    arrangement: [],   // [{ instanceId, sectionId }] — the play order
   };
   document.getElementById('arrange-title').textContent = song.name;
   document.getElementById('song-library-screen').classList.remove('active');
@@ -5526,7 +5526,8 @@ async function openArrangeScreen(songId, song, pdfData) {
 }
 
 async function arrRenderThumbs() {
-  arrState.pageThumbs = [];
+  arrState.pageThumbs  = [];
+  arrState.pageAspects = [];
   const bodyW  = document.getElementById('arrange-body').clientWidth || window.innerWidth;
   const thumbW = Math.min(700, bodyW);
   const DPR    = window.devicePixelRatio || 1;
@@ -5540,6 +5541,7 @@ async function arrRenderThumbs() {
     canvas.height = vp.height;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
     arrState.pageThumbs.push(canvas.toDataURL('image/jpeg', 0.82));
+    arrState.pageAspects.push(canvas.height / canvas.width);
     canvas.width = canvas.height = 0; // free GPU memory
   }
 }
@@ -5709,7 +5711,23 @@ function arrBuildSlicerPanel(body) {
         startY:    yFrac,
       };
       arrState.sections.push(newSec);
-      arrState.arrangement.push({ instanceId: genId(), sectionId: newSec.id });
+
+      // Find which section the click position falls into (its "parent"),
+      // then insert the new section right after that parent in the arrangement.
+      // This keeps the arrangement in page order by default.
+      const sortedForInsert = arrSortedSections(); // includes newSec already
+      // The parent is the last sorted section that starts BEFORE the click position
+      let parentSec = sortedForInsert[0];
+      for (const s of sortedForInsert) {
+        if (s.id === newSec.id) break; // stop before newSec itself
+        if (s.startPage < pi || (s.startPage === pi && (s.startY || 0) < yFrac)) {
+          parentSec = s;
+        }
+      }
+      const parentArrIdx = arrState.arrangement.findIndex(a => a.sectionId === parentSec.id);
+      const insertAt = parentArrIdx >= 0 ? parentArrIdx + 1 : arrState.arrangement.length;
+      arrState.arrangement.splice(insertAt, 0, { instanceId: genId(), sectionId: newSec.id });
+
       arrShowTab('slice');
     });
 
@@ -5814,68 +5832,46 @@ function arrRenderSectionList() {
   arrRenderPreview(previewEl);
 }
 
-// Creates a cropped thumbnail data-URL from a full page thumb
-function arrCropThumb(dataUrl, topY, bottomY) {
-  return new Promise(resolve => {
-    const src = new Image();
-    src.onload = () => {
-      const sw = src.width, sh = src.height;
-      const cy = Math.floor(topY * sh);
-      const ch = Math.max(1, Math.ceil((bottomY - topY) * sh));
-      const c  = document.createElement('canvas');
-      c.width  = sw; c.height = ch;
-      c.getContext('2d').drawImage(src, 0, cy, sw, ch, 0, 0, sw, ch);
-      resolve(c.toDataURL('image/jpeg', 0.85));
-    };
-    src.onerror = () => resolve(dataUrl); // fallback: full page
-    src.src = dataUrl;
-  });
+// Creates a synchronous CSS-cropped thumbnail element for the preview pane.
+// Uses padding-bottom + absolute positioning trick — no canvas, no async.
+function arrMakeCropEl(crop) {
+  const aspect = arrState.pageAspects[crop.pageIndex] || 1.414; // A4 fallback
+  const visibleFraction = crop.bottomY - crop.topY;
+  const wrap = document.createElement('div');
+  wrap.className = 'arr-crop-wrap';
+  wrap.style.cssText = [
+    'position:relative',
+    'overflow:hidden',
+    'width:100%',
+    `padding-bottom:${visibleFraction * aspect * 100}%`,
+  ].join(';');
+  const img = document.createElement('img');
+  img.style.cssText = [
+    'position:absolute',
+    'width:100%',
+    'display:block',
+    `top:${-crop.topY * aspect * 100}%`,
+  ].join(';');
+  img.src = arrState.pageThumbs[crop.pageIndex];
+  img.alt = `Page ${crop.pageIndex + 1}`;
+  img.className = 'arr-preview-img';
+  wrap.appendChild(img);
+  return wrap;
 }
 
-async function arrRenderPreview(previewEl) {
-  // Claim this generation — any older in-flight render will see a newer gen and abort
-  const myGen = ++_previewGen;
-
-  // Snapshot arrangement+sections NOW (synchronously) so names are always consistent
-  const items = arrState.arrangement.map(item => ({
-    item,
-    sec: arrState.sections.find(s => s.id === item.sectionId),
-  })).filter(x => x.sec);
-
-  // Build DOM elements synchronously so labels appear instantly with correct names
-  previewEl.querySelectorAll('.arr-preview-section-label, .arr-preview-img, .arr-preview-img-wrap').forEach(el => el.remove());
-  for (const { sec } of items) {
+function arrRenderPreview(previewEl) {
+  previewEl.querySelectorAll('.arr-preview-section-label, .arr-crop-wrap').forEach(el => el.remove());
+  arrState.arrangement.forEach(item => {
+    const sec = arrState.sections.find(s => s.id === item.sectionId);
+    if (!sec) return;
     const lbl = document.createElement('div');
     lbl.className   = 'arr-preview-section-label';
     lbl.textContent = sec.name;
     previewEl.appendChild(lbl);
-    for (const crop of arrGetSectionCrops(sec)) {
-      const img = document.createElement('img');
-      img.className     = 'arr-preview-img';
-      img.style.cssText = 'display:block;width:100%;';
-      img.src = arrState.pageThumbs[crop.pageIndex]; // full thumb immediately
-      img.alt = `Page ${crop.pageIndex + 1}`;
-      img.dataset.gen       = String(myGen);
-      img.dataset.topY      = String(crop.topY);
-      img.dataset.bottomY   = String(crop.bottomY);
-      img.dataset.pageIndex = String(crop.pageIndex);
-      previewEl.appendChild(img);
-    }
-  }
-
-  // Now async-replace with cropped versions (abort if a newer render has started)
-  const imgEls = previewEl.querySelectorAll('.arr-preview-img');
-  for (const img of imgEls) {
-    if (_previewGen !== myGen) return; // newer render started — stop
-    if (img.dataset.gen !== String(myGen)) continue;
-    const topY    = parseFloat(img.dataset.topY);
-    const bottomY = parseFloat(img.dataset.bottomY);
-    if (topY > 0.001 || bottomY < 0.999) {
-      const cropped = await arrCropThumb(arrState.pageThumbs[parseInt(img.dataset.pageIndex)], topY, bottomY);
-      if (_previewGen !== myGen) return; // abort after await
-      if (img.isConnected) img.src = cropped;
-    }
-  }
+    arrGetSectionCrops(sec).forEach(crop => {
+      previewEl.appendChild(arrMakeCropEl(crop));
+    });
+  });
 }
 
 // ── Save ──
@@ -5941,6 +5937,8 @@ async function arrSaveArrangement() {
     setLoading(false);
     hint(`✓ "${arrState.song.name}" saved with new arrangement!`, 3500);
     closeArrangeScreen();
+    // Reload the library so the song object has fresh arrSections/arrArrangement
+    loadSongLibrary(currentGroupId, true);
   } catch (err) {
     setLoading(false);
     alert('Save failed: ' + err.message);

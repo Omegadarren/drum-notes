@@ -5825,7 +5825,11 @@ function arrBuildSlicerPanel(body) {
       arrState.arrangement.splice(insertAt, 0, { instanceId: genId(), sectionId: newSec.id });
 
       // Insert cut element directly — no full panel rebuild, no scroll jump
-      row.appendChild(arrMakeCutEl(newSec, row));
+      const cutEl = arrMakeCutEl(newSec, row);
+      row.appendChild(cutEl);
+      // Auto-select the name so the user can just start typing
+      const nameInp = cutEl.querySelector('.arr-section-name-input');
+      if (nameInp) { nameInp.focus(); nameInp.select(); }
     });
 
     wrap.appendChild(row);

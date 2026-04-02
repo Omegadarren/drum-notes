@@ -1702,7 +1702,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.06</div>
+  <div class="version-badge">V 4.07</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1942,6 +1942,26 @@
 </div>
 
 <!-- ==================== RENAME SONG MODAL ==================== -->
+<!-- ==================== REPLACE PDF MODAL ==================== -->
+<div class="modal-bg" id="replace-pdf-modal">
+  <div class="modal-box" style="gap:14px;">
+    <div class="modal-title">🔄 Replace PDF</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.5;" id="replace-pdf-subtitle">Replaces the file only. Play history, annotations, BPM and arrangement data are kept.</div>
+    <div>
+      <div class="field-label">New PDF file</div>
+      <div class="upload-zone" id="replace-pdf-zone">
+        <div class="upload-zone-icon">📄</div>
+        <div class="upload-zone-hint">Tap to choose PDF</div>
+        <div class="upload-zone-name" id="replace-pdf-filename"></div>
+      </div>
+      <input id="replace-pdf-input" type="file" accept="application/pdf">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="btn-replace-pdf-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-replace-pdf-confirm" disabled style="opacity:0.4;">Replace →</button>
+    </div>
+  </div>
+</div>
 <!-- ==================== SONG HISTORY MODAL ==================== -->
 <div class="modal-bg" id="song-history-modal">
   <div class="modal-box" style="max-height:85vh;overflow-y:auto;gap:14px;">
@@ -5317,6 +5337,7 @@ async function loadSongLibrary(gid, isAdmin) {
         </div>
         ${count > 0 ? `<button class="song-action-btn" data-action="history" title="View setlist history">🎤</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="arrange" title="Arrange sections">✂️</button>` : ''}
+        ${isAdmin ? `<button class="song-action-btn" data-action="replace" title="Replace PDF">🔄</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="rename" title="Rename">✏️</button>` : ''}
         ${isAdmin ? `<button class="song-action-btn" data-action="delete" title="Delete">🗑</button>` : ''}
         <div class="group-row-arrow">›</div>`;
@@ -5343,6 +5364,10 @@ async function loadSongLibrary(gid, isAdmin) {
         row.querySelector('[data-action="arrange"]').addEventListener('click', e => {
           e.stopPropagation();
           openArrangeForSong(doc.id, song);
+        });
+        row.querySelector('[data-action="replace"]').addEventListener('click', e => {
+          e.stopPropagation();
+          openReplacePdfModal(doc.id, song);
         });
         row.querySelector('[data-action="rename"]').addEventListener('click', e => {
           e.stopPropagation();
@@ -6553,6 +6578,73 @@ document.getElementById('btn-upload-song-confirm').addEventListener('click', asy
 });
 document.getElementById('btn-song-history-close').addEventListener('click', () => {
   document.getElementById('song-history-modal').classList.remove('open');
+});
+
+// ── Replace PDF ──────────────────────────────────────────
+let _replacePdfTarget = null; // { songId, song }
+
+function openReplacePdfModal(songId, song) {
+  _replacePdfTarget = { songId, song };
+  document.getElementById('replace-pdf-subtitle').textContent =
+    `"${song.name}" — Replaces the file only. Play history, annotations, BPM and arrangement data are kept.`;
+  document.getElementById('replace-pdf-filename').textContent = '';
+  document.getElementById('replace-pdf-zone').classList.remove('has-file');
+  document.getElementById('replace-pdf-input').value = '';
+  document.getElementById('btn-replace-pdf-confirm').disabled = true;
+  document.getElementById('btn-replace-pdf-confirm').style.opacity = '0.4';
+  document.getElementById('replace-pdf-modal').classList.add('open');
+}
+
+document.getElementById('replace-pdf-zone').addEventListener('click', () => {
+  document.getElementById('replace-pdf-input').click();
+});
+document.getElementById('replace-pdf-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('replace-pdf-filename').textContent = file.name;
+  document.getElementById('replace-pdf-zone').classList.add('has-file');
+  document.getElementById('btn-replace-pdf-confirm').disabled = false;
+  document.getElementById('btn-replace-pdf-confirm').style.opacity = '';
+});
+document.getElementById('btn-replace-pdf-cancel').addEventListener('click', () => {
+  document.getElementById('replace-pdf-modal').classList.remove('open');
+  _replacePdfTarget = null;
+});
+document.getElementById('btn-replace-pdf-confirm').addEventListener('click', async () => {
+  const file = document.getElementById('replace-pdf-input').files[0];
+  if (!file || !_replacePdfTarget) return;
+  const { songId, song } = _replacePdfTarget;
+  document.getElementById('replace-pdf-modal').classList.remove('open');
+  setLoading(true, 'Uploading replacement…');
+  try {
+    // Upload to the same storagePath — overwrites the existing file in place
+    await new Promise((resolve, reject) => {
+      const task  = storage.ref(song.storagePath).put(file, { contentType: 'application/pdf' });
+      const timer = setTimeout(() => { task.cancel(); reject(new Error('Upload timed out.')); }, 60000);
+      task.on('state_changed', null,
+        err => { clearTimeout(timer); reject(err); },
+        ()  => { clearTimeout(timer); resolve(); }
+      );
+    });
+    // If an _orig.pdf backup exists from the arranger, delete it so the
+    // arranger will treat this new file as the fresh original
+    if (song.originalStoragePath) {
+      try { await storage.ref(song.originalStoragePath).delete(); } catch (_) {}
+      await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).update({
+        originalStoragePath: firebase.firestore.FieldValue.delete(),
+        arrSections:         firebase.firestore.FieldValue.delete(),
+        arrArrangement:      firebase.firestore.FieldValue.delete(),
+      });
+    }
+    // Bust the IDB PDF cache so everyone gets the new file next time they open it
+    await idbDelete(IDB_STORE, `${currentGroupId}/${songId}`);
+    setLoading(false);
+    hint(`✓ PDF for "${song.name}" replaced!`, 3000);
+    _replacePdfTarget = null;
+  } catch (err) {
+    setLoading(false);
+    alert('Replace failed: ' + err.message);
+  }
 });
 document.getElementById('btn-rename-song-cancel').addEventListener('click', () => {
   document.getElementById('rename-song-modal').classList.remove('open');

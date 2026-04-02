@@ -455,7 +455,7 @@ hr {
   <div class="cover">
     <div class="cover-title">BandNotes</div>
     <div class="cover-sub">Sheet music annotations for your whole band</div>
-    <div class="cover-version">User Manual &nbsp;·&nbsp; V 3.89 &nbsp;·&nbsp; March 2026</div>
+    <div class="cover-version">User Manual &nbsp;·&nbsp; V 4.08 &nbsp;·&nbsp; March 2026</div>
   </div>
 
   <!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
@@ -478,6 +478,8 @@ hr {
       <li><a href="#offline">Offline Mode</a></li>
       <li><a href="#backups">Backups &amp; Storage</a></li>
       <li><a href="#tips">Tips &amp; Troubleshooting</a></li>
+      <li><a href="#arrange">Arranging Songs</a></li>
+      <li><a href="#replace-pdf">Replacing a Song's PDF</a></li>
     </ol>
   </div>
 
@@ -632,6 +634,12 @@ hr {
 
     <h3>Renaming a song <span class="badge badge-admin">Admin</span></h3>
     <p>Tap the <strong>✏️</strong> button on any song row, enter the new name, and tap <strong>Save</strong>. The name updates immediately across all setlists.</p>
+
+    <h3>Replacing a song's PDF <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap the <strong>🔄</strong> button on any song row to swap the PDF file while keeping all annotations, BPM, play history, and arrangements intact. See <a href="#replace-pdf">Section 17</a> for full details.</p>
+
+    <h3>Arranging a song <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap the <strong>✂️</strong> button on any song row to open the Arrangement editor. You can slice the PDF into named sections and define a custom playing order, producing a new arranged PDF that all members see. See <a href="#arrange">Section 16</a> for full details.</p>
 
     <h3>Deleting a song <span class="badge badge-admin">Admin</span></h3>
     <p>Tap the <strong>🗑</strong> button on a song row and confirm. This permanently removes the PDF from storage and cannot be undone. Consider archiving any setlists that contain the song first.</p>
@@ -1034,9 +1042,109 @@ hr {
 
   <hr>
 
+  <!-- ═══════════════ 16. ARRANGING SONGS ═══════════════ -->
+  <section id="arrange">
+    <div class="section-number">Section 16</div>
+    <h2>Arranging Songs <span class="badge badge-admin">Admin</span></h2>
+    <p>The Arrangement editor lets you slice a song's PDF into named sections — Intro, Verse, Chorus, Bridge, etc. — and then define a custom playing order to produce a brand-new arranged PDF that the whole band sees when they open that song.</p>
+
+    <div class="callout warn">
+      <div class="callout-title">Admin only</div>
+      <p>The ✂️ Arrange button is only visible to the group admin. Members see the final arranged PDF but cannot access the editor.</p>
+    </div>
+
+    <h3>Opening the editor</h3>
+    <ol class="step-list">
+      <li>Open the <strong>Song Library</strong>.</li>
+      <li>Tap the <strong>✂️</strong> button on the song row you want to arrange.</li>
+      <li>The Arrangement editor opens with two tabs: <strong>Slice</strong> and <strong>Arrange</strong>.</li>
+    </ol>
+
+    <h3>Step 1 — Slice tab</h3>
+    <p>The Slice tab shows all the pages of the song as thumbnails. Your job here is to draw cut lines that divide the PDF into sections.</p>
+    <ul>
+      <li><strong>Tap anywhere on a page</strong> to place a cut line at that vertical position. A horizontal line with a ▼ arrow and a name field appears at the cut.</li>
+      <li>The <strong>▼ arrow</strong> means the name labels the section <em>below</em> that line — so "Chorus" placed at the top of the chorus music labels everything from that line down to the next cut.</li>
+      <li>The name field is <strong>automatically selected</strong> when you add a cut — just start typing the section name immediately.</li>
+      <li>The very first section (from the top of page 1 to the first cut) is always labelled <strong>Start</strong> and cannot be removed.</li>
+      <li>Tap <strong>✕</strong> on any cut line to remove it.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Name before you move</div>
+      <p>Give each section a clear name in the Slice tab before switching to the Arrange tab. Good names (e.g. "Verse 1", "Chorus", "Solo", "Outro") make it much easier to drag them into the right order.</p>
+    </div>
+
+    <h3>Step 2 — Arrange tab</h3>
+    <p>The Arrange tab shows your named sections as cards. The default order mirrors the original page order. Customise the arrangement using the controls on each card:</p>
+    <table class="feature-table">
+      <thead><tr><th>Control</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Drag handle (☰)</td><td>Press and drag to reorder the section within the arrangement.</td></tr>
+        <tr><td>↑ / ↓ buttons</td><td>Move the section one step up or down. Useful on small screens or when a precise drag is tricky.</td></tr>
+        <tr><td>＋ Duplicate</td><td>Inserts a copy of the section at the next position. Use this to repeat a chorus, a vamp, or any recurring passage without uploading a new PDF.</td></tr>
+        <tr><td>✕ Remove</td><td>Removes the section from the arrangement entirely. The original page content is not deleted — you can re-add it from the Slice tab.</td></tr>
+      </tbody>
+    </table>
+    <p>A <strong>live preview panel</strong> below the section list shows thumbnail crops of the arrangement in order so you can verify the result before saving.</p>
+
+    <h3>Saving the arrangement</h3>
+    <ol class="step-list">
+      <li>When the arrangement looks correct in the preview, tap <strong>Save Arrangement</strong>.</li>
+      <li>BandNotes crops each section from the original PDF and assembles them into a new PDF in the defined order.</li>
+      <li>The new PDF is uploaded to cloud storage and the song is updated. All members immediately see the arranged version when they open the song.</li>
+      <li>The <strong>original PDF is preserved</strong> in the background. If you open the ✂️ editor again later, it always loads the original uncut PDF so you can re-slice and re-arrange from scratch.</li>
+    </ol>
+
+    <div class="callout note">
+      <div class="callout-title">Note — Returning to the editor</div>
+      <p>Opening the ✂️ editor on a song that already has an arrangement will reload all previous cuts and the existing arrangement so you can refine rather than start over.</p>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 17. REPLACING A SONG'S PDF ═══════════════ -->
+  <section id="replace-pdf">
+    <div class="section-number">Section 17</div>
+    <h2>Replacing a Song's PDF <span class="badge badge-admin">Admin</span></h2>
+    <p>If you receive a corrected or updated version of a sheet music file, use the <strong>🔄 Replace PDF</strong> button rather than deleting and re-uploading. Replace uploads the new file to exactly the same storage path, so every piece of existing data attached to the song is preserved.</p>
+
+    <h3>What is preserved</h3>
+    <table class="feature-table">
+      <thead><tr><th>Data</th><th>Preserved?</th></tr></thead>
+      <tbody>
+        <tr><td>All members' annotations</td><td>✅ Fully intact</td></tr>
+        <tr><td>BPM / tempo setting</td><td>✅ Fully intact</td></tr>
+        <tr><td>Play history &amp; gig count</td><td>✅ Fully intact</td></tr>
+        <tr><td>Song name</td><td>✅ Fully intact</td></tr>
+        <tr><td>Existing arrangement (if any)</td><td>⚠️ Cleared — see note below</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <div class="callout-title">Arrangements are cleared on replace</div>
+      <p>Because the new PDF may have different pages or different page sizes, any saved arrangement is automatically cleared when you replace the PDF. After replacing, re-open the ✂️ Arrange editor to create a fresh arrangement for the new file.</p>
+    </div>
+
+    <h3>How to replace a PDF</h3>
+    <ol class="step-list">
+      <li>Open the <strong>Song Library</strong>.</li>
+      <li>Tap the <strong>🔄</strong> button on the song row.</li>
+      <li>Tap <strong>Choose File</strong> and select the new PDF from your device.</li>
+      <li>Tap <strong>Replace</strong>. A progress bar shows the upload.</li>
+      <li>Once complete, the cached copy on each device is refreshed automatically the next time members open the song.</li>
+    </ol>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — When to use Delete vs Replace</div>
+      <p>Use <strong>Replace</strong> when you have a newer or corrected version of the same song and want to keep all existing data. Use <strong>Delete</strong> only if you are removing a song entirely from the group library.</p>
+    </div>
+  </section>
+
+  <hr>
+
   <!-- ═══════════════ FOOTER ═══════════════ -->
   <div class="manual-footer">
-    <p>BandNotes &nbsp;·&nbsp; V 3.89 &nbsp;·&nbsp; March 2026</p>
+    <p>BandNotes &nbsp;·&nbsp; V 4.08 &nbsp;·&nbsp; March 2026</p>
     <p style="margin-top:6px;font-size:12px;">For support, contact your group admin.</p>
   </div>
 

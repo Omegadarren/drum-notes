@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.15</div>
+  <div class="version-badge">V 4.16</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5579,17 +5579,21 @@ async function openArrangeForSong(songId, song) {
     // Layer 1: in-memory cache (same session, zero latency)
     if (_arrangementCache[songId]) {
       song = { ...song, ..._arrangementCache[songId] };
+      console.log('[Arrange] Loaded from memory cache, sections:', _arrangementCache[songId].arrSections?.length);
     } else {
       // Layer 2: localStorage (synchronous, survives page reload, no race conditions)
       try {
-        const lsRaw = localStorage.getItem(`bn_arr_${currentGroupId}_${songId}`);
+        const lsKey = `bn_arr_${currentGroupId}_${songId}`;
+        const lsRaw = localStorage.getItem(lsKey);
+        console.log('[Arrange] localStorage key:', lsKey, '| found:', !!lsRaw);
         if (lsRaw) {
           const lsData = JSON.parse(lsRaw);
           if (lsData && lsData.arrSections && lsData.arrSections.length) {
             song = { ...song, ...lsData };
+            console.log('[Arrange] Loaded from localStorage, sections:', lsData.arrSections.length, 'arr:', lsData.arrArrangement?.length);
           }
         }
-      } catch { /* ignore parse errors */ }
+      } catch (e) { console.warn('[Arrange] localStorage read failed:', e); }
 
       // Layer 3: IndexedDB — persists across page refreshes
       if (!song.arrSections || !song.arrSections.length) {
@@ -5666,31 +5670,34 @@ async function openArrangeScreen(songId, song, pdfData) {
     // Restore saved sections/arrangement, or initialise fresh
     if (song.arrSections && song.arrSections.length) {
       arrState.sections = song.arrSections;
-      // Validate: strip arrangement entries whose sectionId no longer exists in sections
+      // Keep only arrangement entries whose sectionId still exists in sections
       let restoredArr = (song.arrArrangement || []).filter(a =>
         arrState.sections.some(s => s.id === a.sectionId)
       );
-      // Also ensure every section appears at least once in the arrangement
-      const allPresent = arrState.sections.every(s => restoredArr.some(a => a.sectionId === s.id));
-      if (!restoredArr.length || !allPresent) {
-        // Fall back to page order — one entry per section
+      // Only rebuild if there are literally no valid arrangement entries
+      if (!restoredArr.length) {
         const sorted = [...arrState.sections].sort((a, b) =>
           a.startPage !== b.startPage ? a.startPage - b.startPage : (a.startY || 0) - (b.startY || 0)
         );
         restoredArr = sorted.map(s => ({ instanceId: genId(), sectionId: s.id }));
+        console.log('[Arrange] No arrangement found — rebuilt from page order');
       }
       arrState.arrangement = restoredArr;
+      console.log('[Arrange] Restored', arrState.sections.length, 'sections,', arrState.arrangement.length, 'arrangement steps',
+        'from song.arrArrangement length:', (song.arrArrangement || []).length);
     } else {
       const firstId = genId();
       arrState.sections    = [{ id: firstId, name: song.name, startPage: 0, startY: 0 }];
       arrState.arrangement = [{ instanceId: genId(), sectionId: firstId }];
+      console.log('[Arrange] Fresh start — no saved sections found');
     }
     await arrRenderThumbs();
     setLoading(false);
     const secCount = arrState.sections.length;
+    const arrCount = arrState.arrangement.length;
     hint(secCount > 1
-      ? `Loaded: ${secCount} saved sections found ✓`
-      : `No saved sections found — starting fresh`, 3000);
+      ? `Loaded: ${secCount} sections, ${arrCount} arrangement steps ✓`
+      : `Starting fresh — no saved arrangement`, 3000);
     arrShowTab('slice');
   } catch (err) {
     setLoading(false);

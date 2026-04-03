@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.13</div>
+  <div class="version-badge">V 4.14</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7108,9 +7108,18 @@ renderStart();
 
 // ─────────────────── Service Worker (offline) ────────────
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .catch(err => console.warn('SW registration failed:', err));
+  window.addEventListener('load', async () => {
+    try {
+      // Unregister any existing SW first so the browser fetches sw.js fresh
+      // from the network (fixes a bug where the old SW cached sw.js itself,
+      // preventing updates from ever landing).
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+      navigator.serviceWorker.register('./sw.js')
+        .catch(err => console.warn('SW registration failed:', err));
+    } catch (err) {
+      console.warn('SW setup failed:', err);
+    }
   });
 }
 </script>

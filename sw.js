@@ -1,6 +1,7 @@
 // BandNotes Service Worker — offline-first shell caching
-const SHELL_CACHE = 'bandnotes-shell-v3';
+const SHELL_CACHE = 'bandnotes-shell-v4';
 const CDN_CACHE   = 'bandnotes-cdn-v2';
+const ALL_CACHES  = [SHELL_CACHE, CDN_CACHE];
 
 const CDN_PRECACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
@@ -12,7 +13,7 @@ const CDN_PRECACHE = [
   'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js',
 ];
 
-// Install: pre-cache CDN scripts immediately (best-effort, don't fail install)
+// Install: pre-cache CDN scripts; skip waiting so new SW activates immediately
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(
@@ -28,9 +29,15 @@ self.addEventListener('install', e => {
   );
 });
 
-// Activate: take control of all open tabs immediately
+// Activate: delete ALL old caches, then claim clients immediately
 self.addEventListener('activate', e => {
-  e.waitUntil(clients.claim());
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(
+        keys.filter(k => !ALL_CACHES.includes(k)).map(k => caches.delete(k))
+      ))
+      .then(() => clients.claim())
+  );
 });
 
 self.addEventListener('fetch', e => {
@@ -38,10 +45,11 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(e.request.url);
 
-  // ── Known CDN library scripts — cache-first ────────────────────────────────
-  // Only intercept the specific versioned CDN URLs we pre-cached at install.
-  // All other cross-origin requests (Firebase Auth/Firestore APIs etc.) are
-  // intentionally ignored here so the browser network stack handles them normally.
+  // NEVER intercept the service worker script itself — browser must always
+  // fetch it fresh from the network to detect updates.
+  if (url.pathname.endsWith('/sw.js')) return;
+
+  // ── Known CDN library scripts — cache-first ───────────────────────────────
   if (CDN_PRECACHE.includes(url.href)) {
     e.respondWith(
       caches.match(e.request).then(cached => {
@@ -56,26 +64,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // ── Cross-origin requests not in the CDN list (Firebase APIs, etc.) ────────
-  // Do NOT intercept — let the browser make a normal network request so that
-  // Firebase Auth and Firestore work correctly.
+  // ── Cross-origin (Firebase APIs, etc.) — pass through untouched ───────────
   if (url.origin !== self.location.origin) return;
 
-  // ── Same-origin (app shell / index.html) — stale-while-revalidate ─────────
-  // Serve from cache instantly; silently update the cache from network.
-  // The updated version is ready for the next load — no user action needed.
+  // ── Same-origin app shell — network-first, cache as fallback ─────────────
+  // Always try the network so the latest index.html is served when online.
+  // Only fall back to cache when offline.
   e.respondWith(
-    caches.open(SHELL_CACHE).then(cache =>
-      cache.match(e.request).then(cached => {
-        const networkFetch = fetch(e.request)
-          .then(response => {
-            if (response.ok) cache.put(e.request, response.clone());
-            return response;
-          })
-          .catch(() => null);
-        // Serve cache immediately if available; otherwise wait for network
-        return cached || networkFetch;
+    fetch(e.request)
+      .then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(SHELL_CACHE).then(cache => cache.put(e.request, clone));
+        }
+        return response;
       })
-    )
+      .catch(() => caches.match(e.request))
   );
 });

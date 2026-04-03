@@ -1242,7 +1242,7 @@
     /* Song Library screen */
     #song-library-screen { display:none; position:fixed; inset:0; background:var(--bg); z-index:120; flex-direction:column; }
     #song-library-screen.active { display:flex; }
-    .song-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
+    .song-row { display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; position:relative; }
     .song-row:last-child { border-bottom:none; }
     .song-row:active { background:var(--surface); }
     .song-row-icon { font-size:26px; flex-shrink:0; }
@@ -1703,7 +1703,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.08</div>
+  <div class="version-badge">V 4.09</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5224,6 +5224,7 @@ function doLeaveGroup() {
 // ─────────────────── Setlist row ctx menu global close ──
 document.addEventListener('click', () => {
   document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
+  document.querySelectorAll('.song-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
 });
 
 // ─────────────────── Stale backup modal ─────────────────
@@ -5338,20 +5339,35 @@ async function loadSongLibrary(gid, isAdmin) {
           <div class="song-row-name">${esc(song.name)}</div>
           <div class="song-row-meta">${count > 0 ? `🎤 Played ${count}×` : 'Tap to open'}</div>
         </div>
-        ${count > 0 ? `<button class="song-action-btn" data-action="history" title="View setlist history">🎤</button>` : ''}
-        ${isAdmin ? `<button class="song-action-btn" data-action="arrange" title="Arrange sections">✂️</button>` : ''}
-        ${isAdmin ? `<button class="song-action-btn" data-action="replace" title="Replace PDF">🔄</button>` : ''}
-        ${isAdmin ? `<button class="song-action-btn" data-action="rename" title="Rename">✏️</button>` : ''}
-        ${isAdmin ? `<button class="song-action-btn" data-action="delete" title="Delete">🗑</button>` : ''}
+        ${(isAdmin || count > 0) ? `
+        <button class="setlist-ctx-btn" title="Actions">···</button>
+        <div class="setlist-ctx-menu">
+          ${count > 0 ? `<button data-action="history">🎤 Play history</button>` : ''}
+          ${isAdmin ? `<button data-action="arrange">✂️ Arrange sections</button>` : ''}
+          ${isAdmin ? `<button data-action="replace">🔄 Replace PDF</button>` : ''}
+          ${isAdmin ? `<button data-action="rename">✏️ Rename</button>` : ''}
+          ${isAdmin ? `<div class="setlist-ctx-divider"></div><button data-action="delete" class="ctx-danger">🗑 Delete</button>` : ''}
+        </div>` : ''}
         <div class="group-row-arrow">›</div>`;
 
       const openSong = () => openLibrarySong(doc.id, song);
       row.querySelector('.group-row-arrow').addEventListener('click', e => { e.stopPropagation(); openSong(); });
       row.addEventListener('click', openSong);
 
+      if (isAdmin || count > 0) {
+        row.querySelector('.setlist-ctx-btn').addEventListener('click', e => {
+          e.stopPropagation();
+          const isOpen = row.classList.contains('ctx-open');
+          document.querySelectorAll('.song-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
+          document.querySelectorAll('.setlist-row.ctx-open').forEach(r => r.classList.remove('ctx-open'));
+          if (!isOpen) row.classList.add('ctx-open');
+        });
+      }
+
       if (count > 0) {
         row.querySelector('[data-action="history"]').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           const modal    = document.getElementById('song-history-modal');
           const titleEl  = document.getElementById('song-history-title');
           const listEl2  = document.getElementById('song-history-list');
@@ -5366,14 +5382,17 @@ async function loadSongLibrary(gid, isAdmin) {
       if (isAdmin) {
         row.querySelector('[data-action="arrange"]').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           openArrangeForSong(doc.id, song);
         });
         row.querySelector('[data-action="replace"]').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           openReplacePdfModal(doc.id, song);
         });
         row.querySelector('[data-action="rename"]').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           document.getElementById('inp-rename-song').value = song.name;
           document.getElementById('rename-song-modal').dataset.songId   = doc.id;
           document.getElementById('rename-song-modal').dataset.groupId  = gid;
@@ -5382,6 +5401,7 @@ async function loadSongLibrary(gid, isAdmin) {
         });
         row.querySelector('[data-action="delete"]').addEventListener('click', e => {
           e.stopPropagation();
+          row.classList.remove('ctx-open');
           showConfirm(`Delete "${song.name}"?`, 'This removes the PDF and all saved notes for this song.', 'Delete', async () => {
             setLoading(true, 'Deleting…');
             try {

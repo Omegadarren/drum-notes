@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.14</div>
+  <div class="version-badge">V 4.15</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5576,24 +5576,36 @@ const _arrangementCache = {};
 async function openArrangeForSong(songId, song) {
   setLoading(true, 'Loading song…');
   try {
-    // Use in-memory cache first (avoids server round-trip race condition),
-    // then fall back to a fresh Firestore fetch, then passed-in song data
+    // Layer 1: in-memory cache (same session, zero latency)
     if (_arrangementCache[songId]) {
       song = { ...song, ..._arrangementCache[songId] };
     } else {
-      // Check IndexedDB — persists across page refreshes and is always up-to-date
+      // Layer 2: localStorage (synchronous, survives page reload, no race conditions)
       try {
-        const idbData = await idbGet(IDB_SETTINGS, `arr_${currentGroupId}_${songId}`);
-        if (idbData && idbData.arrSections && idbData.arrSections.length) {
-          song = { ...song, ...idbData };
-        } else {
-          const freshDoc = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
-          if (freshDoc.exists) song = freshDoc.data();
+        const lsRaw = localStorage.getItem(`bn_arr_${currentGroupId}_${songId}`);
+        if (lsRaw) {
+          const lsData = JSON.parse(lsRaw);
+          if (lsData && lsData.arrSections && lsData.arrSections.length) {
+            song = { ...song, ...lsData };
+          }
         }
-      } catch {
+      } catch { /* ignore parse errors */ }
+
+      // Layer 3: IndexedDB — persists across page refreshes
+      if (!song.arrSections || !song.arrSections.length) {
+        try {
+          const idbData = await idbGet(IDB_SETTINGS, `arr_${currentGroupId}_${songId}`);
+          if (idbData && idbData.arrSections && idbData.arrSections.length) {
+            song = { ...song, ...idbData };
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Layer 4: Firestore (server, may lag behind writes)
+      if (!song.arrSections || !song.arrSections.length) {
         try {
           const freshDoc = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
-          if (freshDoc.exists) song = freshDoc.data();
+          if (freshDoc.exists) song = { ...song, ...freshDoc.data() };
         } catch { /* fall back to passed-in song */ }
       }
     }
@@ -5675,6 +5687,10 @@ async function openArrangeScreen(songId, song, pdfData) {
     }
     await arrRenderThumbs();
     setLoading(false);
+    const secCount = arrState.sections.length;
+    hint(secCount > 1
+      ? `Loaded: ${secCount} saved sections found ✓`
+      : `No saved sections found — starting fresh`, 3000);
     arrShowTab('slice');
   } catch (err) {
     setLoading(false);
@@ -6217,6 +6233,17 @@ async function arrSaveArrangement() {
       arrSections:         arrState.sections,
       arrArrangement:      arrState.arrangement,
     });
+    // localStorage — synchronous, survives page reload, zero race conditions
+    try {
+      localStorage.setItem(
+        `bn_arr_${currentGroupId}_${arrState.songId}`,
+        JSON.stringify({
+          arrSections:         arrState.sections,
+          arrArrangement:      arrState.arrangement,
+          originalStoragePath: arrState.song.originalStoragePath,
+        })
+      );
+    } catch { /* ignore quota issues */ }
     // Store in IndexedDB — reliable across page refreshes, no server round-trip
     await idbPut(IDB_SETTINGS, `arr_${currentGroupId}_${arrState.songId}`, {
       arrSections:         arrState.sections,

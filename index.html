@@ -15,6 +15,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -1702,7 +1703,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.07</div>
+  <div class="version-badge">V 4.08</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -1892,6 +1893,7 @@
     <div class="ghdr-back" id="btn-song-library-back">‹</div>
     <div class="ghdr-title" id="song-library-title">Song Library</div>
     <button class="ghdr-action" id="btn-played-songs">🎤 Played</button>
+    <button class="ghdr-action" id="btn-export-songs" style="display:none;">📊 Export</button>
     <button class="ghdr-action" id="btn-upload-song" style="display:none;">⬆ Add Song</button>
   </div>
   <div class="groups-scroll">
@@ -5288,6 +5290,7 @@ function openSongLibrary(gid, isAdmin) {
   const title = currentGroupData ? currentGroupData.name + ' — Songs' : 'Song Library';
   document.getElementById('song-library-title').textContent = title;
   document.getElementById('btn-upload-song').style.display  = isAdmin ? '' : 'none';
+  document.getElementById('btn-export-songs').style.display = isAdmin ? '' : 'none';
   document.getElementById('group-detail-screen').classList.remove('active');
   document.getElementById('song-library-screen').classList.add('active');
   loadSongLibrary(gid, isAdmin);
@@ -5402,6 +5405,64 @@ async function loadSongLibrary(gid, isAdmin) {
   } catch (err) {
     listEl.innerHTML = `<div class="groups-empty">Could not load songs.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small></div>`;
     console.error(err);
+  }
+}
+
+// ─────────────────── Export Song Library to Excel ───────────────────────
+async function exportSongLibraryToExcel(gid) {
+  setLoading(true, 'Preparing export…');
+  try {
+    const snap = await db.collection('groups').doc(gid).collection('songs').orderBy('name', 'asc').get();
+    const rows = [['Song Name', 'CCLI', 'Key']];
+    const total = snap.size;
+    let i = 0;
+    for (const doc of snap.docs) {
+      const song = doc.data();
+      i++;
+      setLoading(true, `Scanning ${i} of ${total}: ${song.name}…`);
+
+      // Key = last word of the song name
+      const parts = song.name.trim().split(/\s+/);
+      const key = parts.length > 1 ? parts[parts.length - 1] : '';
+
+      // Download PDF and extract CCLI via PDF.js text extraction
+      let ccli = '';
+      try {
+        const url = await storage.ref(song.storagePath).getDownloadURL();
+        const buf = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.responseType = 'arraybuffer';
+          xhr.onload  = () => resolve(xhr.response);
+          xhr.onerror = () => reject(new Error('Download failed'));
+          xhr.send();
+        });
+        const pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+        // Scan from last page first — CCLI is usually at the bottom of the last page
+        outer: for (let p = pdfDoc.numPages; p >= 1; p--) {
+          const page = await pdfDoc.getPage(p);
+          const tc   = await page.getTextContent();
+          const text = tc.items.map(item => item.str).join(' ');
+          const m    = text.match(/CCLI\s+(?:Song|License)\s*(?:No\.?|#)?\s*(\d+)/i);
+          if (m) { ccli = m[1]; break outer; }
+        }
+      } catch { /* skip CCLI for this song if download/parse fails */ }
+
+      rows.push([song.name, ccli, key]);
+    }
+
+    // Generate .xlsx with SheetJS
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{ wch: 45 }, { wch: 12 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'Songs');
+    const groupName = (currentGroupData && currentGroupData.name) ? currentGroupData.name.replace(/[^\w\s-]/g, '') : 'BandNotes';
+    XLSX.writeFile(wb, `${groupName} - Song Library.xlsx`);
+    setLoading(false);
+    hint('✅ Excel export downloaded!', 3000);
+  } catch (err) {
+    setLoading(false);
+    alert('Export failed: ' + err.message);
   }
 }
 
@@ -6157,6 +6218,10 @@ document.addEventListener('click', e => {
 document.getElementById('btn-song-library-back').addEventListener('click', () => {
   document.getElementById('song-library-screen').classList.remove('active');
   document.getElementById('group-detail-screen').classList.add('active');
+});
+document.getElementById('btn-export-songs').addEventListener('click', () => {
+  if (!currentGroupId) return;
+  exportSongLibraryToExcel(currentGroupId);
 });
 
 // ── Played Songs — event handlers ────────────────────────

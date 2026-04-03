@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.11</div>
+  <div class="version-badge">V 4.12</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5567,17 +5567,25 @@ async function openLibrarySong(songId, song) {
 // ─────────────────── Arrangement ─────────────────────────
 let arrState = null;
 let _arrDragController = null; // cleans up accumulated drag listeners on each re-render
+// In-memory cache of the most recently saved arrangement per song.
+// Prevents race conditions where the Firestore server hasn't received the write
+// by the time .get() is called to re-open the arrange screen.
+const _arrangementCache = {};
 
 // Open the arrange screen: fetch PDF then launch slicer
 async function openArrangeForSong(songId, song) {
   setLoading(true, 'Loading song…');
   try {
-    // Always fetch fresh song data so arrSections/arrArrangement are current,
-    // regardless of when the library row was last rendered
-    try {
-      const freshDoc = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
-      if (freshDoc.exists) song = freshDoc.data();
-    } catch { /* fall back to passed-in song if fetch fails */ }
+    // Use in-memory cache first (avoids server round-trip race condition),
+    // then fall back to a fresh Firestore fetch, then passed-in song data
+    if (_arrangementCache[songId]) {
+      song = { ...song, ..._arrangementCache[songId] };
+    } else {
+      try {
+        const freshDoc = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
+        if (freshDoc.exists) song = freshDoc.data();
+      } catch { /* fall back to passed-in song if fetch fails */ }
+    }
 
     let pdfData = null;
     // Always load the untouched original if we have one, so slices are always relative to the source PDF
@@ -6198,6 +6206,13 @@ async function arrSaveArrangement() {
       arrSections:         arrState.sections,
       arrArrangement:      arrState.arrangement,
     });
+    // Store in-memory so re-opening the arrange screen always gets fresh data
+    // even before the Firestore server write has propagated
+    _arrangementCache[arrState.songId] = {
+      arrSections:         arrState.sections.map(s => ({ ...s })),
+      arrArrangement:      arrState.arrangement.map(a => ({ ...a })),
+      originalStoragePath: arrState.song.originalStoragePath,
+    };
 
     // Update local cache
     let binary = '';

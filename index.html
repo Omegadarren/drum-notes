@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.10</div>
+  <div class="version-badge">V 4.11</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -5572,6 +5572,13 @@ let _arrDragController = null; // cleans up accumulated drag listeners on each r
 async function openArrangeForSong(songId, song) {
   setLoading(true, 'Loading song…');
   try {
+    // Always fetch fresh song data so arrSections/arrArrangement are current,
+    // regardless of when the library row was last rendered
+    try {
+      const freshDoc = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
+      if (freshDoc.exists) song = freshDoc.data();
+    } catch { /* fall back to passed-in song if fetch fails */ }
+
     let pdfData = null;
     // Always load the untouched original if we have one, so slices are always relative to the source PDF
     const srcPath = song.originalStoragePath || song.storagePath;

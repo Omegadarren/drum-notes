@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.16</div>
+  <div class="version-badge">V 4.17</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4652,8 +4652,13 @@ async function loadGroupSetlists(gid) {
     // Check for stale backups (fire-and-forget — shows modal if any are > 30 days old)
     checkStaleBackups(gid);
   } catch (err) {
-    console.error(err);
-    // Try to show cached setlists when Firestore is unreachable
+    console.error('loadGroupSetlists error:', err);
+    // Only treat as offline if the browser says so — otherwise show the real error
+    if (navigator.onLine) {
+      listEl.innerHTML = `<div class="groups-empty">Could not load setlists.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small><br><br><button onclick="loadGroupSetlists('${esc(gid)}')" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:15px;cursor:pointer;">↺ Retry</button></div>`;
+      return;
+    }
+    // Offline fallback — use cached setlists
     const cachedIds = JSON.parse(localStorage.getItem('bn_setlist_ids_' + gid) || '[]');
     if (!cachedIds.length) {
       listEl.innerHTML = '<div class="groups-empty">No WiFi — and no local backup found yet. Open once while online to enable offline access.</div>';

@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.18</div>
+  <div class="version-badge">V 4.19</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4009,10 +4009,15 @@ let fbAuthReady = false;
 
 auth.onAuthStateChanged(user => {
   if (user) {
-    // Prefer our own stored UID so admin status survives Firebase auth resets
     const storedUid = localStorage.getItem('bandnotes_uid');
-    fbUid = storedUid || user.uid;
-    if (!storedUid) localStorage.setItem('bandnotes_uid', fbUid);
+    if (storedUid && storedUid !== user.uid) {
+      // Firebase issued a new anonymous UID — stale stored UID would cause permission-denied.
+      // Preserve the old UID so rejoin logic can detect the change.
+      console.warn('[BandNotes] Auth UID changed:', storedUid.slice(0,8) + '…', '→', user.uid.slice(0,8) + '…');
+      localStorage.setItem('bandnotes_uid_prev', storedUid);
+    }
+    fbUid = user.uid;  // Always match actual Firebase auth token
+    localStorage.setItem('bandnotes_uid', fbUid);
   } else {
     auth.signInAnonymously().catch(err => {
       console.error('Firebase anon auth failed:', err);
@@ -4660,6 +4665,20 @@ async function loadGroupSetlists(gid) {
     console.error('loadGroupSetlists error:', err);
     // Only treat as offline if the browser says so — otherwise show the real error
     if (navigator.onLine) {
+      // Permission denied often means Firebase issued a new anonymous UID that isn't a member yet.
+      // If we have the invite code cached, offer one-tap silent rejoin.
+      if (err.code === 'permission-denied') {
+        const groupCache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
+        const cachedCode = groupCache[gid] && groupCache[gid].inviteCode;
+        if (cachedCode) {
+          listEl.innerHTML = `<div class="groups-empty">Session was reset — your access needs to be restored.<br><br><button id="btn-auto-rejoin" style="padding:10px 22px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:15px;cursor:pointer;">🔄 Restore Access</button></div>`;
+          document.getElementById('btn-auto-rejoin').addEventListener('click', () => {
+            document.getElementById('inp-invite-code').value = cachedCode;
+            document.getElementById('join-group-modal').classList.add('open');
+          });
+          return;
+        }
+      }
       listEl.innerHTML = `<div class="groups-empty">Could not load setlists.<br><small style="font-size:12px;opacity:0.6">${esc(err.code || err.message || String(err))}</small><br><br><button onclick="loadGroupSetlists('${esc(gid)}')" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:15px;cursor:pointer;">↺ Retry</button></div>`;
       return;
     }

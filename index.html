@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.19</div>
+  <div class="version-badge">V 4.20</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4228,11 +4228,13 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
 
     // Invite code is the admin's secret — if the stored adminUid doesn't match the
     // current UID (e.g. localStorage was wiped and a new anonymous UID was issued),
-    // claim admin ownership back by updating Firestore.
+    // attempt to claim admin ownership back by updating Firestore.
+    // This may fail if rules haven't recognised us yet — that's OK, we proceed anyway.
     const isOriginalAdmin = gdata.adminUid === fbUid;
-    const isLostAdmin     = !isOriginalAdmin; // entering invite code = you ARE the admin
+    const isLostAdmin     = !isOriginalAdmin;
     if (isLostAdmin) {
-      await gdoc.ref.update({ adminUid: fbUid });
+      try { await gdoc.ref.update({ adminUid: fbUid }); }
+      catch (adminErr) { console.warn('[BandNotes] Could not reclaim adminUid (rules):', adminErr.code); }
     }
 
     // Restore/add group to local list
@@ -4245,10 +4247,20 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
     if (!adminGroups.includes(groupId)) adminGroups.unshift(groupId);
     localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
 
-    // Register as member under new UID
-    await gdoc.ref.collection('members').doc(fbUid).set({
-      name: getProfileName() || 'Unknown', joinedAt: Date.now()
-    });
+    // Register as member under current UID
+    try {
+      await gdoc.ref.collection('members').doc(fbUid).set({
+        name: getProfileName() || 'Unknown', joinedAt: Date.now()
+      });
+    } catch (memberErr) {
+      setLoading(false);
+      if (memberErr.code === 'permission-denied') {
+        alert('Firebase blocked the join — Anonymous Authentication may be disabled in the Firebase Console.\n\nGo to: Firebase Console → Authentication → Sign-in method → Anonymous → Enable it.');
+      } else {
+        alert('Could not register as member: ' + memberErr.message);
+      }
+      return;
+    }
 
     document.getElementById('join-group-modal').classList.remove('open');
     setLoading(false);

@@ -1704,7 +1704,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.17</div>
+  <div class="version-badge">V 4.18</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -4365,6 +4365,11 @@ document.getElementById('btn-group-detail-back').addEventListener('click', () =>
 async function loadGroupSetlists(gid) {
   const listEl = document.getElementById('group-setlists-list');
   listEl.innerHTML = '<div class="groups-empty">Loading…</div>';
+  // Ensure we have a valid auth token before querying Firestore
+  try { if (!fbUid) await waitForAuth(); } catch (authErr) {
+    listEl.innerHTML = `<div class="groups-empty">Could not authenticate.<br><small style="font-size:12px;opacity:0.6">${esc(authErr.message || String(authErr))}</small><br><br><button onclick="loadGroupSetlists('${esc(gid)}')" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text);font-size:15px;cursor:pointer;">↺ Retry</button></div>`;
+    return;
+  }
   try {
     const snap = await db.collection('groups').doc(gid).collection('setlists')
       .orderBy('createdAt', 'desc').get();

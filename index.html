@@ -689,6 +689,172 @@
       -webkit-user-select: none;
     }
 
+    /* ── Chord Helper ─────────────────────────────────── */
+    #chord-fab {
+      position: fixed;
+      bottom: 28px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-size: 22px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+      z-index: 200;
+      touch-action: manipulation;
+      transition: transform 0.15s;
+    }
+    #chord-fab:active { transform: scale(0.92); }
+    #viewer.active #chord-fab { display: flex; }
+
+    #chord-panel {
+      position: fixed;
+      top: 0; right: 0;
+      width: min(320px, 90vw);
+      height: 100%;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 20px 32px;
+      gap: 20px;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      box-shadow: -6px 0 32px rgba(0,0,0,0.35);
+    }
+    #chord-panel.open { transform: translateX(0); }
+
+    #chord-panel-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 299;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.28s;
+    }
+    #chord-panel-overlay.open { display: block; opacity: 1; }
+
+    .chord-panel-hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chord-panel-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .chord-panel-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 26px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 8px;
+      touch-action: manipulation;
+    }
+    .chord-panel-close:active { background: var(--press-bg); }
+
+    .chord-select-wrap label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 7px;
+    }
+    #chord-select {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 17px;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+    #chord-select:focus { outline: 2px solid var(--accent); }
+
+    .chord-notes-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: -8px;
+    }
+    .chord-note-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .chord-note-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 16px 10px;
+      border-radius: 14px;
+      border: 1.5px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 0.12s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .chord-note-btn:active { transform: scale(0.94); background: var(--accent); color: #fff; border-color: var(--accent); }
+    .chord-note-btn.playing { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .chord-note-btn-label {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .chord-note-btn-sub {
+      font-size: 11px;
+      opacity: 0.75;
+      text-align: center;
+      line-height: 1.3;
+    }
+    .chord-octave-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chord-octave-row label {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .chord-octave-btns {
+      display: flex;
+      gap: 6px;
+    }
+    .chord-octave-btn {
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chord-octave-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
     #slide-track {
       display: flex;
       height: 100%;
@@ -1704,7 +1870,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.20</div>
+  <div class="version-badge">V 4.21</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2114,6 +2280,54 @@
   </div>
 
   <div id="pdf-scroll"></div>
+
+  <!-- ── Chord Helper FAB ── -->
+  <button id="chord-fab" title="Chord helper">🎵</button>
+
+  <!-- ── Chord Helper Panel ── -->
+  <div id="chord-panel-overlay"></div>
+  <div id="chord-panel">
+    <div class="chord-panel-hdr">
+      <span class="chord-panel-title">Chord Helper</span>
+      <button class="chord-panel-close" id="chord-panel-close">×</button>
+    </div>
+
+    <div class="chord-select-wrap">
+      <label>Chord</label>
+      <select id="chord-select">
+        <!-- populated by JS -->
+      </select>
+    </div>
+
+    <div class="chord-octave-row">
+      <label>Octave</label>
+      <div class="chord-octave-btns">
+        <button class="chord-octave-btn" data-oct="-1">−</button>
+        <button class="chord-octave-btn active" data-oct="0">Mid</button>
+        <button class="chord-octave-btn" data-oct="1">+</button>
+      </div>
+    </div>
+
+    <span class="chord-notes-label">Play a note</span>
+    <div class="chord-note-btns">
+      <button class="chord-note-btn" id="cnb-fifth-below" data-interval="-7">
+        <span class="chord-note-btn-label" id="cnb-fifth-below-name">—</span>
+        <span class="chord-note-btn-sub">5th below</span>
+      </button>
+      <button class="chord-note-btn" id="cnb-root" data-interval="0">
+        <span class="chord-note-btn-label" id="cnb-root-name">—</span>
+        <span class="chord-note-btn-sub">Root</span>
+      </button>
+      <button class="chord-note-btn" id="cnb-third" data-interval="4">
+        <span class="chord-note-btn-label" id="cnb-third-name">—</span>
+        <span class="chord-note-btn-sub">3rd above</span>
+      </button>
+      <button class="chord-note-btn" id="cnb-fifth" data-interval="7">
+        <span class="chord-note-btn-label" id="cnb-fifth-name">—</span>
+        <span class="chord-note-btn-sub">5th above</span>
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- ==================== STALE BACKUP MODAL ==================== -->
@@ -7179,6 +7393,148 @@ renderStart();
       }
     }, 150);
   });
+})();
+
+// ─────────────────── Chord Helper ────────────────────────
+(function() {
+  // All 12 chromatic note names (sharps)
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  // Friendly display names (use flats for common cases)
+  const NOTE_DISPLAY = ['C','C#/D♭','D','D#/E♭','E','F','F#/G♭','G','G#/A♭','A','A#/B♭','B'];
+
+  // Chord definitions: [root semitone index, quality label, third interval]
+  // Third interval: 4 = major third, 3 = minor third
+  const CHORDS = [];
+  const QUALITIES = [
+    { label: '',   thirdInterval: 4, suffix: '' },       // Major
+    { label: 'm',  thirdInterval: 3, suffix: 'm' },      // Minor
+    { label: '7',  thirdInterval: 4, suffix: '7' },      // Dominant 7 (same 3rd as major)
+    { label: 'm7', thirdInterval: 3, suffix: 'm7' },     // Minor 7
+    { label: 'maj7', thirdInterval: 4, suffix: 'maj7' }, // Major 7
+    { label: 'sus4', thirdInterval: 5, suffix: 'sus4' }, // Sus4 (4th instead of 3rd)
+    { label: 'dim', thirdInterval: 3, suffix: 'dim' },   // Diminished (minor 3rd)
+  ];
+  NOTE_NAMES.forEach((note, i) => {
+    QUALITIES.forEach(q => {
+      CHORDS.push({ name: note + q.suffix, root: i, third: q.thirdInterval });
+    });
+  });
+
+  // Frequency of a MIDI note number (A4 = MIDI 69 = 440 Hz)
+  function midiToFreq(midi) { return 440 * Math.pow(2, (midi - 69) / 12); }
+
+  // Middle C = MIDI 60 (C4). Root at octave 4 by default.
+  let octaveOffset = 0; // -1 / 0 / +1
+
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function playNote(freq) {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 0.015);
+    gain.gain.setValueAtTime(0.55, ctx.currentTime + 0.7);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 1.05);
+  }
+
+  function playInterval(rootSemitone, interval) {
+    // Root at MIDI 60 (C4) + octave offset, then add rootSemitone and interval
+    const midi = 60 + (octaveOffset * 12) + rootSemitone + interval;
+    playNote(midiToFreq(midi));
+  }
+
+  // Populate chord dropdown
+  const sel = document.getElementById('chord-select');
+  CHORDS.forEach((c, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+
+  function getSelectedChord() { return CHORDS[parseInt(sel.value, 10)]; }
+
+  function noteName(semitone) {
+    return NOTE_DISPLAY[((semitone % 12) + 12) % 12];
+  }
+
+  function updateNoteLabels() {
+    const chord = getSelectedChord();
+    if (!chord) return;
+    const intervals = {
+      'cnb-fifth-below': -7,
+      'cnb-root':         0,
+      'cnb-third':        chord.third,
+      'cnb-fifth':        7
+    };
+    for (const [id, interval] of Object.entries(intervals)) {
+      const nameEl = document.getElementById(id + '-name');
+      if (nameEl) nameEl.textContent = noteName(chord.root + interval);
+    }
+    // Update the third sub-label to indicate major/minor/sus
+    const thirdSub = document.querySelector('#cnb-third .chord-note-btn-sub');
+    if (thirdSub) {
+      const t = chord.third;
+      thirdSub.textContent = t === 3 ? 'Minor 3rd' : t === 5 ? 'Sus 4th' : 'Major 3rd';
+    }
+  }
+
+  sel.addEventListener('change', updateNoteLabels);
+  updateNoteLabels();
+
+  // Note buttons
+  document.querySelectorAll('.chord-note-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const chord = getSelectedChord();
+      if (!chord) return;
+      const interval = btn.dataset.interval === '4'
+        ? chord.third                        // third uses chord-specific interval
+        : parseInt(btn.dataset.interval, 10);
+      playInterval(chord.root, interval);
+      btn.classList.add('playing');
+      setTimeout(() => btn.classList.remove('playing'), 1000);
+    });
+  });
+
+  // Octave buttons
+  document.querySelectorAll('.chord-octave-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.chord-octave-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      octaveOffset = parseInt(btn.dataset.oct, 10);
+    });
+  });
+
+  // Open / close panel
+  const fab     = document.getElementById('chord-fab');
+  const panel   = document.getElementById('chord-panel');
+  const overlay = document.getElementById('chord-panel-overlay');
+  const closeBtn = document.getElementById('chord-panel-close');
+
+  function openChordPanel() {
+    panel.classList.add('open');
+    overlay.classList.add('open');
+  }
+  function closeChordPanel() {
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+  }
+
+  fab.addEventListener('click', openChordPanel);
+  closeBtn.addEventListener('click', closeChordPanel);
+  overlay.addEventListener('click', closeChordPanel);
 })();
 
 // ─────────────────── Service Worker (offline) ────────────

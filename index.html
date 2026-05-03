@@ -1870,7 +1870,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.24</div>
+  <div class="version-badge">V 4.25</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2318,6 +2318,10 @@
         <span class="chord-note-btn-label" id="cnb-root-name">—</span>
         <span class="chord-note-btn-sub">Root</span>
       </button>
+      <button class="chord-note-btn" id="cnb-sus2" data-interval="2">
+        <span class="chord-note-btn-label" id="cnb-sus2-name">—</span>
+        <span class="chord-note-btn-sub">Sus 2nd</span>
+      </button>
       <button class="chord-note-btn" id="cnb-third" data-interval="4">
         <span class="chord-note-btn-label" id="cnb-third-name">—</span>
         <span class="chord-note-btn-sub">3rd above</span>
@@ -2325,6 +2329,10 @@
       <button class="chord-note-btn" id="cnb-fifth" data-interval="7">
         <span class="chord-note-btn-label" id="cnb-fifth-name">—</span>
         <span class="chord-note-btn-sub">5th above</span>
+      </button>
+      <button class="chord-note-btn" id="cnb-seventh" data-interval="seventh">
+        <span class="chord-note-btn-label" id="cnb-seventh-name">—</span>
+        <span class="chord-note-btn-sub">7th above</span>
       </button>
     </div>
   </div>
@@ -7406,17 +7414,17 @@ renderStart();
   // Third interval: 4 = major third, 3 = minor third
   const CHORDS = [];
   const QUALITIES = [
-    { label: '',   thirdInterval: 4, suffix: '' },       // Major
-    { label: 'm',  thirdInterval: 3, suffix: 'm' },      // Minor
-    { label: '7',  thirdInterval: 4, suffix: '7' },      // Dominant 7 (same 3rd as major)
-    { label: 'm7', thirdInterval: 3, suffix: 'm7' },     // Minor 7
-    { label: 'maj7', thirdInterval: 4, suffix: 'maj7' }, // Major 7
-    { label: 'sus4', thirdInterval: 5, suffix: 'sus4' }, // Sus4 (4th instead of 3rd)
-    { label: 'dim', thirdInterval: 3, suffix: 'dim' },   // Diminished (minor 3rd)
+    { label: '',     thirdInterval: 4, seventhInterval: 10, suffix: '' },       // Major (dom 7)
+    { label: 'm',    thirdInterval: 3, seventhInterval: 10, suffix: 'm' },      // Minor
+    { label: '7',    thirdInterval: 4, seventhInterval: 10, suffix: '7' },      // Dominant 7
+    { label: 'm7',   thirdInterval: 3, seventhInterval: 10, suffix: 'm7' },     // Minor 7
+    { label: 'maj7', thirdInterval: 4, seventhInterval: 11, suffix: 'maj7' },   // Major 7
+    { label: 'sus4', thirdInterval: 5, seventhInterval: 10, suffix: 'sus4' },   // Sus4
+    { label: 'dim',  thirdInterval: 3, seventhInterval:  9, suffix: 'dim' },    // Diminished (dim 7)
   ];
   NOTE_NAMES.forEach((note, i) => {
     QUALITIES.forEach(q => {
-      CHORDS.push({ name: note + q.suffix, root: i, third: q.thirdInterval });
+      CHORDS.push({ name: note + q.suffix, root: i, third: q.thirdInterval, seventh: q.seventhInterval });
     });
   });
 
@@ -7476,8 +7484,10 @@ renderStart();
     const intervals = {
       'cnb-fifth-below': -5,
       'cnb-root':         0,
+      'cnb-sus2':         2,
       'cnb-third':        chord.third,
-      'cnb-fifth':        7
+      'cnb-fifth':        7,
+      'cnb-seventh':      chord.seventh
     };
     for (const [id, interval] of Object.entries(intervals)) {
       const nameEl = document.getElementById(id + '-name');
@@ -7488,6 +7498,12 @@ renderStart();
     if (thirdSub) {
       const t = chord.third;
       thirdSub.textContent = t === 3 ? 'Minor 3rd' : t === 5 ? 'Sus 4th' : 'Major 3rd';
+    }
+    // Update the seventh sub-label
+    const seventhSub = document.querySelector('#cnb-seventh .chord-note-btn-sub');
+    if (seventhSub) {
+      const s = chord.seventh;
+      seventhSub.textContent = s === 11 ? 'Major 7th' : s === 9 ? 'Dim 7th' : 'Minor 7th';
     }
   }
 
@@ -7526,8 +7542,8 @@ renderStart();
     btn.addEventListener('click', () => {
       const chord = getSelectedChord();
       if (!chord) return;
-      const interval = btn.dataset.interval === '4'
-        ? chord.third                        // third uses chord-specific interval
+      const interval = btn.dataset.interval === '4'       ? chord.third
+        : btn.dataset.interval === 'seventh' ? chord.seventh
         : parseInt(btn.dataset.interval, 10);
       playInterval(chord.root, interval);
       btn.classList.add('playing');

@@ -1870,7 +1870,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.21</div>
+  <div class="version-badge">V 4.22</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7441,12 +7441,12 @@ renderStart();
     osc.frequency.value = freq;
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 0.015);
-    gain.gain.setValueAtTime(0.55, ctx.currentTime + 0.7);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+    gain.gain.setValueAtTime(0.55, ctx.currentTime + 1.6);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 1.05);
+    osc.stop(ctx.currentTime + 2.05);
   }
 
   function playInterval(rootSemitone, interval) {
@@ -7491,8 +7491,38 @@ renderStart();
     }
   }
 
-  sel.addEventListener('change', updateNoteLabels);
+  function currentSongId() {
+    return app.slides && app.slides[app.slideIdx] ? app.slides[app.slideIdx].songId : null;
+  }
+
+  function saveChordForSong() {
+    const id = currentSongId();
+    if (!id) return;
+    localStorage.setItem('bn_chord_' + id, sel.value);
+  }
+
+  function loadChordForSong() {
+    const id = currentSongId();
+    if (!id) return;
+    const saved = localStorage.getItem('bn_chord_' + id);
+    if (saved !== null && sel.options[saved]) {
+      sel.value = saved;
+      updateNoteLabels();
+    }
+  }
+
+  sel.addEventListener('change', () => { updateNoteLabels(); saveChordForSong(); });
   updateNoteLabels();
+
+  // Hook into slide changes so chord auto-loads per song
+  const _origGoToSlide = window.goToSlide;
+  window.goToSlide = function(idx) {
+    if (_origGoToSlide) _origGoToSlide(idx);
+    loadChordForSong();
+  };
+
+  // Also load when the panel is opened (covers single-song view)
+  fab.addEventListener('click', loadChordForSong, true);
 
   // Note buttons
   document.querySelectorAll('.chord-note-btn').forEach(btn => {
@@ -7504,7 +7534,7 @@ renderStart();
         : parseInt(btn.dataset.interval, 10);
       playInterval(chord.root, interval);
       btn.classList.add('playing');
-      setTimeout(() => btn.classList.remove('playing'), 1000);
+      setTimeout(() => btn.classList.remove('playing'), 2000);
     });
   });
 

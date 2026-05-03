@@ -1922,7 +1922,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.28</div>
+  <div class="version-badge">V 4.29</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7667,21 +7667,42 @@ renderStart();
       _mediaRecorder.stop();
       return;
     }
+    // Check API availability (DuckDuckGo on iOS may block this entirely)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Voice recording is not supported in this browser.\n\nPlease use Safari on iOS or Chrome on Android.');
+      return;
+    }
     // Start recording
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
-      alert('Microphone access denied. Please allow microphone access in your browser settings.');
+      const name = err.name || '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        alert('Microphone access was denied.\n\niOS: Settings → Safari → Microphone → Allow\nThen reload the page.');
+      } else if (name === 'NotFoundError') {
+        alert('No microphone found on this device.');
+      } else {
+        alert('Could not access microphone: ' + (err.message || err.name || String(err)));
+      }
+      return;
+    }
+    // Pick best supported MIME type — iOS Safari only supports audio/mp4
+    const mimeType = ['audio/mp4', 'audio/webm', 'audio/ogg']
+      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+    try {
+      _mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    } catch (err) {
+      alert('Could not start recorder: ' + (err.message || String(err)));
+      stream.getTracks().forEach(t => t.stop());
       return;
     }
     _recordChunks = [];
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
-    _mediaRecorder = new MediaRecorder(stream, { mimeType });
+    const usedType = _mediaRecorder.mimeType || mimeType || 'audio/mp4';
     _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _recordChunks.push(e.data); };
     _mediaRecorder.onstop = async () => {
       stream.getTracks().forEach(t => t.stop());
-      _voiceBlob = new Blob(_recordChunks, { type: mimeType });
+      _voiceBlob = new Blob(_recordChunks, { type: usedType });
       const key = voiceKey();
       if (key) await idbPut(IDB_SETTINGS, key, _voiceBlob).catch(() => {});
       playBtn.disabled = false;

@@ -1870,7 +1870,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.23</div>
+  <div class="version-badge">V 4.24</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2310,7 +2310,7 @@
 
     <span class="chord-notes-label">Play a note</span>
     <div class="chord-note-btns">
-      <button class="chord-note-btn" id="cnb-fifth-below" data-interval="-7">
+      <button class="chord-note-btn" id="cnb-fifth-below" data-interval="-5">
         <span class="chord-note-btn-label" id="cnb-fifth-below-name">—</span>
         <span class="chord-note-btn-sub">5th below</span>
       </button>
@@ -7474,7 +7474,7 @@ renderStart();
     const chord = getSelectedChord();
     if (!chord) return;
     const intervals = {
-      'cnb-fifth-below': -7,
+      'cnb-fifth-below': -5,
       'cnb-root':         0,
       'cnb-third':        chord.third,
       'cnb-fifth':        7

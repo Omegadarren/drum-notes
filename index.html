@@ -1870,7 +1870,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.22</div>
+  <div class="version-badge">V 4.23</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7521,9 +7521,6 @@ renderStart();
     loadChordForSong();
   };
 
-  // Also load when the panel is opened (covers single-song view)
-  fab.addEventListener('click', loadChordForSong, true);
-
   // Note buttons
   document.querySelectorAll('.chord-note-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -7563,6 +7560,7 @@ renderStart();
   }
 
   fab.addEventListener('click', openChordPanel);
+  fab.addEventListener('click', loadChordForSong);  // load saved chord on open
   closeBtn.addEventListener('click', closeChordPanel);
   overlay.addEventListener('click', closeChordPanel);
 })();

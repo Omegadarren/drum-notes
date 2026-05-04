@@ -896,6 +896,7 @@
       white-space: nowrap;
     }
     .cheat-note:active { transform: translate(-50%, -50%) scale(0.94); }
+    .cheat-note.dragging { cursor: grabbing; transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 6px 18px rgba(0,0,0,0.55); }
     .cheat-note.playing { background: var(--accent); }
 
     /* Placement overlay — covers full scrollable content of song-slide */
@@ -1975,7 +1976,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.37</div>
+  <div class="version-badge">V 4.38</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7659,27 +7660,65 @@ renderStart();
       // x/y stored as % of slide scrollWidth/scrollHeight
       btn.style.left = note.x + '%';
       btn.style.top  = note.y + '%';
-      // Play on tap
-      btn.addEventListener('click', e => {
+
+      // Double-click to delete
+      btn.addEventListener('dblclick', e => {
         e.stopPropagation();
-        playNote(midiToFreq(note.midi));
-        btn.classList.add('playing');
-        setTimeout(() => btn.classList.remove('playing'), 2000);
-      });
-      // Long-press to delete
-      let _pressTimer = null;
-      function startPress() { _pressTimer = setTimeout(() => {
         if (confirm('Remove this cheat note?')) {
           const arr = getCheatNotes(songId);
           arr.splice(idx, 1);
           saveCheatNotes(songId, arr);
           renderCheatNotes();
         }
-      }, 700); }
-      function cancelPress() { clearTimeout(_pressTimer); }
-      btn.addEventListener('pointerdown', startPress);
-      btn.addEventListener('pointerup',   cancelPress);
-      btn.addEventListener('pointerleave', cancelPress);
+      });
+
+      // Drag to reposition
+      let _dragging = false;
+      let _dragMoved = false;
+      let _startX, _startY, _origLeft, _origTop;
+      btn.addEventListener('pointerdown', e => {
+        _dragging = true;
+        _dragMoved = false;
+        _startX = e.clientX;
+        _startY = e.clientY;
+        _origLeft = note.x;
+        _origTop  = note.y;
+        btn.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+      });
+      btn.addEventListener('pointermove', e => {
+        if (!_dragging) return;
+        const dx = e.clientX - _startX;
+        const dy = e.clientY - _startY;
+        if (!_dragMoved && Math.hypot(dx, dy) > 6) { _dragMoved = true; btn.classList.add('dragging'); }
+        if (!_dragMoved) return;
+        const newX = _origLeft + (dx / slide.scrollWidth)  * 100;
+        const newY = _origTop  + (dy / slide.scrollHeight) * 100;
+        btn.style.left = newX + '%';
+        btn.style.top  = newY + '%';
+      });
+      btn.addEventListener('pointerup', e => {
+        if (!_dragging) return;
+        _dragging = false;
+        btn.classList.remove('dragging');
+          // Persist new position
+          const dx = e.clientX - _startX;
+          const dy = e.clientY - _startY;
+          const arr = getCheatNotes(songId);
+          arr[idx].x = _origLeft + (dx / slide.scrollWidth)  * 100;
+          arr[idx].y = _origTop  + (dy / slide.scrollHeight) * 100;
+          saveCheatNotes(songId, arr);
+          note.x = arr[idx].x;
+          note.y = arr[idx].y;
+        } else {
+          // Tap — play the note
+          playNote(midiToFreq(note.midi));
+          btn.classList.add('playing');
+          setTimeout(() => btn.classList.remove('playing'), 2000);
+        }
+        e.stopPropagation();
+      });
+
       slide.appendChild(btn);
     });
   }
@@ -7694,7 +7733,7 @@ renderStart();
     if (!slide) return;
     const overlay = document.createElement('div');
     overlay.className = 'placement-overlay';
-    overlay.innerHTML = `<div class="placement-hint"><div class="placement-hint-inner">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap to play &nbsp;·&nbsp; Hold to remove</small></div></div>`;
+    overlay.innerHTML = `<div class="placement-hint"><div class="placement-hint-inner">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap to play &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; Double-tap to remove</small></div></div>`;
     function finish(e) {
       if (!_placementData) return;
       // Coords relative to slide's full scrollable content

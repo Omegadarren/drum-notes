@@ -1984,7 +1984,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.44</div>
+  <div class="version-badge">V 4.45</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2967,6 +2967,7 @@ async function launchViewer(session) {
     }
     updateSlideNav();
     drawAllAnnotations();
+    goToSlide(0);  // trigger chord/cheat-note hooks for first slide
     // Sync BPM label to first slide
     const firstBpm = app.slides[0] && app.slides[0].bpm;
     if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(firstBpm || null);
@@ -7797,7 +7798,8 @@ renderStart();
   window.goToSlide = function(idx) {
     if (_origGoToSlide) _origGoToSlide(idx);
     loadChordForSong();
-    renderCheatNotes();
+    // Defer render so the slide layout (scrollWidth/scrollHeight) is settled
+    requestAnimationFrame(() => requestAnimationFrame(() => renderCheatNotes()));
   };
 
   // Note buttons — event delegation (buttons are dynamically created)

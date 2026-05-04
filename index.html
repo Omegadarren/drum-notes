@@ -901,19 +901,16 @@
 
     /* Placement overlay — covers full scrollable content of song-slide */
     .placement-overlay {
-      position: absolute;
-      left: 0; top: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 200;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
       background: rgba(0,0,0,0.4);
       cursor: crosshair;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .placement-hint {
-      position: sticky;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex; align-items: center; justify-content: center;
       pointer-events: none;
     }
     .placement-hint-inner {
@@ -1976,7 +1973,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.40</div>
+  <div class="version-badge">V 4.41</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7757,7 +7754,7 @@ renderStart();
     function onKey(e) { if (e.key === 'Escape') cleanup(); }
     overlay.addEventListener('click', finish);
     document.addEventListener('keydown', onKey);
-    slide.appendChild(overlay);
+    document.body.appendChild(overlay);
   }
 
   // Hook into slide changes so chord auto-loads per song

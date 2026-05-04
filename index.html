@@ -898,19 +898,28 @@
     .cheat-note:active { transform: translate(-50%, -50%) scale(0.94); }
     .cheat-note.playing { background: var(--accent); }
 
-    /* Placement overlay */
+    /* Placement overlay — covers full scrollable content of song-slide */
     .placement-overlay {
-      position: absolute; inset: 0; z-index: 200;
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 200;
       background: rgba(0,0,0,0.4);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
       cursor: crosshair;
     }
     .placement-hint {
+      position: sticky;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    .placement-hint-inner {
       background: rgba(0,0,0,0.75); color: #fff;
       padding: 16px 28px; border-radius: 14px;
       font-size: 18px; text-align: center;
-      pointer-events: none; line-height: 1.5;
+      line-height: 1.5;
     }
 
     .chord-voice-row {
@@ -963,6 +972,7 @@
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
+      position: relative;
     }
 
     /* Slide navigation buttons in viewer header */
@@ -1965,7 +1975,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.36</div>
+  <div class="version-badge">V 4.37</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7630,17 +7640,23 @@ renderStart();
   function saveCheatNotes(songId, notes) {
     localStorage.setItem('bn_cheats_' + songId, JSON.stringify(notes));
   }
+  function currentSlideEl() {
+    return document.querySelectorAll('.song-slide')[app.slideIdx] || null;
+  }
+
   function renderCheatNotes() {
-    // Remove any existing cheat note elements from viewer
+    // Remove any existing cheat note elements
     document.querySelectorAll('.cheat-note').forEach(el => el.remove());
     const songId = currentSongId();
     if (!songId) return;
-    const viewer = document.getElementById('viewer');
+    const slide = currentSlideEl();
+    if (!slide) return;
     const notes = getCheatNotes(songId);
     notes.forEach((note, idx) => {
       const btn = document.createElement('button');
       btn.className = 'cheat-note';
       btn.textContent = note.label;
+      // x/y stored as % of slide scrollWidth/scrollHeight
       btn.style.left = note.x + '%';
       btn.style.top  = note.y + '%';
       // Play on tap
@@ -7664,7 +7680,7 @@ renderStart();
       btn.addEventListener('pointerdown', startPress);
       btn.addEventListener('pointerup',   cancelPress);
       btn.addEventListener('pointerleave', cancelPress);
-      viewer.appendChild(btn);
+      slide.appendChild(btn);
     });
   }
 
@@ -7674,15 +7690,17 @@ renderStart();
     document.getElementById('chord-panel').classList.remove('open');
     document.getElementById('chord-panel-overlay').classList.remove('open');
     _placementData = { midi, label };
-    const viewer = document.getElementById('viewer');
+    const slide = currentSlideEl();
+    if (!slide) return;
     const overlay = document.createElement('div');
     overlay.className = 'placement-overlay';
-    overlay.innerHTML = `<div class="placement-hint">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap the note to play it &nbsp;·&nbsp; Hold to remove it</small></div>`;
+    overlay.innerHTML = `<div class="placement-hint"><div class="placement-hint-inner">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap to play &nbsp;·&nbsp; Hold to remove</small></div></div>`;
     function finish(e) {
       if (!_placementData) return;
-      const rect = viewer.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width)  * 100;
-      const y = ((e.clientY - rect.top)  / rect.height) * 100;
+      // Coords relative to slide's full scrollable content
+      const rect = slide.getBoundingClientRect();
+      const x = ((e.clientX - rect.left)                    / slide.scrollWidth)  * 100;
+      const y = ((e.clientY - rect.top  + slide.scrollTop)  / slide.scrollHeight) * 100;
       const songId = currentSongId();
       if (songId) {
         const arr = getCheatNotes(songId);
@@ -7700,7 +7718,7 @@ renderStart();
     function onKey(e) { if (e.key === 'Escape') cleanup(); }
     overlay.addEventListener('click', finish);
     document.addEventListener('keydown', onKey);
-    viewer.appendChild(overlay);
+    slide.appendChild(overlay);
   }
 
   // Hook into slide changes so chord auto-loads per song

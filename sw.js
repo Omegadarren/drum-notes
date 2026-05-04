@@ -68,10 +68,9 @@ self.addEventListener('fetch', e => {
   if (url.origin !== self.location.origin) return;
 
   // ── Same-origin app shell — network-first, cache as fallback ─────────────
-  // Always try the network so the latest index.html is served when online.
-  // Only fall back to cache when offline.
+  // Use cache:'no-cache' so the HTTP cache is always revalidated.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(response => {
         if (response.ok) {
           const clone = response.clone();

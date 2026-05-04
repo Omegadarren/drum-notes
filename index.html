@@ -872,6 +872,47 @@
     }
     .chord-play-btn:active { opacity: 0.8; transform: scale(0.97); }
 
+    /* Pin button on chord note buttons */
+    .chord-note-btn { position: relative; }
+    .chord-note-pin {
+      position: absolute; top: 4px; right: 4px;
+      background: none; border: none; padding: 0;
+      font-size: 13px; line-height: 1; opacity: 0.4;
+      cursor: pointer; touch-action: manipulation;
+      transition: opacity 0.15s;
+    }
+    .chord-note-pin:hover, .chord-note-pin:active { opacity: 1; }
+
+    /* Cheat notes — floating playable buttons on the viewer */
+    .cheat-note {
+      position: absolute;
+      background: #ff9500; color: #fff;
+      border: none; border-radius: 22px;
+      padding: 8px 16px; font-size: 16px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+      transform: translate(-50%, -50%);
+      z-index: 50; touch-action: manipulation;
+      user-select: none; transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .cheat-note:active { transform: translate(-50%, -50%) scale(0.94); }
+    .cheat-note.playing { background: var(--accent); }
+
+    /* Placement overlay */
+    .placement-overlay {
+      position: absolute; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.4);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: crosshair;
+    }
+    .placement-hint {
+      background: rgba(0,0,0,0.75); color: #fff;
+      padding: 16px 28px; border-radius: 14px;
+      font-size: 18px; text-align: center;
+      pointer-events: none; line-height: 1.5;
+    }
+
     .chord-voice-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -1924,7 +1965,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.35</div>
+  <div class="version-badge">V 4.36</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7541,6 +7582,17 @@ renderStart();
       btn.dataset.interval = interval;
       btn.innerHTML = `<span class="chord-note-btn-label">${noteName(chord.root + interval)}</span>` +
                       `<span class="chord-note-btn-sub">${INTERVAL_LABELS[String(interval)] || interval}</span>`;
+      // Pin button to place note on screen
+      const pin = document.createElement('button');
+      pin.className = 'chord-note-pin';
+      pin.textContent = '📌';
+      pin.title = 'Place on screen';
+      pin.addEventListener('click', e => {
+        e.stopPropagation();
+        const midi = 60 + (octaveOffset * 12) + chord.root + interval;
+        enterPlacementMode(midi, noteName(chord.root + interval));
+      });
+      btn.appendChild(pin);
       container.appendChild(btn);
     });
   }
@@ -7571,11 +7623,92 @@ renderStart();
   sel.addEventListener('change', () => { renderChordButtons(); saveChordForSong(); });
   renderChordButtons();
 
+  // ── Cheat Notes ─────────────────────────────────────────────────────────────
+  function getCheatNotes(songId) {
+    try { return JSON.parse(localStorage.getItem('bn_cheats_' + songId) || '[]'); } catch(e) { return []; }
+  }
+  function saveCheatNotes(songId, notes) {
+    localStorage.setItem('bn_cheats_' + songId, JSON.stringify(notes));
+  }
+  function renderCheatNotes() {
+    // Remove any existing cheat note elements from viewer
+    document.querySelectorAll('.cheat-note').forEach(el => el.remove());
+    const songId = currentSongId();
+    if (!songId) return;
+    const viewer = document.getElementById('viewer');
+    const notes = getCheatNotes(songId);
+    notes.forEach((note, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'cheat-note';
+      btn.textContent = note.label;
+      btn.style.left = note.x + '%';
+      btn.style.top  = note.y + '%';
+      // Play on tap
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        playNote(midiToFreq(note.midi));
+        btn.classList.add('playing');
+        setTimeout(() => btn.classList.remove('playing'), 2000);
+      });
+      // Long-press to delete
+      let _pressTimer = null;
+      function startPress() { _pressTimer = setTimeout(() => {
+        if (confirm('Remove this cheat note?')) {
+          const arr = getCheatNotes(songId);
+          arr.splice(idx, 1);
+          saveCheatNotes(songId, arr);
+          renderCheatNotes();
+        }
+      }, 700); }
+      function cancelPress() { clearTimeout(_pressTimer); }
+      btn.addEventListener('pointerdown', startPress);
+      btn.addEventListener('pointerup',   cancelPress);
+      btn.addEventListener('pointerleave', cancelPress);
+      viewer.appendChild(btn);
+    });
+  }
+
+  let _placementData = null;
+  function enterPlacementMode(midi, label) {
+    // Close the chord panel
+    document.getElementById('chord-panel').classList.remove('open');
+    document.getElementById('chord-panel-overlay').classList.remove('open');
+    _placementData = { midi, label };
+    const viewer = document.getElementById('viewer');
+    const overlay = document.createElement('div');
+    overlay.className = 'placement-overlay';
+    overlay.innerHTML = `<div class="placement-hint">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap the note to play it &nbsp;·&nbsp; Hold to remove it</small></div>`;
+    function finish(e) {
+      if (!_placementData) return;
+      const rect = viewer.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width)  * 100;
+      const y = ((e.clientY - rect.top)  / rect.height) * 100;
+      const songId = currentSongId();
+      if (songId) {
+        const arr = getCheatNotes(songId);
+        arr.push({ midi: _placementData.midi, label: _placementData.label, x, y });
+        saveCheatNotes(songId, arr);
+        renderCheatNotes();
+      }
+      cleanup();
+    }
+    function cleanup() {
+      overlay.remove();
+      _placementData = null;
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') cleanup(); }
+    overlay.addEventListener('click', finish);
+    document.addEventListener('keydown', onKey);
+    viewer.appendChild(overlay);
+  }
+
   // Hook into slide changes so chord auto-loads per song
   const _origGoToSlide = window.goToSlide;
   window.goToSlide = function(idx) {
     if (_origGoToSlide) _origGoToSlide(idx);
     loadChordForSong();
+    renderCheatNotes();
   };
 
   // Note buttons — event delegation (buttons are dynamically created)

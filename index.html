@@ -1924,7 +1924,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.32</div>
+  <div class="version-badge">V 4.33</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7483,26 +7483,28 @@ renderStart();
     return audioCtx;
   }
 
-  function playNote(freq) {
+  function playNote(freq, duration) {
+    duration = duration || 2.0;
     const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'triangle';
     osc.frequency.value = freq;
+    const hold = Math.max(duration - 0.4, 0.015);
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 0.015);
-    gain.gain.setValueAtTime(0.55, ctx.currentTime + 1.6);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.0);
+    gain.gain.setValueAtTime(0.55, ctx.currentTime + hold);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + duration);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 2.05);
+    osc.stop(ctx.currentTime + duration + 0.05);
   }
 
-  function playInterval(rootSemitone, interval) {
+  function playInterval(rootSemitone, interval, duration) {
     // Root at MIDI 60 (C4) + octave offset, then add rootSemitone and interval
     const midi = 60 + (octaveOffset * 12) + rootSemitone + interval;
-    playNote(midiToFreq(midi));
+    playNote(midiToFreq(midi), duration);
   }
 
   // Populate chord dropdown
@@ -7635,7 +7637,7 @@ renderStart();
       }
       const interval = sequence[step++];
       highlightBtn(interval);
-      playInterval(chord.root, interval);
+      playInterval(chord.root, interval, 1.0);
       setTimeout(playStep, 1000);
     }
     playStep();

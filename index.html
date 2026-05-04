@@ -1976,7 +1976,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.38</div>
+  <div class="version-badge">V 4.39</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7701,6 +7701,7 @@ renderStart();
         if (!_dragging) return;
         _dragging = false;
         btn.classList.remove('dragging');
+        if (_dragMoved) {
           // Persist new position
           const dx = e.clientX - _startX;
           const dy = e.clientY - _startY;

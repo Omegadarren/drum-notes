@@ -817,6 +817,8 @@
     }
     .chord-note-btn:active { transform: scale(0.94); background: var(--accent); color: #fff; border-color: var(--accent); }
     .chord-note-btn.playing { background: var(--accent); color: #fff; border-color: var(--accent); }
+    /* Span full width when last button is the 5th item (7th chord) */
+    .chord-note-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
     .chord-note-btn-label {
       font-size: 20px;
       font-weight: 700;
@@ -1922,7 +1924,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.29</div>
+  <div class="version-badge">V 4.30</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2361,32 +2363,7 @@
     </div>
 
     <span class="chord-notes-label">Play a note</span>
-    <div class="chord-note-btns">
-      <button class="chord-note-btn" id="cnb-fifth-below" data-interval="-5">
-        <span class="chord-note-btn-label" id="cnb-fifth-below-name">—</span>
-        <span class="chord-note-btn-sub">5th below</span>
-      </button>
-      <button class="chord-note-btn" id="cnb-root" data-interval="0">
-        <span class="chord-note-btn-label" id="cnb-root-name">—</span>
-        <span class="chord-note-btn-sub">Root</span>
-      </button>
-      <button class="chord-note-btn" id="cnb-sus2" data-interval="2">
-        <span class="chord-note-btn-label" id="cnb-sus2-name">—</span>
-        <span class="chord-note-btn-sub">Sus 2nd</span>
-      </button>
-      <button class="chord-note-btn" id="cnb-third" data-interval="4">
-        <span class="chord-note-btn-label" id="cnb-third-name">—</span>
-        <span class="chord-note-btn-sub">3rd above</span>
-      </button>
-      <button class="chord-note-btn" id="cnb-fifth" data-interval="7">
-        <span class="chord-note-btn-label" id="cnb-fifth-name">—</span>
-        <span class="chord-note-btn-sub">5th above</span>
-      </button>
-      <button class="chord-note-btn" id="cnb-seventh" data-interval="seventh">
-        <span class="chord-note-btn-label" id="cnb-seventh-name">—</span>
-        <span class="chord-note-btn-sub">7th above</span>
-      </button>
-    </div>
+    <div class="chord-note-btns" id="chord-note-btns"></div>
 
     <button id="cnb-play-chord" class="chord-play-btn">&#9654; Play Chord</button>
 
@@ -7478,17 +7455,17 @@ renderStart();
   // Third interval: 4 = major third, 3 = minor third
   const CHORDS = [];
   const QUALITIES = [
-    { label: '',     thirdInterval: 4, seventhInterval: 11, suffix: '' },       // Major (maj 7)
-    { label: 'm',    thirdInterval: 3, seventhInterval: 10, suffix: 'm' },      // Minor
-    { label: '7',    thirdInterval: 4, seventhInterval: 10, suffix: '7' },      // Dominant 7
-    { label: 'm7',   thirdInterval: 3, seventhInterval: 10, suffix: 'm7' },     // Minor 7
-    { label: 'maj7', thirdInterval: 4, seventhInterval: 11, suffix: 'maj7' },   // Major 7
-    { label: 'sus4', thirdInterval: 5, seventhInterval: 10, suffix: 'sus4' },   // Sus4
-    { label: 'dim',  thirdInterval: 3, seventhInterval:  9, suffix: 'dim' },    // Diminished (dim 7)
+    { suffix: '',     tones: [0, 4, 7] },        // Major
+    { suffix: 'm',    tones: [0, 3, 7] },         // Minor
+    { suffix: '7',    tones: [0, 4, 7, 10] },     // Dominant 7
+    { suffix: 'm7',   tones: [0, 3, 7, 10] },     // Minor 7
+    { suffix: 'maj7', tones: [0, 4, 7, 11] },     // Major 7
+    { suffix: 'sus4', tones: [0, 5, 7] },         // Sus4
+    { suffix: 'dim',  tones: [0, 3, 6] },         // Diminished
   ];
   NOTE_NAMES.forEach((note, i) => {
     QUALITIES.forEach(q => {
-      CHORDS.push({ name: note + q.suffix, root: i, third: q.thirdInterval, seventh: q.seventhInterval });
+      CHORDS.push({ name: note + q.suffix, root: i, tones: q.tones });
     });
   });
 
@@ -7542,33 +7519,27 @@ renderStart();
     return NOTE_DISPLAY[((semitone % 12) + 12) % 12];
   }
 
-  function updateNoteLabels() {
+  const INTERVAL_LABELS = {
+    '-5': '5th below', '0': 'Root', '3': 'Min 3rd', '4': 'Maj 3rd',
+    '5': '4th (Sus)', '6': 'Dim 5th', '7': '5th',
+    '9': 'Dim 7th', '10': 'Min 7th', '11': 'Maj 7th'
+  };
+
+  function renderChordButtons() {
     const chord = getSelectedChord();
     if (!chord) return;
-    const intervals = {
-      'cnb-fifth-below': -5,
-      'cnb-root':         0,
-      'cnb-sus2':         2,
-      'cnb-third':        chord.third,
-      'cnb-fifth':        7,
-      'cnb-seventh':      chord.seventh
-    };
-    for (const [id, interval] of Object.entries(intervals)) {
-      const nameEl = document.getElementById(id + '-name');
-      if (nameEl) nameEl.textContent = noteName(chord.root + interval);
-    }
-    // Update the third sub-label to indicate major/minor/sus
-    const thirdSub = document.querySelector('#cnb-third .chord-note-btn-sub');
-    if (thirdSub) {
-      const t = chord.third;
-      thirdSub.textContent = t === 3 ? 'Minor 3rd' : t === 5 ? 'Sus 4th' : 'Major 3rd';
-    }
-    // Update the seventh sub-label
-    const seventhSub = document.querySelector('#cnb-seventh .chord-note-btn-sub');
-    if (seventhSub) {
-      const s = chord.seventh;
-      seventhSub.textContent = s === 11 ? 'Major 7th' : s === 9 ? 'Dim 7th' : 'Minor 7th';
-    }
+    const container = document.getElementById('chord-note-btns');
+    container.innerHTML = '';
+    // Always: 5th below + all chord tones
+    const allIntervals = [-5, ...chord.tones];
+    allIntervals.forEach(interval => {
+      const btn = document.createElement('button');
+      btn.className = 'chord-note-btn';
+      btn.dataset.interval = interval;
+      btn.innerHTML = `<span class="chord-note-btn-label">${noteName(chord.root + interval)}</span>` +
+                      `<span class="chord-note-btn-sub">${INTERVAL_LABELS[String(interval)] || interval}</span>`;
+      container.appendChild(btn);
+    });
   }
 
   function currentSongId() {
@@ -7591,8 +7562,11 @@ renderStart();
     }
   }
 
-  sel.addEventListener('change', () => { updateNoteLabels(); saveChordForSong(); });
-  updateNoteLabels();
+  // updateNoteLabels alias so loadChordForSong still works
+  function updateNoteLabels() { renderChordButtons(); }
+
+  sel.addEventListener('change', () => { renderChordButtons(); saveChordForSong(); });
+  renderChordButtons();
 
   // Hook into slide changes so chord auto-loads per song
   const _origGoToSlide = window.goToSlide;
@@ -7601,25 +7575,22 @@ renderStart();
     loadChordForSong();
   };
 
-  // Note buttons
-  document.querySelectorAll('.chord-note-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const chord = getSelectedChord();
-      if (!chord) return;
-      const interval = btn.dataset.interval === '4'       ? chord.third
-        : btn.dataset.interval === 'seventh' ? chord.seventh
-        : parseInt(btn.dataset.interval, 10);
-      playInterval(chord.root, interval);
-      btn.classList.add('playing');
-      setTimeout(() => btn.classList.remove('playing'), 2000);
-    });
+  // Note buttons — event delegation (buttons are dynamically created)
+  document.getElementById('chord-note-btns').addEventListener('click', e => {
+    const btn = e.target.closest('.chord-note-btn');
+    if (!btn) return;
+    const chord = getSelectedChord();
+    if (!chord) return;
+    playInterval(chord.root, parseInt(btn.dataset.interval, 10));
+    btn.classList.add('playing');
+    setTimeout(() => btn.classList.remove('playing'), 2000);
   });
 
   // Play full triad button
   document.getElementById('cnb-play-chord').addEventListener('click', () => {
     const chord = getSelectedChord();
     if (!chord) return;
-    [0, chord.third, 7].forEach(interval => playInterval(chord.root, interval));
+    chord.tones.forEach(interval => playInterval(chord.root, interval));
     const btn = document.getElementById('cnb-play-chord');
     btn.textContent = '♪ Playing…';
     setTimeout(() => { btn.textContent = '▶ Play Chord'; }, 2000);

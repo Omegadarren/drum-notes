@@ -1924,7 +1924,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.31</div>
+  <div class="version-badge">V 4.32</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7612,18 +7612,30 @@ renderStart();
     const sequence = [...up, ...down];
     let step = 0;
     let cancelled = false;
+    function highlightBtn(interval) {
+      document.querySelectorAll('#chord-note-btns .chord-note-btn').forEach(b => b.classList.remove('playing'));
+      const target = document.querySelector(`#chord-note-btns .chord-note-btn[data-interval="${interval}"]`);
+      if (target) target.classList.add('playing');
+    }
+    function clearHighlight() {
+      document.querySelectorAll('#chord-note-btns .chord-note-btn').forEach(b => b.classList.remove('playing'));
+    }
     _arpCancel = () => {
       cancelled = true;
       _arpCancel = null;
       btn.textContent = '▶ Play Arpeggio';
+      clearHighlight();
     };
     function playStep() {
       if (cancelled || step >= sequence.length) {
         _arpCancel = null;
         btn.textContent = '▶ Play Arpeggio';
+        clearHighlight();
         return;
       }
-      playInterval(chord.root, sequence[step++]);
+      const interval = sequence[step++];
+      highlightBtn(interval);
+      playInterval(chord.root, interval);
       setTimeout(playStep, 1000);
     }
     playStep();

@@ -1924,7 +1924,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.33</div>
+  <div class="version-badge">V 4.34</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7599,17 +7599,17 @@ renderStart();
     setTimeout(() => { btn.textContent = '▶ Play Chord'; }, 2000);
   });
 
-  // Play arpeggio button (up then down, 1 second per note)
+  // Play arpeggio button (up then down, looping, 1 second per note)
   let _arpCancel = null;
   document.getElementById('cnb-play-arp').addEventListener('click', () => {
     const chord = getSelectedChord();
     if (!chord) return;
     const btn = document.getElementById('cnb-play-arp');
-    // Cancel if already playing
+    // Stop if already playing
     if (_arpCancel) { _arpCancel(); return; }
-    btn.textContent = '■ Stop';
-    // Up then back down (without repeating top note): [0,1,2,...,n-1, n-2,...,1,0]
-    const up = chord.tones;
+    btn.textContent = '■ Stop Arpeggio';
+    // Include 5th-below, up then back down (without repeating top/bottom): [-5,0,1,...,n-1,n-2,...,0,-5 reversed inner]
+    const up = [-5, ...chord.tones];
     const down = up.slice(1, -1).reverse();
     const sequence = [...up, ...down];
     let step = 0;
@@ -7629,12 +7629,8 @@ renderStart();
       clearHighlight();
     };
     function playStep() {
-      if (cancelled || step >= sequence.length) {
-        _arpCancel = null;
-        btn.textContent = '▶ Play Arpeggio';
-        clearHighlight();
-        return;
-      }
+      if (cancelled) return;
+      if (step >= sequence.length) step = 0; // loop
       const interval = sequence[step++];
       highlightBtn(interval);
       playInterval(chord.root, interval, 1.0);

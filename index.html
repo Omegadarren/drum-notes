@@ -1984,7 +1984,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.43</div>
+  <div class="version-badge">V 4.44</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -2437,6 +2437,7 @@
         <span class="vbicon">▶</span>Play back
       </button>
     </div>
+    <button class="chord-play-btn" id="cnb-place-memo" style="opacity:0.4;pointer-events:none;">📌 Place Memo Button</button>
   </div>
 </div>
 
@@ -7688,6 +7689,24 @@ renderStart();
       });
       btn.appendChild(del);
 
+      // Play action — pitch note or voice memo
+      function playCheatNote() {
+        if (note.type === 'voice') {
+          idbGet(IDB_SETTINGS, 'voice_' + songId).then(blob => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.play();
+            btn.classList.add('playing');
+            audio.onended = () => { URL.revokeObjectURL(url); btn.classList.remove('playing'); };
+          }).catch(() => {});
+        } else {
+          playNote(midiToFreq(note.midi));
+          btn.classList.add('playing');
+          setTimeout(() => btn.classList.remove('playing'), 2000);
+        }
+      }
+
       // Drag to reposition — read current px position from style on pointerdown
       let _dragging = false;
       let _dragMoved = false;
@@ -7726,10 +7745,8 @@ renderStart();
           note.x = arr[idx].x;
           note.y = arr[idx].y;
         } else {
-          // Tap — play the note
-          playNote(midiToFreq(note.midi));
-          btn.classList.add('playing');
-          setTimeout(() => btn.classList.remove('playing'), 2000);
+          // Tap — play the note or memo
+          playCheatNote();
         }
         e.stopPropagation();
       });
@@ -7739,16 +7756,16 @@ renderStart();
   }
 
   let _placementData = null;
-  function enterPlacementMode(midi, label) {
+  function enterPlacementMode(midi, label, type) {
     // Close the chord panel
     document.getElementById('chord-panel').classList.remove('open');
     document.getElementById('chord-panel-overlay').classList.remove('open');
-    _placementData = { midi, label };
+    _placementData = { midi, label, type: type || 'note' };
     const slide = currentSlideEl();
     if (!slide) return;
     const overlay = document.createElement('div');
     overlay.className = 'placement-overlay';
-    overlay.innerHTML = `<div class="placement-hint"><div class="placement-hint-inner">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap to play &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; Double-tap to remove</small></div></div>`;
+    overlay.innerHTML = `<div class="placement-hint"><div class="placement-hint-inner">Tap where to place <strong>${label}</strong><br><small style="opacity:0.7">Tap to play &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; × to remove</small></div></div>`;
     function finish(e) {
       if (!_placementData) return;
       // Coords relative to slide's full scrollable content
@@ -7758,7 +7775,7 @@ renderStart();
       const songId = currentSongId();
       if (songId) {
         const arr = getCheatNotes(songId);
-        arr.push({ midi: _placementData.midi, label: _placementData.label, x, y });
+        arr.push({ midi: _placementData.midi, label: _placementData.label, type: _placementData.type, x, y });
         saveCheatNotes(songId, arr);
         renderCheatNotes();
       }
@@ -7991,6 +8008,27 @@ renderStart();
     panel.classList.remove('open');
     overlay.classList.remove('open');
   }
+
+  const placeMemoBtn = document.getElementById('cnb-place-memo');
+
+  // Enable/disable Place Memo button based on whether a memo exists
+  function updatePlaceMemoBtn() {
+    const hasBlob = !!_voiceBlob;
+    placeMemoBtn.style.opacity = hasBlob ? '1' : '0.4';
+    placeMemoBtn.style.pointerEvents = hasBlob ? 'auto' : 'none';
+  }
+
+  // Patch loadVoiceMemo to also update the button state
+  const _origLoadVoiceMemo = loadVoiceMemo;
+  loadVoiceMemo = async function() {
+    await _origLoadVoiceMemo();
+    updatePlaceMemoBtn();
+  };
+
+  placeMemoBtn.addEventListener('click', () => {
+    if (!_voiceBlob) return;
+    enterPlacementMode(null, '🎤 Memo', 'voice');
+  });
 
   fab.addEventListener('click', openChordPanel);
   fab.addEventListener('click', () => { loadChordForSong(); loadVoiceMemo(); });  // load saved state on open

@@ -1976,7 +1976,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.39</div>
+  <div class="version-badge">V 4.40</div>
 
   <img class="hero-photo"
        src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
@@ -7657,9 +7657,9 @@ renderStart();
       const btn = document.createElement('button');
       btn.className = 'cheat-note';
       btn.textContent = note.label;
-      // x/y stored as % of slide scrollWidth/scrollHeight
-      btn.style.left = note.x + '%';
-      btn.style.top  = note.y + '%';
+      // Position in px derived from stored % of scroll dimensions
+      btn.style.left = (note.x / 100 * slide.scrollWidth)  + 'px';
+      btn.style.top  = (note.y / 100 * slide.scrollHeight) + 'px';
 
       // Double-click to delete
       btn.addEventListener('dblclick', e => {
@@ -7675,14 +7675,14 @@ renderStart();
       // Drag to reposition
       let _dragging = false;
       let _dragMoved = false;
-      let _startX, _startY, _origLeft, _origTop;
+      let _startX, _startY, _origLeftPx, _origTopPx;
       btn.addEventListener('pointerdown', e => {
         _dragging = true;
         _dragMoved = false;
         _startX = e.clientX;
         _startY = e.clientY;
-        _origLeft = note.x;
-        _origTop  = note.y;
+        _origLeftPx = note.x / 100 * slide.scrollWidth;
+        _origTopPx  = note.y / 100 * slide.scrollHeight;
         btn.setPointerCapture(e.pointerId);
         e.stopPropagation();
       });
@@ -7692,22 +7692,21 @@ renderStart();
         const dy = e.clientY - _startY;
         if (!_dragMoved && Math.hypot(dx, dy) > 6) { _dragMoved = true; btn.classList.add('dragging'); }
         if (!_dragMoved) return;
-        const newX = _origLeft + (dx / slide.scrollWidth)  * 100;
-        const newY = _origTop  + (dy / slide.scrollHeight) * 100;
-        btn.style.left = newX + '%';
-        btn.style.top  = newY + '%';
+        btn.style.left = (_origLeftPx + dx) + 'px';
+        btn.style.top  = (_origTopPx  + dy) + 'px';
       });
       btn.addEventListener('pointerup', e => {
         if (!_dragging) return;
         _dragging = false;
         btn.classList.remove('dragging');
         if (_dragMoved) {
-          // Persist new position
           const dx = e.clientX - _startX;
           const dy = e.clientY - _startY;
+          const newLeftPx = _origLeftPx + dx;
+          const newTopPx  = _origTopPx  + dy;
           const arr = getCheatNotes(songId);
-          arr[idx].x = _origLeft + (dx / slide.scrollWidth)  * 100;
-          arr[idx].y = _origTop  + (dy / slide.scrollHeight) * 100;
+          arr[idx].x = newLeftPx / slide.scrollWidth  * 100;
+          arr[idx].y = newTopPx  / slide.scrollHeight * 100;
           saveCheatNotes(songId, arr);
           note.x = arr[idx].x;
           note.y = arr[idx].y;

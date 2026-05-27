@@ -233,13 +233,14 @@
       width: 300px;
       height: 300px;
       object-fit: cover;
-      object-position: 50% 18%;
+      object-position: 50% 30%;
       display: block;
-      /* Soft radial fade — no hard edges */
-      -webkit-mask-image: radial-gradient(ellipse 92% 92% at 50% 50%,
-        rgba(0,0,0,1) 38%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0) 72%);
-      mask-image: radial-gradient(ellipse 92% 92% at 50% 50%,
-        rgba(0,0,0,1) 38%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0) 72%);
+      border-radius: 50%;
+      /* Soft fade — solid centre, dissolves at edges */
+      -webkit-mask-image: radial-gradient(ellipse 88% 88% at 50% 50%,
+        black 42%, rgba(0,0,0,0.85) 58%, rgba(0,0,0,0.3) 74%, transparent 88%);
+      mask-image: radial-gradient(ellipse 88% 88% at 50% 50%,
+        black 42%, rgba(0,0,0,0.85) 58%, rgba(0,0,0,0.3) 74%, transparent 88%);
     }
     .app-name  { font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }
     .app-sub   { font-size: 18px; color: var(--muted); margin-bottom: 10px; }
@@ -1984,11 +1985,11 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.45</div>
+  <div class="version-badge">V 4.46</div>
 
   <img class="hero-photo"
-       src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
-       alt="Todd Sucherman performing live"
+       src="./band-hero.jpg"
+       alt="Band performing live"
        onerror="this.outerHTML='<div class=&quot;app-icon&quot;>🥁</div>'">
   <div class="app-name">BandNotes</div>
   <div class="app-sub">Sheet music annotations for your band</div>

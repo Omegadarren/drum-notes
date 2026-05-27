@@ -455,7 +455,7 @@ hr {
   <div class="cover">
     <div class="cover-title">BandNotes</div>
     <div class="cover-sub">Sheet music annotations for your whole band</div>
-    <div class="cover-version">User Manual &nbsp;·&nbsp; V 4.46 &nbsp;·&nbsp; May 2026</div>
+    <div class="cover-version">User Manual &nbsp;·&nbsp; V 4.47 &nbsp;·&nbsp; May 2026</div>
   </div>
 
   <!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
@@ -528,6 +528,7 @@ hr {
       <thead><tr><th>Element</th><th>What it does</th></tr></thead>
       <tbody>
         <tr><td>Playing as / Change</td><td>Your per-device display name. Shown to bandmates when you share notes. Tap <strong>Change</strong> to edit it.</td></tr>
+        <tr><td>☀️ / ☾ Theme</td><td>Toggles between dark mode (default) and light mode. The button shows ☀️ when you are in dark mode, and ☾ when in light mode. Your preference is saved between sessions.</td></tr>
         <tr><td>↺ Refresh</td><td>Reloads the app. Useful if something appears stuck.</td></tr>
         <tr><td>⛶ Fullscreen</td><td>Enters full-screen mode (see <a href="#tips">Tips</a> for iOS instructions).</td></tr>
       </tbody>
@@ -538,6 +539,12 @@ hr {
 
     <h3>🎸 Band Groups button</h3>
     <p>Opens the Group screen where you can create, join, and manage band groups. This is the main entry point for shared setlists.</p>
+
+    <h3>📖 User Manual button</h3>
+    <p>Opens this manual in a new browser tab.</p>
+
+    <h3>Recent Private Sessions</h3>
+    <p>Below the main buttons, BandNotes shows a list of any sessions you have previously opened outside of a Band Group (e.g. a standalone PDF you loaded in an older version of the app). Each card shows the session name, the date it was last opened, and the number of notes saved. Tap a card to reopen that session in the viewer. Tap <strong>✕</strong> on a card to remove it from the list (your annotations are kept in local storage).</p>
 
     <h3>Banners</h3>
     <ul>
@@ -590,19 +597,39 @@ hr {
       <p>If you clear browser data and lose your groups, open the app, tap <strong>Band Groups</strong> and BandNotes will automatically search the cloud for any groups you own. Alternatively, tap <strong>Join Group</strong> and enter your original invite code — this works for admins too and will restore your admin status.</p>
     </div>
 
-    <h3>Group admin actions <span class="badge badge-admin">Admin</span></h3>
-    <p>Inside the group detail screen, the admin section at the bottom provides:</p>
+    <h3>Group detail header buttons</h3>
+    <p>Inside the group detail screen, the header bar contains the following buttons (some are role-dependent):</p>
     <table class="feature-table">
-      <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+      <thead><tr><th>Button</th><th>Who sees it</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td>📋 Copy Code</td><td>Copies your invite code to share with new members.</td></tr>
+        <tr><td>🎤 Played</td><td>Everyone</td><td>Opens the full Played Songs history for the group — all performed setlists with dates and song counts.</td></tr>
+        <tr><td>📁 Folder</td><td>Everyone</td><td>Sets the default local download folder for PDFs on this device (see <a href="#backups">Section 14</a>).</td></tr>
+        <tr><td>✚ Setlist</td><td>Admin only</td><td>Opens the setlist builder to create a new setlist.</td></tr>
+        <tr><td>⚙ Settings</td><td>Everyone</td><td>Opens the settings dropdown. Contents differ by role — see below.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Group admin actions <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap <strong>⚙ Settings</strong> in the group detail header to open the settings dropdown. As an admin you will see:</p>
+    <table class="feature-table">
+      <thead><tr><th>Item</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Invite code</td><td>Your 6-character invite code is shown inline. Tap the <strong>📋 Copy</strong> button next to it to copy it to the clipboard and share it with new members.</td></tr>
+        <tr><td>📚 Song Library</td><td>Opens the Song Library for this group.</td></tr>
         <tr><td>✏️ Rename Group</td><td>Changes the group's name.</td></tr>
         <tr><td>🗑 Delete Group</td><td>Permanently deletes the group, all setlists, and all members' access. This cannot be undone.</td></tr>
       </tbody>
     </table>
 
-    <h3>Leaving a group <span class="badge badge-member">Member</span></h3>
-    <p>Tap <strong>Leave Group</strong> at the bottom of the group detail screen. Your private annotations are kept on your device but you will no longer see the group's setlists.</p>
+    <h3>Member settings <span class="badge badge-member">Member</span></h3>
+    <p>Tap <strong>⚙ Settings</strong> in the group detail header. As a member you will see:</p>
+    <table class="feature-table">
+      <thead><tr><th>Item</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>📚 Song Library</td><td>Opens the Song Library for this group (browse songs — adding and deleting requires admin access).</td></tr>
+        <tr><td>🚩 Leave Group</td><td>Removes you from the group. Your private annotations are kept on your device but you will no longer see the group's setlists.</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <!-- ═══════════════ 5. SONG LIBRARY ═══════════════ -->
@@ -612,10 +639,7 @@ hr {
     <p>The Song Library holds all the PDF sheet music for your group. Songs are uploaded once by an admin and are then available to all members.</p>
 
     <h3>Opening the library</h3>
-    <ul>
-      <li><strong>Admin:</strong> Tap <strong>📚 Song Library</strong> in the admin section of the group screen.</li>
-      <li><strong>Member:</strong> Tap <strong>📚 Song Library</strong> in the member section of the group screen.</li>
-    </ul>
+    <p>Both admins and members access the Song Library via <strong>⚙ Settings → 📚 Song Library</strong> in the group detail header.</p>
 
     <h3>Searching songs</h3>
     <p>An <strong>A–Z filter bar</strong> sits above the song list. Tap a letter to show only songs whose name starts with that letter. When a filter is active, a <strong>✕ Clear</strong> button appears at the end of the bar — tap it to restore the full list.</p>
@@ -633,23 +657,33 @@ hr {
       <p>Uploading large PDFs (over 20 MB) on slow connections may time out after 60 seconds. If that happens, compress the PDF first using a tool like Smallpdf or Adobe Acrobat before retrying.</p>
     </div>
 
-    <h3>Renaming a song <span class="badge badge-admin">Admin</span></h3>
-    <p>Tap the <strong>✏️</strong> button on any song row, enter the new name, and tap <strong>Save</strong>. The name updates immediately across all setlists.</p>
-
-    <h3>Replacing a song's PDF <span class="badge badge-admin">Admin</span></h3>
-    <p>Tap the <strong>🔄</strong> button on any song row to swap the PDF file while keeping all annotations, BPM, play history, and arrangements intact. See <a href="#replace-pdf">Section 17</a> for full details.</p>
-
-    <h3>Arranging a song <span class="badge badge-admin">Admin</span></h3>
-    <p>Tap the <strong>✂️</strong> button on any song row to open the Arrangement editor. You can slice the PDF into named sections and define a custom playing order, producing a new arranged PDF that all members see. See <a href="#arrange">Section 16</a> for full details.</p>
-
-    <h3>Deleting a song <span class="badge badge-admin">Admin</span></h3>
-    <p>Tap the <strong>🗑</strong> button on a song row and confirm. This permanently removes the PDF from storage and cannot be undone. Consider archiving any setlists that contain the song first.</p>
+    <h3>Song actions (··· context menu)</h3>
+    <p>Tap the <strong>···</strong> button on any song row to open a context menu. Available options depend on your role and whether the song has been performed:</p>
+    <table class="feature-table">
+      <thead><tr><th>Option</th><th>Who sees it</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>🎤 Play history</td><td>Everyone (only if played)</td><td>Shows every setlist the song was performed in with the date. Visible to all members once the song has a non-zero play count.</td></tr>
+        <tr><td>✂️ Arrange sections</td><td>Admin only</td><td>Opens the Arrangement editor to slice the PDF into named sections and define a custom playing order. See <a href="#arrange">Section 16</a>.</td></tr>
+        <tr><td>🔄 Replace PDF</td><td>Admin only</td><td>Swaps the PDF file while keeping all annotations, BPM, play history, and arrangements intact. See <a href="#replace-pdf">Section 17</a>.</td></tr>
+        <tr><td>✏️ Rename</td><td>Admin only</td><td>Changes the song name across all setlists immediately.</td></tr>
+        <tr><td>🗑 Delete</td><td>Admin only</td><td>Permanently removes the song and its PDF from storage. Cannot be undone.</td></tr>
+      </tbody>
+    </table>
 
     <h3>Opening a song directly</h3>
-    <p>Tap the <strong>›</strong> arrow or anywhere on the row (not on the action buttons) to open the song in the viewer. Your annotations for that song are loaded automatically. Tapping <strong>‹ Back</strong> in the viewer returns you directly to the Song Library (not to the setlist screen).</p>
+    <p>Tap the <strong>›</strong> arrow or anywhere on the song row (outside the ··· button) to open the song in the viewer. Your annotations for that song are loaded automatically. Tapping <strong>‹ Back</strong> in the viewer returns you directly to the Song Library (not to the setlist screen).</p>
 
     <h3>Play history</h3>
     <p>If a song has been performed (via a setlist marked as performed), a <strong>🎤</strong> button appears on its row showing the play count (e.g. <em>🎤 Played 4×</em>). Tap it to see every setlist the song was performed in with the date. This is visible to <strong>all members</strong>, not just admins. The <strong>🎤 Played</strong> button in the song library header also opens the full group-wide Played Songs history from this screen.</p>
+
+    <h3>Exporting to Excel <span class="badge badge-admin">Admin</span></h3>
+    <p>Tap the <strong>📊</strong> button in the Song Library header to download an Excel spreadsheet (<code>.xlsx</code>) of the entire song library. BandNotes scans every song and automatically extracts:</p>
+    <ul>
+      <li><strong>Song Name</strong> — as it appears in the library.</li>
+      <li><strong>CCLI</strong> — the CCLI Song/License number read directly from the PDF text (e.g. <em>CCLI Song No. 1234567</em>). Left blank if not found.</li>
+      <li><strong>Key</strong> — read from the last word of the song name (e.g. a song named &ldquo;Amazing Grace E&rdquo; extracts key <em>E</em>).</li>
+    </ul>
+    <p>The file is named <em>GroupName – Song Library.xlsx</em> and downloads automatically. This is an admin-only feature — the 📊 button is hidden from members.</p>
   </section>
 
   <!-- ═══════════════ 6. SETLISTS ═══════════════ -->
@@ -714,7 +748,7 @@ hr {
         <tr><td>👥 Shared chip</td><td>Appears (purple) when a bandmate has shared notes for a song. Tap to view and import them.</td></tr>
         <tr><td>⛶ Fullscreen</td><td>Toggles full-screen mode.</td></tr>
         <tr><td>BPM / Metronome</td><td>Opens the metronome popover. Set BPM with − / + or type it in. Tap ▶ Start / ■ Stop to run the click track. The header flashes red on each beat. BPM is saved per song and syncs when you swipe.</td></tr>
-        <tr><td>⋯ Menu</td><td>Opens the dropdown with print, share, note style, and clear options.</td></tr>
+        <tr><td>⋯ Menu</td><td>Opens the dropdown with: <strong>Share notes</strong>, <strong>Note style</strong>, <strong>Print</strong>, <strong>Print to PDF</strong>, <strong>Clear all notes</strong>, and — for admins viewing a group setlist — <strong>✏️ Edit setlist</strong> (opens the setlist builder without leaving the viewer).</td></tr>
       </tbody>
     </table>
 
@@ -758,6 +792,8 @@ hr {
         <tr><td>Number input</td><td>Tap the number to focus it and type a BPM value directly. Press Enter or tap elsewhere to apply.</td></tr>
         <tr><td>Tap</td><td>Large oversized button. Tap it in time with the song to set the tempo by feel. After 2 taps BandNotes starts averaging the interval (up to the last 8 taps). The BPM updates live as you tap. Resets automatically after a 3-second pause.</td></tr>
         <tr><td>▶ Start / ■ Stop</td><td>Starts or stops the click track. While running, the viewer header flashes red on every beat.</td></tr>
+        <tr><td>🔊 Sound</td><td>Choose the click sound: <strong>Off</strong> (silent flash only), <strong>Click</strong>, <strong>Beep</strong>, or <strong>Wood</strong>. Your choice is saved per device.</td></tr>
+        <tr><td>♪ Subdivision</td><td>Choose between <strong>♩ 1/4</strong> (one click per beat, quarter notes) and <strong>♪ 1/8</strong> (two clicks per beat, eighth notes). Saved per device.</td></tr>
       </tbody>
     </table>
     <p>BPM is <strong>saved per song</strong> in the cloud. When you swipe to a song that has a saved BPM, the metronome updates to that tempo automatically. Manually changing the BPM while viewing a song writes it back immediately.</p>
@@ -1250,7 +1286,7 @@ hr {
 
   <hr>
   <div class="manual-footer">
-    <p>BandNotes &nbsp;·&nbsp; V 4.46 &nbsp;·&nbsp; May 2026</p>
+    <p>BandNotes &nbsp;·&nbsp; V 4.47 &nbsp;·&nbsp; May 2026</p>
     <p style="margin-top:6px;font-size:12px;">For support, contact your group admin.</p>
   </div>
 

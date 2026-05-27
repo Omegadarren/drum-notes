@@ -455,7 +455,7 @@ hr {
   <div class="cover">
     <div class="cover-title">BandNotes</div>
     <div class="cover-sub">Sheet music annotations for your whole band</div>
-    <div class="cover-version">User Manual &nbsp;·&nbsp; V 4.08 &nbsp;·&nbsp; March 2026</div>
+    <div class="cover-version">User Manual &nbsp;·&nbsp; V 4.46 &nbsp;·&nbsp; May 2026</div>
   </div>
 
   <!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
@@ -480,6 +480,7 @@ hr {
       <li><a href="#tips">Tips &amp; Troubleshooting</a></li>
       <li><a href="#arrange">Arranging Songs</a></li>
       <li><a href="#replace-pdf">Replacing a Song's PDF</a></li>
+      <li><a href="#chord-helper">Chord Helper</a></li>
     </ol>
   </div>
 
@@ -1142,9 +1143,114 @@ hr {
 
   <hr>
 
-  <!-- ═══════════════ FOOTER ═══════════════ -->
+  <!-- ═══════════════ 18. CHORD HELPER ═══════════════ -->
+  <section id="chord-helper">
+    <div class="section-number">Section 18</div>
+    <h2>Chord Helper</h2>
+    <p>The Chord Helper is a slide-in side panel available in the viewer. It lets you look up any chord, hear what individual notes and the full chord sound like, record a quick voice memo, and pin note or memo buttons directly onto your sheet music so they are always one tap away during a performance.</p>
+
+    <h3>Opening the panel</h3>
+    <p>Tap the <strong>🎵</strong> floating button in the bottom-right corner of the viewer. The Chord Helper panel slides in from the right and a translucent overlay dims the sheet music behind it. Tap the <strong>&times;</strong> button at the top of the panel, or tap anywhere on the overlay, to close it.</p>
+
+    <h3>Selecting a chord</h3>
+    <p>The <strong>Chord</strong> dropdown at the top of the panel lists all 84 chords: every chromatic root (C, C#/D♭, D … B) in seven qualities.</p>
+    <table class="feature-table">
+      <thead><tr><th>Quality</th><th>Example</th><th>Intervals played</th></tr></thead>
+      <tbody>
+        <tr><td>Major</td><td>C</td><td>Root, Maj 3rd, 5th</td></tr>
+        <tr><td>Minor</td><td>Cm</td><td>Root, Min 3rd, 5th</td></tr>
+        <tr><td>Dominant 7</td><td>C7</td><td>Root, Maj 3rd, 5th, Min 7th</td></tr>
+        <tr><td>Minor 7</td><td>Cm7</td><td>Root, Min 3rd, 5th, Min 7th</td></tr>
+        <tr><td>Major 7</td><td>Cmaj7</td><td>Root, Maj 3rd, 5th, Maj 7th</td></tr>
+        <tr><td>Sus4</td><td>Csus4</td><td>Root, 4th (Sus), 5th</td></tr>
+        <tr><td>Diminished</td><td>Cdim</td><td>Root, Min 3rd, Dim 5th</td></tr>
+      </tbody>
+    </table>
+    <p>The selected chord is <strong>saved per song</strong>. When you swipe to a different song, BandNotes automatically restores whatever chord was last selected for that song.</p>
+
+    <h3>Octave control</h3>
+    <p>Three buttons set the playback register:</p>
+    <ul>
+      <li><strong>− (Low)</strong> — one octave below middle C</li>
+      <li><strong>Mid</strong> — default; middle C register (C4)</li>
+      <li><strong>+ (High)</strong> — one octave above middle C</li>
+    </ul>
+    <p>The active octave is highlighted. Changing octave takes effect immediately for all subsequent playback.</p>
+
+    <h3>Note buttons</h3>
+    <p>Below the octave selector, a row of buttons shows every note in the selected chord plus a <strong>5th below</strong> the root (useful for bass runs). Each button shows:</p>
+    <ul>
+      <li>The note name (e.g. <em>G#/A♭</em>)</li>
+      <li>Its interval label (e.g. <em>Min 3rd</em>, <em>5th below</em>)</li>
+    </ul>
+    <p><strong>Tap a note button</strong> to play that single pitch at the chosen octave. The button glows briefly while the note sounds.</p>
+
+    <h3>Play Chord</h3>
+    <p>Tap <strong>▶ Play Chord</strong> to play all notes of the selected chord simultaneously as a block chord. The button label changes to <em>♪ Playing…</em> while the sound rings out.</p>
+
+    <h3>Play Arpeggio</h3>
+    <p>Tap <strong>▶ Play Arpeggio</strong> to step through the chord notes one at a time — up from the 5th below through the chord, then back down — at one note per second. The sequence repeats up to five times. Each note button lights up as it plays so you can follow along.</p>
+    <ul>
+      <li>Tap <strong>■ Stop Arpeggio</strong> at any time to halt playback immediately.</li>
+      <li>The arpeggio stops automatically after five complete cycles.</li>
+    </ul>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Ear training</div>
+      <p>Use the arpeggio feature before a song starts to hear the key and feel of the opening chord. Switch octaves to find the register that matches your instrument.</p>
+    </div>
+
+    <h3>Voice memo</h3>
+    <p>The Chord Helper includes a one-tap voice recorder for capturing quick verbal reminders — a spoken chord name, a count-in, a cue for another player, or anything else you want to hear at a glance during a performance.</p>
+    <table class="feature-table">
+      <thead><tr><th>Button</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>⏺ Record</td><td>Starts recording from the device microphone. Tap again to stop. The recording replaces any previous memo for this song.</td></tr>
+        <tr><td>▶ Play back</td><td>Plays the recorded memo through the speaker. Enabled only once a recording exists.</td></tr>
+        <tr><td>📌 Place Memo Button</td><td>Enters placement mode so you can pin the voice memo as a tappable button on the sheet music (see <em>Cheat Notes</em> below). Enabled only once a recording exists.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout note">
+      <div class="callout-title">Note — Microphone permission</div>
+      <p>The first time you tap Record, the browser will ask for microphone access. Tap <strong>Allow</strong>. On iOS with privacy restrictions (e.g. DuckDuckGo browser), the recorder may not be available — use Safari instead.</p>
+    </div>
+
+    <h3>Placing individual notes on the sheet (Cheat Notes)</h3>
+    <p>Every note button in the chord panel has a <strong>📌 pin icon</strong> in its corner. Tapping it enters <strong>placement mode</strong>:</p>
+    <ol class="step-list">
+      <li>The chord panel closes and a translucent overlay appears over the sheet music with the prompt <em>Tap where to place [note name]</em>.</li>
+      <li>Tap anywhere on the page. A small labelled button appears at that position.</li>
+      <li>Tap the button during a performance to hear the note play. The button glows while the note sounds.</li>
+      <li>Press <strong>Escape</strong> (or navigate away) to cancel placement without adding a note.</li>
+    </ol>
+    <p>The same placement flow applies to the voice memo when you tap <strong>📌 Place Memo Button</strong>. The placed button plays back the recording when tapped.</p>
+
+    <h3>Working with Cheat Notes</h3>
+    <p>Once placed, Cheat Note buttons live on the sheet music across sessions — they are saved in device storage and reload automatically whenever you open that song.</p>
+    <table class="feature-table">
+      <thead><tr><th>Action</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td>Play note / memo</td><td>Tap the button. It glows while sounding.</td></tr>
+        <tr><td>Move the button</td><td>Press and drag to any position on the page. Release to drop. The new position is saved immediately.</td></tr>
+        <tr><td>Delete the button</td><td>Tap the small <strong>&times;</strong> in the top-right corner of the button and confirm.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <div class="callout-title">Tip — Performance use</div>
+      <p>Place a Cheat Note on the first bar of a tricky chord change so you can tap it right before you need to play it. Place a voice memo button at the top of the page to hear your pre-recorded count-in before the song starts.</p>
+    </div>
+
+    <div class="callout warn">
+      <div class="callout-title">Cheat Notes are device-local</div>
+      <p>Cheat Notes are stored in your browser's local storage and are not shared with other band members or backed up to the cloud. If you clear browser data or switch devices, they will be lost. Use the voice memo for important cues you want to preserve.</p>
+    </div>
+  </section>
+
+  <hr>
   <div class="manual-footer">
-    <p>BandNotes &nbsp;·&nbsp; V 4.08 &nbsp;·&nbsp; March 2026</p>
+    <p>BandNotes &nbsp;·&nbsp; V 4.46 &nbsp;·&nbsp; May 2026</p>
     <p style="margin-top:6px;font-size:12px;">For support, contact your group admin.</p>
   </div>
 

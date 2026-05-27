@@ -335,6 +335,36 @@ hr {
 }
 .close-btn:active { opacity: 0.65; }
 
+/* ── Floating 'Go To Beginning' button ──────────────────── */
+.back-to-top {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 999;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: translateY(-6px);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  white-space: nowrap;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.back-to-top.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+.back-to-top:hover { background: var(--border); }
+
 /* ═══════════════════════════════════════════════════════════
    PRINT STYLES — clean white-on-white A4 / Letter layout
 ════════════════════════════════════════════════════════════ */
@@ -348,6 +378,7 @@ hr {
   .page-wrap { padding: 0; max-width: 100%; }
   .print-btn { display: none !important; }
   .close-btn  { display: none !important; }
+  .back-to-top { display: none !important; }
 
   /* Cover */
   .cover {
@@ -450,6 +481,9 @@ hr {
   <button class="print-btn" onclick="window.print()">🖨️ &nbsp;Print / Save as PDF</button>
   <!-- Close button — handy when manual is opened as a new tab on iOS with no browser chrome -->
   <button class="close-btn" onclick="window.close()">✕ &nbsp;Close Manual</button>
+
+  <!-- Floating back-to-top button -->
+  <button class="back-to-top" id="btn-back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑ Go To Beginning</button>
 
   <!-- ═══════════════ COVER ═══════════════ -->
   <div class="cover">
@@ -1291,5 +1325,13 @@ hr {
   </div>
 
 </div>
+<script>
+(function(){
+  var btn = document.getElementById('btn-back-top');
+  window.addEventListener('scroll', function(){
+    btn.classList.toggle('visible', window.scrollY > 300);
+  }, { passive: true });
+})();
+</script>
 </body>
 </html>

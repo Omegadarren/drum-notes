@@ -233,14 +233,13 @@
       width: 300px;
       height: 300px;
       object-fit: cover;
-      object-position: 50% 30%;
+      object-position: 50% 18%;
       display: block;
-      border-radius: 50%;
-      /* Soft fade — solid centre, dissolves at edges */
-      -webkit-mask-image: radial-gradient(ellipse 88% 88% at 50% 50%,
-        black 42%, rgba(0,0,0,0.85) 58%, rgba(0,0,0,0.3) 74%, transparent 88%);
-      mask-image: radial-gradient(ellipse 88% 88% at 50% 50%,
-        black 42%, rgba(0,0,0,0.85) 58%, rgba(0,0,0,0.3) 74%, transparent 88%);
+      /* Soft radial fade — no hard edges */
+      -webkit-mask-image: radial-gradient(ellipse 92% 92% at 50% 50%,
+        rgba(0,0,0,1) 38%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0) 72%);
+      mask-image: radial-gradient(ellipse 92% 92% at 50% 50%,
+        rgba(0,0,0,1) 38%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0) 72%);
     }
     .app-name  { font-size: 40px; font-weight: 700; letter-spacing: -1.5px; }
     .app-sub   { font-size: 18px; color: var(--muted); margin-bottom: 10px; }
@@ -457,6 +456,34 @@
       flex-shrink: 0;
     }
     .btn-undo-redo:active { background: var(--press-bg); }
+    .zoom-ctrl {
+      display: flex;
+      align-items: center;
+      gap: 1px;
+      flex-shrink: 0;
+    }
+    .zoom-btn {
+      background: none;
+      border: none;
+      color: var(--fg);
+      font-size: 19px;
+      padding: 4px 7px;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+    }
+    .zoom-btn:active { background: var(--press-bg); }
+    .zoom-btn:disabled { opacity: 0.3; pointer-events: none; }
+    .zoom-label {
+      font-size: 11px;
+      color: var(--muted);
+      min-width: 36px;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
     .vhdr-menu {
       font-size: 24px;
       padding: 4px 8px;
@@ -1988,8 +2015,8 @@
   <div class="version-badge">V 4.46</div>
 
   <img class="hero-photo"
-       src="./band-hero.jpg"
-       alt="Band performing live"
+       src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/ToddSucherman.JPG/600px-ToddSucherman.JPG"
+       alt="Todd Sucherman performing live"
        onerror="this.outerHTML='<div class=&quot;app-icon&quot;>🥁</div>'">
   <div class="app-name">BandNotes</div>
   <div class="app-sub">Sheet music annotations for your band</div>
@@ -2380,6 +2407,11 @@
     </div>
     <button class="btn-undo-redo" id="btn-undo" title="Undo (Ctrl+Z)" disabled style="opacity:0.35;">↩</button>
     <button class="btn-undo-redo" id="btn-redo" title="Redo (Ctrl+Y)" disabled style="opacity:0.35;">↪</button>
+    <div class="zoom-ctrl" id="zoom-ctrl">
+      <button class="zoom-btn" id="btn-zoom-out" title="Zoom out">−</button>
+      <span class="zoom-label" id="zoom-label">100%</span>
+      <button class="zoom-btn" id="btn-zoom-in" title="Zoom in">＋</button>
+    </div>
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
   </div>
@@ -2936,6 +2968,7 @@ async function launchViewer(session) {
   app.pendingAnn = null;
   app.slides     = [];
   app.slideIdx   = 0;
+  app.zoomFactor = parseFloat(localStorage.getItem('bn_zoom') || '1') || 1.0;
   setChip('scroll');
 
   const pdfScroll = document.getElementById('pdf-scroll');
@@ -2956,7 +2989,7 @@ async function launchViewer(session) {
         const bytes  = dataUrlToBytes(sp.pdfData);
         const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
         await renderPages(slide, pdfDoc, sp.songId);
-        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null });
+        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null, pdfDoc, renderedAtZoom: app.zoomFactor });
       }
     } else {
       // Legacy single-PDF session
@@ -2964,11 +2997,12 @@ async function launchViewer(session) {
       const bytes = dataUrlToBytes(session.pdfData);
       app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
       await renderPages(slide, app.pdfDoc, null);
-      app.slides.push({ el: slide, songName: session.name, songId: null });
+      app.slides.push({ el: slide, songName: session.name, songId: null, pdfDoc: app.pdfDoc, renderedAtZoom: app.zoomFactor });
     }
     updateSlideNav();
     drawAllAnnotations();
     goToSlide(0);  // trigger chord/cheat-note hooks for first slide
+    if (window.updateZoomUI) window.updateZoomUI();
     // Sync BPM label to first slide
     const firstBpm = app.slides[0] && app.slides[0].bpm;
     if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(firstBpm || null);
@@ -3204,14 +3238,15 @@ function updateSlideNav() {
 
 // ─────────────────── Render PDF pages ────────────────────
 async function renderPages(container, pdfDoc, songId) {
-  const W   = container.clientWidth || window.innerWidth;
-  const DPR = window.devicePixelRatio || 1;   // iPad Pro = 2
+  const W    = container.clientWidth || window.innerWidth;
+  const DPR  = window.devicePixelRatio || 1;   // iPad Pro = 2
+  const zoom = app.zoomFactor || 1.0;
 
   for (let p = 1; p <= pdfDoc.numPages; p++) {
     const page  = await pdfDoc.getPage(p);
     const vp0   = page.getViewport({ scale: 1 });
-    // Render at physical pixel density for crisp text
-    const scale = (W / vp0.width) * DPR;
+    // Render at physical pixel density × user zoom for crisp text
+    const scale = (W / vp0.width) * DPR * zoom;
     const vp    = page.getViewport({ scale });
 
     const wrap     = document.createElement('div');
@@ -3252,6 +3287,26 @@ async function renderPages(container, pdfDoc, songId) {
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
     initLassoLayer(app.pages[app.pages.length - 1]);
   }
+}
+
+// ─────────────────── Re-render current slide at new zoom ─
+async function reRenderCurrentSlide() {
+  const slideData = app.slides && app.slides[app.slideIdx];
+  if (!slideData || !slideData.pdfDoc) return;
+  const slide = slideData.el;
+
+  // Drop app.pages entries that belong to this slide
+  app.pages = app.pages.filter(p => p.wrap.closest && p.wrap.closest('.song-slide') !== slide);
+
+  // Remove existing page canvases
+  slide.querySelectorAll('.page-wrap').forEach(el => el.remove());
+
+  // Re-render at current zoom
+  await renderPages(slide, slideData.pdfDoc, slideData.songId);
+  slideData.renderedAtZoom = app.zoomFactor;
+
+  drawAllAnnotations();
+  if (window.renderCheatNotes) window.renderCheatNotes();
 }
 
 // ─────────────────── Find page for annotation ────────────
@@ -7657,6 +7712,7 @@ renderStart();
   }
 
   function renderCheatNotes() {
+    window.renderCheatNotes = renderCheatNotes; // expose for global re-render
     // Remove any existing cheat note elements
     document.querySelectorAll('.cheat-note').forEach(el => el.remove());
     const songId = currentSongId();
@@ -7800,7 +7856,15 @@ renderStart();
     if (_origGoToSlide) _origGoToSlide(idx);
     loadChordForSong();
     // Defer render so the slide layout (scrollWidth/scrollHeight) is settled
-    requestAnimationFrame(() => requestAnimationFrame(() => renderCheatNotes()));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const slideData = app.slides && app.slides[app.slideIdx];
+      if (slideData && slideData.renderedAtZoom !== (app.zoomFactor || 1)) {
+        // Slide was not rendered at the current zoom — re-render it
+        reRenderCurrentSlide();
+      } else {
+        renderCheatNotes();
+      }
+    }));
   };
 
   // Note buttons — event delegation (buttons are dynamically created)
@@ -8037,6 +8101,39 @@ renderStart();
   fab.addEventListener('click', () => { loadChordForSong(); loadVoiceMemo(); });  // load saved state on open
   closeBtn.addEventListener('click', closeChordPanel);
   overlay.addEventListener('click', closeChordPanel);
+})();
+
+// ─────────────────── PDF Zoom control ────────────────────
+(function() {
+  const STEP = 0.25;
+  const MIN  = 0.5;
+  const MAX  = 3.0;
+
+  const outBtn = document.getElementById('btn-zoom-out');
+  const inBtn  = document.getElementById('btn-zoom-in');
+  const label  = document.getElementById('zoom-label');
+
+  function updateZoomUI() {
+    const z = app.zoomFactor || 1;
+    label.textContent = Math.round(z * 100) + '%';
+    outBtn.disabled = z <= MIN;
+    inBtn.disabled  = z >= MAX;
+  }
+  window.updateZoomUI = updateZoomUI;
+
+  async function applyZoom(delta) {
+    const current = app.zoomFactor || 1.0;
+    // Round to nearest STEP to avoid floating-point drift
+    const next = Math.min(MAX, Math.max(MIN, Math.round((current + delta) / STEP) * STEP));
+    if (next === current) return;
+    app.zoomFactor = next;
+    localStorage.setItem('bn_zoom', next);
+    updateZoomUI();
+    await reRenderCurrentSlide();
+  }
+
+  outBtn.addEventListener('click', () => applyZoom(-STEP));
+  inBtn.addEventListener('click',  () => applyZoom(+STEP));
 })();
 
 // ─────────────────── Service Worker (offline) ────────────

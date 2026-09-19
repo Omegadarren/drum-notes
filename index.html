@@ -447,6 +447,28 @@
       border-color: var(--accent);
       color: var(--accent);
     }
+    .btn-eraser {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 15px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .btn-eraser:active { background: var(--press-bg); }
+    .btn-eraser.on {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    #viewer.ink-tool-on .song-slide {
+      touch-action: none;
+    }
     .ink-layer {
       position: absolute;
       left: 0;
@@ -2011,7 +2033,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.49-pen</div>
+  <div class="version-badge">V 4.50</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2405,6 +2427,7 @@
       </div>
     </div>
     <button class="btn-pencil" id="btn-pencil" title="Pencil — write with your stylus (off)">✎</button>
+    <button class="btn-eraser" id="btn-eraser" title="Eraser — rub out ink">⌫</button>
     <button class="btn-undo-redo" id="btn-undo" title="Undo (Ctrl+Z)" disabled style="opacity:0.35;">↩</button>
     <button class="btn-undo-redo" id="btn-redo" title="Redo (Ctrl+Y)" disabled style="opacity:0.35;">↪</button>
     <div class="zoom-ctrl" id="zoom-ctrl">
@@ -2616,15 +2639,21 @@ function idbDelete(storeName, key) {
 // or Firestore memberAnnotations. Off by default; only pointerType
 // === 'pen' draws. Finger scroll / swipe / text notes stay intact.
 const INK_WIDTH_FRAC = 0.004; // stroke width as a fraction of page width
+const INK_ERASE_RADIUS = 0.022;
 let inkPencilOn    = false;
+let inkEraserOn    = false;
 let inkStrokes     = [];      // all strokes for the open session
 let inkUndoStack   = [];
 let inkRedoStack   = [];
 let lastMutate     = 'ann';   // 'ann' | 'ink' — undo hits the last edit type
-let inkDrawing     = null;    // { pointerId, pg, stroke }
+let inkDrawing     = null;    // { pointerId, pg, stroke } or { pointerId, pg, erasing, dirty }
+let inkFingerScroll = null;   // { pointerId, y, top } — finger scroll while a tool is on
 
 function isInkPen(e) {
   return e && e.pointerType === 'pen';
+}
+function inkToolOn() {
+  return inkPencilOn || inkEraserOn;
 }
 
 function inkStoreKey(songId) {
@@ -2639,18 +2668,37 @@ function inkResetMemory() {
   inkUndoStack = [];
   inkRedoStack = [];
   inkDrawing   = null;
+  inkFingerScroll = null;
   lastMutate   = 'ann';
 }
 
-function setPencilOn(on) {
-  inkPencilOn = !!on;
-  const btn = document.getElementById('btn-pencil');
-  if (btn) {
-    btn.classList.toggle('on', inkPencilOn);
-    btn.title = inkPencilOn
-      ? 'Pencil on — write with your stylus. Finger still scrolls.'
+function syncInkToolUI() {
+  const viewer = document.getElementById('viewer');
+  if (viewer) viewer.classList.toggle('ink-tool-on', inkToolOn());
+  const p = document.getElementById('btn-pencil');
+  if (p) {
+    p.classList.toggle('on', inkPencilOn);
+    p.title = inkPencilOn
+      ? 'Pencil on — write in any direction. Tap again to turn off.'
       : 'Pencil — write with your stylus (off)';
   }
+  const er = document.getElementById('btn-eraser');
+  if (er) {
+    er.classList.toggle('on', inkEraserOn);
+    er.title = inkEraserOn
+      ? 'Eraser on — rub out a stroke. Tap again to turn off.'
+      : 'Eraser — rub out ink';
+  }
+}
+
+function setInkMode(mode) {
+  inkPencilOn = mode === 'pencil';
+  inkEraserOn = mode === 'eraser';
+  if (!inkToolOn()) {
+    inkDrawing = null;
+    inkFingerScroll = null;
+  }
+  syncInkToolUI();
 }
 
 function pushInkUndo() {
@@ -2806,34 +2854,100 @@ function findPageAtPoint(cx, cy) {
   return null;
 }
 
+function distPointToSeg(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 1e-12) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function strokeHitsPoint(stroke, pt, radius) {
+  const pts = stroke && stroke.points;
+  if (!pts || !pts.length || !pt) return false;
+  if (pts.length === 1) return Math.hypot(pts[0][0] - pt[0], pts[0][1] - pt[1]) < radius;
+  for (let i = 1; i < pts.length; i++) {
+    if (distPointToSeg(pt[0], pt[1], pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) < radius)
+      return true;
+  }
+  return false;
+}
+
+function eraseStrokesAt(pg, pt) {
+  if (!pg || !pt) return false;
+  const radius = INK_ERASE_RADIUS;
+  const hitIds = [];
+  inkStrokes.forEach(s => {
+    if (!strokeOnPage(s, pg)) return;
+    const r = radius + (s.width || INK_WIDTH_FRAC) * 2;
+    if (strokeHitsPoint(s, pt, r)) hitIds.push(s.id);
+  });
+  if (!hitIds.length) return false;
+  if (inkDrawing && !inkDrawing.dirty) {
+    pushInkUndo();
+    inkDrawing.dirty = true;
+  }
+  const drop = new Set(hitIds);
+  inkStrokes = inkStrokes.filter(s => !drop.has(s.id));
+  redrawPageInk(pg);
+  return true;
+}
+
+function currentSlideEl() {
+  return app.slides && app.slides[app.slideIdx] ? app.slides[app.slideIdx].el : null;
+}
+
 function inkPointerDown(e) {
-  if (!inkPencilOn || !isInkPen(e) || inkDrawing) return;
   if (selectMode || app.pendingAnn) return;
-  const pg = findPageAtPoint(e.clientX, e.clientY);
-  if (!pg) return;
-  const pt = inkPointOnPage(pg, e.clientX, e.clientY);
-  if (!pt) return;
-  e.preventDefault();
-  e.stopPropagation();
-  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
-  const stroke = {
-    id:       genId(),
-    songId:   pg.songId !== undefined ? pg.songId : null,
-    songPage: pg.songPageIndex,
-    color:    getNoteColor(),
-    width:    INK_WIDTH_FRAC,
-    points:   [pt],
-  };
-  if (stroke.songId === null) stroke.page = app.pages.indexOf(pg);
-  inkDrawing = { pointerId: e.pointerId, pg, stroke };
+  if (isInkPen(e) && inkToolOn()) {
+    const pg = findPageAtPoint(e.clientX, e.clientY);
+    e.preventDefault();
+    e.stopPropagation();
+    if (!pg) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    const pt = inkPointOnPage(pg, e.clientX, e.clientY);
+    if (!pt) return;
+    if (inkEraserOn) {
+      inkDrawing = { pointerId: e.pointerId, pg, erasing: true, dirty: false };
+      eraseStrokesAt(pg, pt);
+      return;
+    }
+    const stroke = {
+      id:       genId(),
+      songId:   pg.songId !== undefined ? pg.songId : null,
+      songPage: pg.songPageIndex,
+      color:    getNoteColor(),
+      width:    INK_WIDTH_FRAC,
+      points:   [pt],
+    };
+    if (stroke.songId === null) stroke.page = app.pages.indexOf(pg);
+    inkDrawing = { pointerId: e.pointerId, pg, stroke };
+    return;
+  }
+  if (inkToolOn() && !isInkPen(e)) {
+    const slide = currentSlideEl();
+    if (!slide) return;
+    inkFingerScroll = { pointerId: e.pointerId, y: e.clientY, top: slide.scrollTop };
+  }
 }
 
 function inkPointerMove(e) {
+  if (inkFingerScroll && e.pointerId === inkFingerScroll.pointerId) {
+    const slide = currentSlideEl();
+    if (slide) slide.scrollTop = inkFingerScroll.top - (e.clientY - inkFingerScroll.y);
+    return;
+  }
   if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
   e.preventDefault();
-  const { pg, stroke } = inkDrawing;
+  const { pg } = inkDrawing;
   const pt = inkPointOnPage(pg, e.clientX, e.clientY);
   if (!pt) return;
+  if (inkDrawing.erasing) {
+    eraseStrokesAt(pg, pt);
+    return;
+  }
+  const { stroke } = inkDrawing;
   const last = stroke.points[stroke.points.length - 1];
   if (last && Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 0.001) return;
   if (stroke.points.length < 2000) stroke.points.push(pt);
@@ -2841,11 +2955,19 @@ function inkPointerMove(e) {
 }
 
 function inkPointerUp(e) {
+  if (inkFingerScroll && e.pointerId === inkFingerScroll.pointerId) {
+    inkFingerScroll = null;
+    return;
+  }
   if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
-  const { pg, stroke } = inkDrawing;
+  const { pg, stroke, erasing, dirty } = inkDrawing;
   inkDrawing = null;
   try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
-  if (!stroke.points.length) return;
+  if (erasing) {
+    if (dirty) persistInkForSong(pg && pg.songId);
+    return;
+  }
+  if (!stroke || !stroke.points.length) return;
   pushInkUndo();
   inkStrokes.push(stroke);
   redrawPageInk(pg);
@@ -2853,10 +2975,24 @@ function inkPointerUp(e) {
 }
 
 function inkPointerCancel(e) {
+  if (inkFingerScroll && e.pointerId === inkFingerScroll.pointerId) {
+    inkFingerScroll = null;
+    return;
+  }
   if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
-  const { pg } = inkDrawing;
+  const { pg, erasing } = inkDrawing;
   inkDrawing = null;
-  redrawPageInk(pg);
+  if (!erasing) redrawPageInk(pg);
+}
+
+function inkTouchStart(e) {
+  if (!inkToolOn()) return;
+  for (let i = 0; i < e.touches.length; i++) {
+    if (e.touches[i].touchType === 'stylus') {
+      e.preventDefault();
+      return;
+    }
+  }
 }
 
 function setupInkGesture(pdfScroll) {
@@ -2866,17 +3002,20 @@ function setupInkGesture(pdfScroll) {
     pdfScroll.removeEventListener('pointermove',   h.move,   true);
     pdfScroll.removeEventListener('pointerup',     h.up,     true);
     pdfScroll.removeEventListener('pointercancel', h.cancel, true);
+    pdfScroll.removeEventListener('touchstart',    h.touch,  true);
   }
   const handlers = {
     down:   inkPointerDown,
     move:   inkPointerMove,
     up:     inkPointerUp,
     cancel: inkPointerCancel,
+    touch:  inkTouchStart,
   };
   pdfScroll.addEventListener('pointerdown',   handlers.down,   { capture: true, passive: false });
   pdfScroll.addEventListener('pointermove',   handlers.move,   { capture: true, passive: false });
   pdfScroll.addEventListener('pointerup',     handlers.up,     { capture: true, passive: false });
   pdfScroll.addEventListener('pointercancel', handlers.cancel, { capture: true, passive: false });
+  pdfScroll.addEventListener('touchstart',    handlers.touch,  { capture: true, passive: false });
   pdfScroll._inkHandlers = handlers;
 }
 
@@ -3351,7 +3490,7 @@ function createSongSlide(track) {
   slide.addEventListener('touchend', e => {
     if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
     const t   = e.changedTouches[0];
-    if (inkPencilOn && t.touchType === 'stylus') return;
+    if ((inkPencilOn || inkEraserOn) && t.touchType === 'stylus') return;
     const now = Date.now();
     const dt  = now - lastTime;
     if (dt > 30 && dt < 370 && lastXY) {
@@ -3432,7 +3571,7 @@ function setupSwipeGesture(pdfScroll, track) {
   const onStart = e => {
     if (trackingId !== null) return;              // already tracking a touch
     if (selectMode) return;                       // lasso mode — no swiping
-    if (inkPencilOn && isInkPen(e)) return;       // pencil writing — do not swipe
+    if (inkToolOn() && isInkPen(e)) return;        // writing/erasing — do not swipe
     if (inkDrawing) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;  // left-click only
     trackingId = e.pointerId;
@@ -4595,10 +4734,16 @@ document.getElementById('mi-clear-ink').addEventListener('click', () => {
   clearInkForSession();
 });
 document.getElementById('btn-pencil').addEventListener('click', () => {
-  setPencilOn(!inkPencilOn);
+  setInkMode(inkPencilOn ? 'off' : 'pencil');
   hint(inkPencilOn
-    ? 'Pencil on — write with your stylus. Finger still scrolls.'
+    ? 'Pencil on — write in any direction. Finger still scrolls.'
     : 'Pencil off', 2800);
+});
+document.getElementById('btn-eraser').addEventListener('click', () => {
+  setInkMode(inkEraserOn ? 'off' : 'eraser');
+  hint(inkEraserOn
+    ? 'Eraser on — rub a stroke to delete it.'
+    : 'Eraser off', 2800);
 });
 
 document.getElementById('mi-share-notes').addEventListener('click', e => {
@@ -4628,6 +4773,7 @@ document.addEventListener('keydown', e => {
 function goBack() {
   if (app.pendingAnn) cancelAnn();
   exitSelectMode();
+  setInkMode('off');
   undoStack = []; redoStack = []; updateUndoRedoBtns();
   if (window.metroStop) window.metroStop();
   if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(null);

@@ -2036,7 +2036,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.52</div>
+  <div class="version-badge">V 4.53</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -7362,7 +7362,9 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 
   function getAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+      audioCtx.resume().catch(() => {});
+    }
     return audioCtx;
   }
 
@@ -7370,7 +7372,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   // Call this in a direct click/tap handler; never call it from async code.
   function unlockAudioCtx() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') {
+    if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
       try {
         const buf = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
         const src = audioCtx.createBufferSource();
@@ -7378,7 +7380,7 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
         src.connect(audioCtx.destination);
         src.start(0);
       } catch (_) {}
-      audioCtx.resume();
+      audioCtx.resume().catch(() => {});
     }
   }
 
@@ -7440,12 +7442,65 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
   }
 
   // ── Lookahead scheduler ───────────────────────────────
-  // Schedules audio via AudioContext clock (accurate) and
-  // fires visual flash via setTimeout synced to each beat.
+  // Visual beats use the wall clock (performance.now). iOS freezes
+  // AudioContext.currentTime after the app sits idle, which used to
+  // schedule one flash then stall until a full refresh.
   const LOOKAHEAD   = 0.1;   // seconds ahead to schedule
   const SCHEDULE_MS = 50;    // how often to call scheduler (ms)
-  let   nextBeatTime = 0;    // AudioContext time of next beat
+  let   nextBeatWall = 0;    // performance.now()/1000 of next beat
   let   schedTimer   = null;
+
+  function wallNow() {
+    return performance.now() / 1000;
+  }
+
+  function scheduler() {
+    if (!metroRunning) return;
+    try {
+      const interval = (60 / metroBpm) / (metroSubdiv === 'eighth' ? 2 : 1);
+      const now = wallNow();
+      // Came back from background / a frozen audio clock: skip the backlog
+      if (nextBeatWall < now - interval * 2) nextBeatWall = now;
+      let guard = 0;
+      while (nextBeatWall < now + LOOKAHEAD && guard++ < 16) {
+        const delay = Math.max(0, (nextBeatWall - now) * 1000);
+        setTimeout(flash, delay);
+        if (metroSoundMode !== 'off' && audioCtx && audioCtx.state === 'running') {
+          try { scheduleClick(audioCtx.currentTime + delay / 1000); } catch (_) {}
+        }
+        nextBeatWall += interval;
+      }
+    } catch (e) {}
+    schedTimer = setTimeout(scheduler, SCHEDULE_MS);
+  }
+
+  function startTick() {
+    metroRunning = true;
+    btnMetro.classList.add('active');
+    toggleBtn.classList.add('active');
+    toggleBtn.textContent = '⏹ Stop';
+    nextBeatWall = wallNow();
+    scheduler();
+  }
+
+  function stopTick() {
+    metroRunning = false;
+    clearTimeout(schedTimer);
+    clearTimeout(flashTimer);
+    schedTimer = null;
+    dot.classList.remove('flash');
+    vhdr.classList.remove('metro-flash');
+    btnMetro.classList.remove('active');
+    toggleBtn.classList.remove('active');
+    toggleBtn.textContent = '▶ Start';
+  }
+
+  function restartTick() {
+    clearTimeout(schedTimer);
+    clearTimeout(flashTimer);
+    nextBeatWall = wallNow();
+    scheduler();
+  }
 
   function scheduleClick(audioTime) {
     if (metroSoundMode === 'off') return;
@@ -7492,55 +7547,6 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
         });
       }
     } catch (e) {}
-  }
-
-  function scheduler() {
-    if (!metroRunning) return;
-    try {
-      const ctx      = getAudioCtx();
-      const interval = (60 / metroBpm) / (metroSubdiv === 'eighth' ? 2 : 1);
-      while (nextBeatTime < ctx.currentTime + LOOKAHEAD) {
-        scheduleClick(nextBeatTime);
-        // Schedule visual flash at the right moment
-        const delay = Math.max(0, (nextBeatTime - ctx.currentTime) * 1000);
-        setTimeout(flash, delay);
-        nextBeatTime += interval;
-      }
-    } catch (e) {}
-    schedTimer = setTimeout(scheduler, SCHEDULE_MS);
-  }
-
-  function startTick() {
-    metroRunning = true;
-    btnMetro.classList.add('active');
-    toggleBtn.classList.add('active');
-    toggleBtn.textContent = '⏹ Stop';
-    nextBeatTime = audioCtx ? audioCtx.currentTime : 0;
-    scheduler();
-  }
-
-  function stopTick() {
-    metroRunning = false;
-    clearTimeout(schedTimer);
-    clearTimeout(flashTimer);
-    schedTimer = null;
-    dot.classList.remove('flash');
-    vhdr.classList.remove('metro-flash');
-    btnMetro.classList.remove('active');
-    toggleBtn.classList.remove('active');
-    toggleBtn.textContent = '▶ Start';
-  }
-
-  function restartTick() {
-    clearTimeout(schedTimer);
-    clearTimeout(flashTimer);
-    try {
-      const ctx = getAudioCtx();
-      nextBeatTime = ctx.currentTime;
-    } catch (e) {
-      nextBeatTime = 0;
-    }
-    scheduler();
   }
 
   // Toggle popover
@@ -7610,13 +7616,21 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
     applyBpm(bpm);
   });
 
-  // Start/stop toggle
+  // Start/stop toggle. Visual flash uses the wall clock, so Start
+  // must not wait on AudioContext.resume() — that promise can
+  // resolve against a frozen clock after a long iOS session.
   toggleBtn.addEventListener('click', () => {
     if (metroRunning) { stopTick(); return; }
-    // iOS: AudioContext must be created + resumed synchronously within the gesture.
-    // Chain startTick in .then() so ctx.currentTime is valid when scheduling begins.
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioCtx.resume().then(startTick);
+    unlockAudioCtx();
+    startTick();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (audioCtx && (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted')) {
+      audioCtx.resume().catch(() => {});
+    }
+    if (metroRunning) nextBeatWall = wallNow();
   });
 
   // Stop metronome when leaving viewer

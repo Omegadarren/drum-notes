@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="theme-color" content="#1c1c1e">
   <meta name="mobile-web-app-capable" content="yes">
   <title>BandNotes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -26,6 +27,7 @@
 
     :root {
       --hdr: 60px;
+      --sat: env(safe-area-inset-top, 0px);
       --bg: #111;
       --surface: #1c1c1e;
       --border: #2c2c2e;
@@ -99,7 +101,7 @@
 
     .version-badge {
       position: absolute;
-      top: 56px;
+      top: calc(56px + var(--sat));
       right: 14px;
       font-size: 11px;
       color: var(--muted);
@@ -114,11 +116,11 @@
       top: 0;
       left: 0;
       right: 0;
-      height: 52px;
+      height: calc(52px + var(--sat));
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 18px;
+      padding: var(--sat) 18px 0;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
@@ -384,12 +386,12 @@
     #viewer.active { display: flex; }
 
     .vhdr {
-      height: var(--hdr);
+      height: calc(var(--hdr) + var(--sat));
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      padding: 0 16px;
+      padding: var(--sat) 16px 0;
       gap: 12px;
       flex-shrink: 0;
       z-index: 10;
@@ -554,7 +556,7 @@
     .vhdr { transition: background 0.12s; }
     .metro-popover {
       position: absolute;
-      top: calc(var(--hdr) + 8px);
+      top: calc(var(--hdr) + var(--sat) + 8px);
       left: 50%;
       transform: translateX(-50%);
       background: var(--surface);
@@ -703,7 +705,7 @@
 
     .dropdown-menu {
       position: absolute;
-      top: calc(var(--hdr) + 6px);
+      top: calc(var(--hdr) + var(--sat) + 6px);
       right: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -1079,7 +1081,7 @@
     .btn-jump-to:active { background: var(--press-bg); }
     .jump-dropdown {
       position: absolute;
-      top: calc(var(--hdr) + 6px);
+      top: calc(var(--hdr) + var(--sat) + 6px);
       left: 50%;
       transform: translateX(-50%);
       background: var(--surface);
@@ -1412,12 +1414,12 @@
     #groups-screen.active { display: flex; }
 
     .ghdr {
-      height: var(--hdr);
+      height: calc(var(--hdr) + var(--sat));
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      padding: 0 16px;
+      padding: var(--sat) 16px 0;
       gap: 12px;
       flex-shrink: 0;
     }
@@ -1457,7 +1459,7 @@
     /* Group detail settings dropdown */
     .gd-settings-menu {
       position: absolute;
-      top: calc(var(--hdr) + 6px);
+      top: calc(var(--hdr) + var(--sat) + 6px);
       right: 12px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -2034,7 +2036,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.51</div>
+  <div class="version-badge">V 4.52</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"

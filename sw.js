@@ -1,5 +1,5 @@
 // BandNotes Service Worker — offline-first shell caching
-const SHELL_CACHE = 'bandnotes-shell-v8';
+const SHELL_CACHE = 'bandnotes-shell-v9';
 const CDN_CACHE   = 'bandnotes-cdn-v2';
 const ALL_CACHES  = [SHELL_CACHE, CDN_CACHE];
 

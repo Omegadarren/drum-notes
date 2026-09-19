@@ -456,6 +456,34 @@
       flex-shrink: 0;
     }
     .btn-undo-redo:active { background: var(--press-bg); }
+    .btn-pencil {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 16px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+      line-height: 1;
+    }
+    .btn-pencil:active { background: var(--press-bg); }
+    .btn-pencil.on {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .ink-layer {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 3;
+    }
     .zoom-ctrl {
       display: flex;
       align-items: center;
@@ -2017,7 +2045,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.48</div>
+  <div class="version-badge">V 4.49-pen</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2410,6 +2438,7 @@
         </div>
       </div>
     </div>
+    <button class="btn-pencil" id="btn-pencil" title="Pencil — write with your stylus (off)">✎</button>
     <button class="btn-undo-redo" id="btn-undo" title="Undo (Ctrl+Z)" disabled style="opacity:0.35;">↩</button>
     <button class="btn-undo-redo" id="btn-redo" title="Redo (Ctrl+Y)" disabled style="opacity:0.35;">↪</button>
     <div class="zoom-ctrl" id="zoom-ctrl">
@@ -2429,6 +2458,7 @@
     <div class="dropdown-item" id="mi-print">🖨️&nbsp; Print</div>
     <div class="dropdown-item" id="mi-print-pdf">📄&nbsp; Print to PDF</div>
     <div class="dropdown-item" id="mi-clear">🗑&nbsp; Clear all notes</div>
+    <div class="dropdown-item" id="mi-clear-ink">✎&nbsp; Clear ink</div>
   </div>
 
   <div id="pdf-scroll"></div>
@@ -2534,14 +2564,19 @@ const SA_KEY     = (gid, sid) => `bn_sa_${gid}_${sid}`;  // per-song annotations
 
 // ─────────────────── Offline PDF Cache (IndexedDB) ───────
 const IDB_NAME     = 'bandnotes_cache';
-const IDB_VERSION  = 2;
+const IDB_VERSION  = 3;
 const IDB_STORE    = 'pdfs';      // key: "gid/songId", value: { songId, songName, pdfData, cachedAt }
 const IDB_META     = 'setlists';  // key: "gid/setlistId", value: { name, songIds, cachedAt }
 const IDB_SETTINGS = 'settings';  // key: string, value: any
+const IDB_INK      = 'ink';       // key: "gid/songId" or "local/sessionId", value: { strokes, updatedAt }
 
 let _idb = null;
 function openIDB() {
-  if (_idb) return Promise.resolve(_idb);
+  if (_idb) {
+    if (_idb.version >= IDB_VERSION) return Promise.resolve(_idb);
+    try { _idb.close(); } catch (_) {}
+    _idb = null;
+  }
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, IDB_VERSION);
     req.onupgradeneeded = e => {
@@ -2549,6 +2584,7 @@ function openIDB() {
       if (!db.objectStoreNames.contains(IDB_STORE))    db.createObjectStore(IDB_STORE);
       if (!db.objectStoreNames.contains(IDB_META))     db.createObjectStore(IDB_META);
       if (!db.objectStoreNames.contains(IDB_SETTINGS)) db.createObjectStore(IDB_SETTINGS);
+      if (!db.objectStoreNames.contains(IDB_INK))      db.createObjectStore(IDB_INK);
     };
     req.onsuccess = e => { _idb = e.target.result; resolve(_idb); };
     req.onerror   = () => reject(req.error);
@@ -2607,6 +2643,310 @@ function idbDelete(storeName, key) {
     tx.oncomplete = resolve;
     tx.onerror    = () => reject(tx.error);
   })).catch(() => {});
+}
+
+// ─────────────────── Pencil ink (stylus) ─────────────────
+// Strokes live in IndexedDB only — never in localStorage note blobs
+// or Firestore memberAnnotations. Off by default; only pointerType
+// === 'pen' draws. Finger scroll / swipe / text notes stay intact.
+const INK_WIDTH_FRAC = 0.004; // stroke width as a fraction of page width
+let inkPencilOn    = false;
+let inkStrokes     = [];      // all strokes for the open session
+let inkUndoStack   = [];
+let inkRedoStack   = [];
+let lastMutate     = 'ann';   // 'ann' | 'ink' — undo hits the last edit type
+let inkDrawing     = null;    // { pointerId, pg, stroke }
+
+function isInkPen(e) {
+  return e && e.pointerType === 'pen';
+}
+
+function inkStoreKey(songId) {
+  const s = currentSession();
+  if (!s) return null;
+  if (s.groupId && songId) return s.groupId + '/' + songId;
+  return 'local/' + s.id;
+}
+
+function inkResetMemory() {
+  inkStrokes   = [];
+  inkUndoStack = [];
+  inkRedoStack = [];
+  inkDrawing   = null;
+  lastMutate   = 'ann';
+}
+
+function setPencilOn(on) {
+  inkPencilOn = !!on;
+  const btn = document.getElementById('btn-pencil');
+  if (btn) {
+    btn.classList.toggle('on', inkPencilOn);
+    btn.title = inkPencilOn
+      ? 'Pencil on — write with your stylus. Finger still scrolls.'
+      : 'Pencil — write with your stylus (off)';
+  }
+}
+
+function pushInkUndo() {
+  inkUndoStack.push(JSON.parse(JSON.stringify(inkStrokes)));
+  if (inkUndoStack.length > UNDO_LIMIT) inkUndoStack.shift();
+  inkRedoStack = [];
+  lastMutate = 'ink';
+  updateUndoRedoBtns();
+}
+
+function undoInk() {
+  if (!inkUndoStack.length) return false;
+  inkRedoStack.push(JSON.parse(JSON.stringify(inkStrokes)));
+  inkStrokes = inkUndoStack.pop();
+  lastMutate = inkUndoStack.length ? 'ink' : 'ann';
+  redrawAllInk();
+  persistAllInk();
+  updateUndoRedoBtns();
+  hint('Ink undone', 1200);
+  return true;
+}
+
+function redoInk() {
+  if (!inkRedoStack.length) return false;
+  inkUndoStack.push(JSON.parse(JSON.stringify(inkStrokes)));
+  inkStrokes = inkRedoStack.pop();
+  lastMutate = 'ink';
+  redrawAllInk();
+  persistAllInk();
+  updateUndoRedoBtns();
+  hint('Ink redone', 1200);
+  return true;
+}
+
+function strokeOnPage(stroke, pg) {
+  if (!stroke || !pg) return false;
+  if (stroke.songId !== undefined && stroke.songId !== null) {
+    return stroke.songId === pg.songId && stroke.songPage === pg.songPageIndex;
+  }
+  return stroke.page === app.pages.indexOf(pg);
+}
+
+function drawInkStroke(ctx, stroke, canvas) {
+  if (!stroke || !stroke.points || stroke.points.length < 1 || !ctx || !canvas) return;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.save();
+  ctx.strokeStyle = stroke.color || '#ff3b30';
+  ctx.lineWidth   = Math.max(1.5, (stroke.width || INK_WIDTH_FRAC) * w);
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  ctx.beginPath();
+  stroke.points.forEach((pt, i) => {
+    const x = pt[0] * w;
+    const y = pt[1] * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  if (stroke.points.length === 1) {
+    const x = stroke.points[0][0] * w;
+    const y = stroke.points[0][1] * h;
+    ctx.lineTo(x + 0.01, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function redrawPageInk(pg) {
+  if (!pg || !pg.inkCtx || !pg.inkCanvas) return;
+  try {
+    pg.inkCtx.clearRect(0, 0, pg.inkCanvas.width, pg.inkCanvas.height);
+    inkStrokes.forEach(s => {
+      if (strokeOnPage(s, pg)) drawInkStroke(pg.inkCtx, s, pg.inkCanvas);
+    });
+  } catch (err) {
+    console.warn('[Ink] redraw failed', err);
+  }
+}
+
+function redrawAllInk() {
+  app.pages.forEach(redrawPageInk);
+}
+
+async function persistInkForSong(songId) {
+  const key = inkStoreKey(songId);
+  if (!key) return;
+  const strokes = inkStrokes.filter(s => {
+    if (songId) return s.songId === songId;
+    return true;
+  });
+  try {
+    const db = await openIDB();
+    if (!db.objectStoreNames.contains(IDB_INK)) {
+      hint('Could not save ink.', 2500);
+      return;
+    }
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_INK, 'readwrite');
+      tx.objectStore(IDB_INK).put({ strokes, updatedAt: Date.now() }, key);
+      tx.oncomplete = resolve;
+      tx.onerror    = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('[Ink] save failed', err);
+    hint('Could not save ink.', 2500);
+  }
+}
+
+function persistAllInk() {
+  const s = currentSession();
+  if (!s) return Promise.resolve();
+  if (s.groupId && s.songIds && s.songIds.length) {
+    return Promise.all(s.songIds.map(id => persistInkForSong(id)));
+  }
+  return persistInkForSong(s.songIds && s.songIds[0] ? s.songIds[0] : null);
+}
+
+async function loadAllInkForSession() {
+  inkStrokes = [];
+  const s = currentSession();
+  if (!s) return;
+  try {
+    if (s.groupId && s.songIds && s.songIds.length) {
+      for (const songId of s.songIds) {
+        const data = await idbGet(IDB_INK, inkStoreKey(songId));
+        if (data && Array.isArray(data.strokes)) inkStrokes.push(...data.strokes);
+      }
+    } else {
+      const data = await idbGet(IDB_INK, inkStoreKey(null));
+      if (data && Array.isArray(data.strokes)) inkStrokes.push(...data.strokes);
+    }
+  } catch (err) {
+    console.warn('[Ink] load failed', err);
+  }
+}
+
+function inkPointOnPage(pg, clientX, clientY) {
+  const r = pg.wrap.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return null;
+  const xPct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  const yPct = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+  return [xPct, yPct];
+}
+
+function findPageAtPoint(cx, cy) {
+  const currentSlide = app.slides && app.slides[app.slideIdx] ? app.slides[app.slideIdx].el : null;
+  for (let i = 0; i < app.pages.length; i++) {
+    const pg = app.pages[i];
+    if (currentSlide && pg.wrap && !currentSlide.contains(pg.wrap)) continue;
+    const r = pg.wrap.getBoundingClientRect();
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return pg;
+  }
+  return null;
+}
+
+function inkPointerDown(e) {
+  if (!inkPencilOn || !isInkPen(e) || inkDrawing) return;
+  if (selectMode || app.pendingAnn) return;
+  const pg = findPageAtPoint(e.clientX, e.clientY);
+  if (!pg) return;
+  const pt = inkPointOnPage(pg, e.clientX, e.clientY);
+  if (!pt) return;
+  e.preventDefault();
+  e.stopPropagation();
+  try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+  const stroke = {
+    id:       genId(),
+    songId:   pg.songId !== undefined ? pg.songId : null,
+    songPage: pg.songPageIndex,
+    color:    getNoteColor(),
+    width:    INK_WIDTH_FRAC,
+    points:   [pt],
+  };
+  if (stroke.songId === null) stroke.page = app.pages.indexOf(pg);
+  inkDrawing = { pointerId: e.pointerId, pg, stroke };
+}
+
+function inkPointerMove(e) {
+  if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
+  e.preventDefault();
+  const { pg, stroke } = inkDrawing;
+  const pt = inkPointOnPage(pg, e.clientX, e.clientY);
+  if (!pt) return;
+  const last = stroke.points[stroke.points.length - 1];
+  if (last && Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 0.001) return;
+  if (stroke.points.length < 2000) stroke.points.push(pt);
+  drawInkStroke(pg.inkCtx, { ...stroke, points: [last, pt] }, pg.inkCanvas);
+}
+
+function inkPointerUp(e) {
+  if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
+  const { pg, stroke } = inkDrawing;
+  inkDrawing = null;
+  try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+  if (!stroke.points.length) return;
+  pushInkUndo();
+  inkStrokes.push(stroke);
+  redrawPageInk(pg);
+  persistInkForSong(stroke.songId);
+}
+
+function inkPointerCancel(e) {
+  if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
+  const { pg } = inkDrawing;
+  inkDrawing = null;
+  redrawPageInk(pg);
+}
+
+function setupInkGesture(pdfScroll) {
+  if (pdfScroll._inkHandlers) {
+    const h = pdfScroll._inkHandlers;
+    pdfScroll.removeEventListener('pointerdown',   h.down,   true);
+    pdfScroll.removeEventListener('pointermove',   h.move,   true);
+    pdfScroll.removeEventListener('pointerup',     h.up,     true);
+    pdfScroll.removeEventListener('pointercancel', h.cancel, true);
+  }
+  const handlers = {
+    down:   inkPointerDown,
+    move:   inkPointerMove,
+    up:     inkPointerUp,
+    cancel: inkPointerCancel,
+  };
+  pdfScroll.addEventListener('pointerdown',   handlers.down,   { capture: true, passive: false });
+  pdfScroll.addEventListener('pointermove',   handlers.move,   { capture: true, passive: false });
+  pdfScroll.addEventListener('pointerup',     handlers.up,     { capture: true, passive: false });
+  pdfScroll.addEventListener('pointercancel', handlers.cancel, { capture: true, passive: false });
+  pdfScroll._inkHandlers = handlers;
+}
+
+function drawInkOnExportCtx(ctx, pg, width, height) {
+  inkStrokes.forEach(s => {
+    if (!strokeOnPage(s, pg) || !s.points || s.points.length < 1) return;
+    ctx.save();
+    ctx.strokeStyle = s.color || '#ff3b30';
+    ctx.lineWidth   = Math.max(1.5, (s.width || INK_WIDTH_FRAC) * width);
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
+    ctx.beginPath();
+    s.points.forEach((pt, i) => {
+      const x = pt[0] * width;
+      const y = pt[1] * height;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    if (s.points.length === 1) {
+      ctx.lineTo(s.points[0][0] * width + 0.01, s.points[0][1] * height);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function clearInkForSession() {
+  if (!inkStrokes.length) { hint('No ink to clear.'); return; }
+  const count = inkStrokes.length;
+  showConfirm(`Clear all ${count} ink stroke${count !== 1 ? 's' : ''}?`, 'Text notes are not removed.', 'Clear Ink', () => {
+    pushInkUndo();
+    inkStrokes = [];
+    redrawAllInk();
+    persistAllInk();
+    hint('Ink cleared.');
+  }, true);
 }
 
 // ── Stale backup check ────────────────────────────────────
@@ -2985,6 +3325,8 @@ async function launchViewer(session) {
   pdfScroll.appendChild(track);
 
   setupSwipeGesture(pdfScroll, track);
+  setupInkGesture(pdfScroll);
+  inkResetMemory();
 
   try {
     if (session.songPdfs && session.songPdfs.length) {
@@ -3005,7 +3347,9 @@ async function launchViewer(session) {
       app.slides.push({ el: slide, songName: session.name, songId: null, pdfDoc: app.pdfDoc, renderedAtZoom: app.zoomFactor });
     }
     updateSlideNav();
+    await loadAllInkForSession();
     drawAllAnnotations();
+    redrawAllInk();
     goToSlide(0);  // trigger chord/cheat-note hooks for first slide
     if (window.updateZoomUI) window.updateZoomUI();
     // Sync BPM label to first slide
@@ -3041,6 +3385,7 @@ function createSongSlide(track) {
   slide.addEventListener('touchend', e => {
     if (e.changedTouches.length !== 1 || e.touches.length !== 0) return;
     const t   = e.changedTouches[0];
+    if (inkPencilOn && t.touchType === 'stylus') return;
     const now = Date.now();
     const dt  = now - lastTime;
     if (dt > 30 && dt < 370 && lastXY) {
@@ -3121,6 +3466,8 @@ function setupSwipeGesture(pdfScroll, track) {
   const onStart = e => {
     if (trackingId !== null) return;              // already tracking a touch
     if (selectMode) return;                       // lasso mode — no swiping
+    if (inkPencilOn && isInkPen(e)) return;       // pencil writing — do not swipe
+    if (inkDrawing) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;  // left-click only
     trackingId = e.pointerId;
     startX     = e.clientX;
@@ -3275,14 +3622,23 @@ async function renderPages(container, pdfDoc, songId) {
     lassoRect.className = 'lasso-rect';
     lassoLayer.appendChild(lassoRect);
 
+    const inkCanvas = document.createElement('canvas');
+    inkCanvas.className = 'ink-layer';
+    inkCanvas.width  = vp.width;
+    inkCanvas.height = vp.height;
+    inkCanvas.style.width  = (vp.width  / DPR) + 'px';
+    inkCanvas.style.height = (vp.height / DPR) + 'px';
+    const inkCtx = inkCanvas.getContext('2d');
+
     wrap.appendChild(canvas);
+    wrap.appendChild(inkCanvas);
     wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
     container.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
     app.pages.push({
-      wrap, canvas, annLayer, lassoLayer,
+      wrap, canvas, annLayer, lassoLayer, inkCanvas, inkCtx,
       w: vp.width / DPR, h: vp.height / DPR,
       songId: songId || null,
       songPageIndex: p - 1,
@@ -3311,6 +3667,7 @@ async function reRenderCurrentSlide() {
   slideData.renderedAtZoom = app.zoomFactor;
 
   drawAllAnnotations();
+  redrawAllInk();
   if (window.renderCheatNotes) window.renderCheatNotes();
 }
 
@@ -3597,10 +3954,15 @@ function pushUndo() {
   undoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
   redoStack = [];
+  lastMutate = 'ann';
   updateUndoRedoBtns();
 }
 function undoAnnotation() {
-  if (!undoStack.length) return;
+  if (lastMutate === 'ink' && inkUndoStack.length) { undoInk(); return; }
+  if (!undoStack.length) {
+    if (inkUndoStack.length) { undoInk(); return; }
+    return;
+  }
   const sess = currentSession();
   if (!sess) return;
   redoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
@@ -3611,7 +3973,11 @@ function undoAnnotation() {
   hint('Undone', 1200);
 }
 function redoAnnotation() {
-  if (!redoStack.length) return;
+  if (lastMutate === 'ink' && inkRedoStack.length) { redoInk(); return; }
+  if (!redoStack.length) {
+    if (inkRedoStack.length) { redoInk(); return; }
+    return;
+  }
   const sess = currentSession();
   if (!sess) return;
   undoStack.push(JSON.parse(JSON.stringify(sess.annotations)));
@@ -3624,8 +3990,10 @@ function redoAnnotation() {
 function updateUndoRedoBtns() {
   const u = document.getElementById('btn-undo');
   const r = document.getElementById('btn-redo');
-  if (u) { u.disabled = !undoStack.length; u.style.opacity = undoStack.length ? '1' : '0.35'; }
-  if (r) { r.disabled = !redoStack.length; r.style.opacity = redoStack.length ? '1' : '0.35'; }
+  const canU = (typeof undoStack !== 'undefined' && undoStack.length) || inkUndoStack.length;
+  const canR = (typeof redoStack !== 'undefined' && redoStack.length) || inkRedoStack.length;
+  if (u) { u.disabled = !canU; u.style.opacity = canU ? '1' : '0.35'; }
+  if (r) { r.disabled = !canR; r.style.opacity = canR ? '1' : '0.35'; }
 }
 
 // ─────────────────── Lasso drawing (per page) ────────────
@@ -3805,6 +4173,7 @@ function drawAllAnnotations() {
 }
 
 function drawAnnotation(annLayer, ann) {
+  if (!ann || ann.type === 'ink' || !ann.text) return;
   const label     = document.createElement('span');
   label.className = 'ann-label';
   label.textContent = ann.text;
@@ -4074,7 +4443,7 @@ function compositePage(pg) {
   const ctx  = tmp.getContext('2d');
   ctx.drawImage(pg.canvas, 0, 0);
   if (sess) {
-    const pageAnns = sess.annotations.filter(ann => findPageFor(ann) === pg);
+    const pageAnns = sess.annotations.filter(ann => ann && ann.text && ann.type !== 'ink' && findPageFor(ann) === pg);
     if (pageAnns.length) {
       const fs = getNoteFontSize() * DPR;
       ctx.font         = `bold ${fs}px Arial, sans-serif`;
@@ -4087,6 +4456,7 @@ function compositePage(pg) {
       });
     }
   }
+  drawInkOnExportCtx(ctx, pg, tmp.width, tmp.height);
   return tmp.toDataURL('image/png');
 }
 
@@ -4164,7 +4534,7 @@ async function savePDF(pdfWin) {
     doc.addImage(imgData, 'JPEG', 0, 0, dW, dH);
 
     if (sess) {
-      const pageAnns = sess.annotations.filter(ann => findPageFor(ann) === pg);
+      const pageAnns = sess.annotations.filter(ann => ann && ann.text && ann.type !== 'ink' && findPageFor(ann) === pg);
       if (pageAnns.length) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(fontSize);
@@ -4176,6 +4546,24 @@ async function savePDF(pdfWin) {
         });
       }
     }
+    inkStrokes.forEach(s => {
+      if (!strokeOnPage(s, pg) || !s.points || s.points.length < 1) return;
+      const hex = (s.color || '#ff3b30').replace('#', '');
+      const r = parseInt(hex.slice(0, 2), 16) || 255;
+      const g = parseInt(hex.slice(2, 4), 16) || 59;
+      const b = parseInt(hex.slice(4, 6), 16) || 48;
+      doc.setDrawColor(r, g, b);
+      doc.setLineWidth(Math.max(0.8, (s.width || INK_WIDTH_FRAC) * dW));
+      doc.setLineCap('round');
+      doc.setLineJoin('round');
+      for (let p = 1; p < s.points.length; p++) {
+        const x1 = s.points[p - 1][0] * dW;
+        const y1 = s.points[p - 1][1] * dH;
+        const x2 = s.points[p][0] * dW;
+        const y2 = s.points[p][1] * dH;
+        doc.line(x1, y1, x2, y2);
+      }
+    });
   }
 
   const name = (sess && sess.name)
@@ -4228,13 +4616,23 @@ document.getElementById('mi-clear').addEventListener('click', () => {
   const sess = currentSession();
   if (!sess || !sess.annotations.length) { hint('No notes to clear.'); return; }
   const noteCount = sess.annotations.length;
-  showConfirm(`Clear all ${noteCount} note${noteCount !== 1 ? 's' : ''}?`, 'This removes all notes from this session.', 'Clear All', () => {
+  showConfirm(`Clear all ${noteCount} note${noteCount !== 1 ? 's' : ''}?`, 'This removes text notes only. Ink is not removed.', 'Clear All', () => {
     pushUndo();
     sess.annotations = [];
     saveCurrentSession();
     app.pages.forEach(p => p.annLayer.querySelectorAll('.ann-label').forEach(el => el.remove()));
     hint('All notes cleared.');
   });
+});
+document.getElementById('mi-clear-ink').addEventListener('click', () => {
+  closeDropdown();
+  clearInkForSession();
+});
+document.getElementById('btn-pencil').addEventListener('click', () => {
+  setPencilOn(!inkPencilOn);
+  hint(inkPencilOn
+    ? 'Pencil on — write with your stylus. Finger still scrolls.'
+    : 'Pencil off', 2800);
 });
 
 document.getElementById('mi-share-notes').addEventListener('click', e => {
@@ -4280,6 +4678,7 @@ function goBack() {
   app.slides    = [];
   app.slideIdx  = 0;
   _sharedAnns   = [];
+  inkResetMemory();
   document.getElementById('shared-notes-chip').style.display = 'none';
   document.querySelectorAll('.del-toast').forEach(el => el.remove());
   document.getElementById('pdf-scroll').innerHTML = '';

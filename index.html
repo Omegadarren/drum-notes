@@ -1117,9 +1117,10 @@
 
     .page-wrap {
       position: relative;
-      width: 100%;
+      width: auto;
       max-width: 100%;
       display: block;
+      margin: 0 auto;
       border-bottom: 4px solid #fff;
     }
     .page-wrap canvas {
@@ -2033,7 +2034,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.50</div>
+  <div class="version-badge">V 4.51</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2836,11 +2837,24 @@ async function loadAllInkForSession() {
 }
 
 function inkPointOnPage(pg, clientX, clientY) {
-  const r = pg.wrap.getBoundingClientRect();
+  const el = pg && (pg.inkCanvas || pg.canvas || pg.wrap);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return null;
   const xPct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
   const yPct = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
   return [xPct, yPct];
+}
+
+function pointerClientXY(e) {
+  // iOS/WebKit after preventDefault: clientX/Y can be visual-viewport
+  // while getBoundingClientRect() is layout-viewport. offsetLeft/Top
+  // is 0 on most desktops, so this is a no-op there.
+  const vv = window.visualViewport;
+  return {
+    x: e.clientX + (vv ? vv.offsetLeft : 0),
+    y: e.clientY + (vv ? vv.offsetTop : 0),
+  };
 }
 
 function findPageAtPoint(cx, cy) {
@@ -2848,7 +2862,8 @@ function findPageAtPoint(cx, cy) {
   for (let i = 0; i < app.pages.length; i++) {
     const pg = app.pages[i];
     if (currentSlide && pg.wrap && !currentSlide.contains(pg.wrap)) continue;
-    const r = pg.wrap.getBoundingClientRect();
+    const el = pg.inkCanvas || pg.canvas || pg.wrap;
+    const r = el.getBoundingClientRect();
     if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) return pg;
   }
   return null;
@@ -2900,13 +2915,14 @@ function currentSlideEl() {
 
 function inkPointerDown(e) {
   if (selectMode || app.pendingAnn) return;
+  const { x, y } = pointerClientXY(e);
   if (isInkPen(e) && inkToolOn()) {
-    const pg = findPageAtPoint(e.clientX, e.clientY);
+    const pg = findPageAtPoint(x, y);
     e.preventDefault();
     e.stopPropagation();
     if (!pg) return;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
-    const pt = inkPointOnPage(pg, e.clientX, e.clientY);
+    const pt = inkPointOnPage(pg, x, y);
     if (!pt) return;
     if (inkEraserOn) {
       inkDrawing = { pointerId: e.pointerId, pg, erasing: true, dirty: false };
@@ -2941,7 +2957,8 @@ function inkPointerMove(e) {
   if (!inkDrawing || e.pointerId !== inkDrawing.pointerId) return;
   e.preventDefault();
   const { pg } = inkDrawing;
-  const pt = inkPointOnPage(pg, e.clientX, e.clientY);
+  const { x, y } = pointerClientXY(e);
+  const pt = inkPointOnPage(pg, x, y);
   if (!pt) return;
   if (inkDrawing.erasing) {
     eraseStrokesAt(pg, pt);
@@ -3441,7 +3458,7 @@ async function launchViewer(session) {
         const bytes  = dataUrlToBytes(sp.pdfData);
         const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
         await renderPages(slide, pdfDoc, sp.songId);
-        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null, pdfDoc, renderedAtZoom: app.zoomFactor });
+        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null, pdfDoc, renderedAtZoom: app.zoomFactor, renderedAtWidth: slide.clientWidth });
       }
     } else {
       // Legacy single-PDF session
@@ -3449,7 +3466,7 @@ async function launchViewer(session) {
       const bytes = dataUrlToBytes(session.pdfData);
       app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
       await renderPages(slide, app.pdfDoc, null);
-      app.slides.push({ el: slide, songName: session.name, songId: null, pdfDoc: app.pdfDoc, renderedAtZoom: app.zoomFactor });
+      app.slides.push({ el: slide, songName: session.name, songId: null, pdfDoc: app.pdfDoc, renderedAtZoom: app.zoomFactor, renderedAtWidth: slide.clientWidth });
     }
     updateSlideNav();
     await loadAllInkForSession();
@@ -3655,6 +3672,7 @@ function goToSlide(idx) {
     hint('Metronome stopped — no tempo set for this song.', 2500);
   }
   if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(slideBpm || null);
+  reRenderIfSlideWidthChanged();
 }
 
 // ─────────────────── Update song nav in header ───────────
@@ -3709,7 +3727,9 @@ async function renderPages(container, pdfDoc, songId) {
     const wrap     = document.createElement('div');
     wrap.className = 'page-wrap';
     // CSS dimensions stay at logical pixels so layout is unchanged
+    const cssW = vp.width / DPR;
     const cssH = vp.height / DPR;
+    wrap.style.width  = cssW + 'px';
     wrap.style.height = cssH + 'px';
 
     const canvas   = document.createElement('canvas');
@@ -3756,8 +3776,7 @@ async function renderPages(container, pdfDoc, songId) {
 }
 
 // ─────────────────── Re-render current slide at new zoom ─
-async function reRenderCurrentSlide() {
-  const slideData = app.slides && app.slides[app.slideIdx];
+async function reRenderSlide(slideData) {
   if (!slideData || !slideData.pdfDoc) return;
   const slide = slideData.el;
 
@@ -3767,13 +3786,28 @@ async function reRenderCurrentSlide() {
   // Remove existing page canvases
   slide.querySelectorAll('.page-wrap').forEach(el => el.remove());
 
-  // Re-render at current zoom
   await renderPages(slide, slideData.pdfDoc, slideData.songId);
-  slideData.renderedAtZoom = app.zoomFactor;
+  slideData.renderedAtZoom  = app.zoomFactor;
+  slideData.renderedAtWidth = slide.clientWidth;
 
   drawAllAnnotations();
   redrawAllInk();
   if (window.renderCheatNotes) window.renderCheatNotes();
+}
+
+async function reRenderCurrentSlide() {
+  const slideData = app.slides && app.slides[app.slideIdx];
+  await reRenderSlide(slideData);
+}
+
+async function reRenderIfSlideWidthChanged() {
+  const viewer = document.getElementById('viewer');
+  if (!viewer || !viewer.classList.contains('active')) return;
+  const slideData = app.slides && app.slides[app.slideIdx];
+  if (!slideData || !slideData.el) return;
+  const w = slideData.el.clientWidth;
+  if (Math.abs((slideData.renderedAtWidth || 0) - w) < 8) return;
+  await reRenderSlide(slideData);
 }
 
 // ─────────────────── Find page for annotation ────────────
@@ -8055,14 +8089,20 @@ renderStart();
 // ─────────────────── Orientation / resize — fix slide alignment ─────────────
 (function() {
   let resizeTimer;
-  window.addEventListener('resize', () => {
+  function onViewportChange() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (app.slides && app.slides.length > 1) {
         goToSlide(app.slideIdx);
       }
-    }, 150);
-  });
+      reRenderIfSlideWidthChanged();
+    }, 180);
+  }
+  window.addEventListener('resize', onViewportChange);
+  window.addEventListener('orientationchange', onViewportChange);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportChange);
+  }
 })();
 
 // ─────────────────── Chord Helper ────────────────────────

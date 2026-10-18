@@ -1799,15 +1799,20 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 12px 16px;
+      padding: 10px 14px;
       font-size: 14px;
-      line-height: 1.7;
+      line-height: 1.5;
       color: var(--text);
-      white-space: pre-wrap;
       z-index: 50;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
       pointer-events: none;
     }
+    .songs-tip-sum { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .songs-tip-sum.done { color: #34c759; }
+    .songs-tip-row { display: flex; align-items: baseline; gap: 12px; padding: 3px 0; }
+    .songs-tip-name { flex: 1; min-width: 0; }
+    .songs-tip-singer { flex-shrink: 0; font-size: 12px; font-weight: 600; color: #60a5fa; }
+    .songs-tip-none { flex-shrink: 0; font-size: 12px; font-weight: 600; color: #8e8e93; }
     .setlist-row.tooltip-open .songs-tooltip { display: block; }
 
     .setlist-row.archived .setlist-row-icon,
@@ -2070,7 +2075,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.54</div>
+  <div class="version-badge">V 4.55</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -3393,6 +3398,28 @@ function assignmentForSong(singerBySong, songId) {
 
 function singerNameFromSetlist(sl, songId) {
   return assignmentForSong(sl && sl.singerBySong, songId).singerName;
+}
+
+function setlistSongsTooltip(sl) {
+  if (!sl || !sl.songs) return '';
+  const lines = String(sl.songs).split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return '';
+  const ids = Array.isArray(sl.songIds) ? sl.songIds : [];
+  let assigned = 0;
+  const rows = lines.map((line, i) => {
+    const singer = ids[i] ? singerNameFromSetlist(sl, ids[i]) : '';
+    if (singer) assigned++;
+    const who = ids.length
+      ? (singer
+          ? `<span class="songs-tip-singer">${esc(singer)}</span>`
+          : `<span class="songs-tip-none">none</span>`)
+      : '';
+    return `<div class="songs-tip-row"><span class="songs-tip-name">${esc(line)}</span>${who}</div>`;
+  }).join('');
+  const sum = ids.length
+    ? `<div class="songs-tip-sum${assigned === ids.length ? ' done' : ''}">Singers ${assigned} of ${ids.length}</div>`
+    : '';
+  return `<div class="songs-tooltip">${sum}${rows}</div>`;
 }
 
 function singerBySongFromSelected() {
@@ -5524,10 +5551,10 @@ async function loadGroupSetlists(gid) {
       const performedTag = sl.performed ? ' · 🎤 Performed' : '';
       if (sl.songIds && sl.songIds.length) {
         metaText = `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ${d}${sl.songs ? ' · 📝' : ''}${performedTag}${backedUpTag}`;
-        if (sl.songs) tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
+        if (sl.songs) tooltipHtml = setlistSongsTooltip(sl);
       } else if (sl.songs) {
         metaText = `Uploaded ${d} · 📝 song list${performedTag}${backedUpTag}`;
-        tooltipHtml = `<div class="songs-tooltip">${esc(sl.songs)}</div>`;
+        tooltipHtml = setlistSongsTooltip(sl);
       } else {
         metaText = `Uploaded ${d}${performedTag}${backedUpTag}`;
       }
@@ -5721,7 +5748,7 @@ async function loadGroupSetlists(gid) {
         const row = document.createElement('div');
         row.className = 'setlist-row archived';
         const songCount = sl.songIds ? `${sl.songIds.length} song${sl.songIds.length !== 1 ? 's' : ''} · ` : '';
-        const archTooltipHtml = sl.songs ? `<div class="songs-tooltip">${esc(sl.songs)}</div>` : '';
+        const archTooltipHtml = setlistSongsTooltip(sl);
         row.innerHTML = `
           <div class="setlist-row-icon">🎼</div>
           <div class="setlist-row-info">

@@ -294,6 +294,8 @@
       padding: 24px;
     }
     .modal-bg.open { display: flex; }
+    #manage-singers-modal { z-index: 210; }
+    #confirm-modal { z-index: 230; }
 
     .modal-box {
       background: var(--surface);
@@ -321,6 +323,7 @@
       font-family: inherit;
     }
     .text-input:focus { border-color: var(--accent); }
+    .text-input:disabled { opacity: 0.55; }
 
     .upload-zone {
       border: 2px dashed var(--border);
@@ -1664,11 +1667,42 @@
     .ps-empty-label { font-size: 14px; color: var(--muted); padding: 4px 14px 12px; font-style: italic; }
 
     /* Setlist builder song rows */
-    .sl-selected-row { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--border); }
+    .sl-selected-row { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
     .sl-selected-row:last-child { border-bottom:none; }
-    .sl-selected-name { flex:1; font-size:16px; }
+    .sl-selected-name { flex:1; font-size:16px; min-width:80px; }
     .sl-order-btn { background:none; border:none; color:var(--muted); font-size:20px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
     .sl-remove-btn { background:none; border:none; color:var(--muted); font-size:18px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
+    .sl-singer-select {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 7px 8px;
+      min-width: 118px;
+      max-width: 170px;
+      flex: 0 1 150px;
+    }
+    .sl-selected-row.singers-only .sl-order-btn,
+    .sl-selected-row.singers-only .sl-remove-btn { display: none; }
+    .ps-singer {
+      float: right;
+      font-size: 12px;
+      font-weight: 600;
+      color: #60a5fa;
+      margin-left: 10px;
+    }
+    .singer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .singer-row:last-child { border-bottom: none; }
+    .singer-row-name { flex: 1; font-size: 16px; }
+    .singer-add-row { display: flex; gap: 8px; align-items: stretch; }
     .sl-available-row { display:flex; align-items:center; gap:12px; padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; touch-action:manipulation; }
     .sl-available-row:last-child { border-bottom:none; }
     .sl-available-row:active { background:var(--surface); }
@@ -2036,7 +2070,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.53</div>
+  <div class="version-badge">V 4.54</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2145,7 +2179,7 @@
     <div class="ps-modal-hdr">
       <div class="modal-title" style="font-size:22px;">🎤 Played Songs</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="ps-sort-btn" id="btn-ps-sort" title="Toggle sort">By Song</button>
+        <button class="ps-sort-btn" id="btn-ps-sort" title="Cycle sort: setlist, song, singer">By Song</button>
         <button class="ps-close-btn" id="btn-played-songs-close">✕</button>
       </div>
     </div>
@@ -2203,19 +2237,46 @@
              autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div>
-      <div class="field-label">Songs in this setlist <span style="color:var(--muted);font-weight:400;">— tap ＋ to add</span></div>
+      <div class="field-label">Songs in this setlist <span style="color:var(--muted);font-weight:400;">— singer is for this setlist only</span></div>
       <div id="setlist-selected-songs" style="border:1.5px solid var(--border);border-radius:12px;min-height:48px;margin-bottom:10px;overflow:hidden;">
         <div class="groups-empty" id="setlist-selected-empty" style="padding:14px;font-size:15px;">No songs yet</div>
       </div>
+      <div id="setlist-library-wrap">
       <div class="field-label" style="margin-top:8px;">Song Library</div>
       <div id="setlist-alpha-filter" class="sl-alpha-bar"></div>
       <div id="setlist-available-songs" style="border:1.5px solid var(--border);border-radius:12px;max-height:200px;overflow-y:auto;">
         <div class="groups-empty" style="padding:14px;font-size:15px;" id="setlist-library-empty">Loading…</div>
       </div>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn-ghost" id="btn-create-setlist-cancel">Cancel</button>
       <button class="btn-primary" id="btn-create-setlist-save">Save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MANAGE SINGERS MODAL ==================== -->
+<div class="modal-bg" id="manage-singers-modal">
+  <div class="modal-box" style="max-height:85vh;overflow-y:auto;gap:14px;">
+    <div class="modal-title">🎤 Singers</div>
+    <div>
+      <div class="field-label">Add a singer for this group</div>
+      <div class="singer-add-row">
+        <input class="text-input" id="inp-add-singer" type="text"
+               placeholder="Name…" maxlength="40"
+               autocomplete="off" autocorrect="off" spellcheck="false" style="flex:1;">
+        <button class="btn-primary" id="btn-add-singer" style="padding:12px 18px;border-radius:12px;font-size:16px;">Add</button>
+      </div>
+    </div>
+    <div>
+      <div class="field-label">Group singers</div>
+      <div id="singers-list" style="border:1.5px solid var(--border);border-radius:12px;overflow:hidden;min-height:48px;">
+        <div class="groups-empty" style="padding:14px;font-size:15px;">No singers yet</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="btn-manage-singers-done">Done</button>
     </div>
   </div>
 </div>
@@ -2607,7 +2668,16 @@ async function getCachedSongPdf(gid, songId) {
 async function cacheSetlistMeta(gid, setlistId, name, songIds, extra = {}) {
   const existing = await getCachedSetlist(gid, setlistId);
   const preserved = existing
-    ? { keepPermanently: existing.keepPermanently, snoozedUntil: existing.snoozedUntil }
+    ? {
+        keepPermanently: existing.keepPermanently,
+        snoozedUntil:    existing.snoozedUntil,
+        performed:       existing.performed,
+        performedAt:     existing.performedAt,
+        archived:        existing.archived,
+        createdAt:       existing.createdAt,
+        uploadedAt:      existing.uploadedAt,
+        singerBySong:    existing.singerBySong,
+      }
     : {};
   await idbPut(IDB_META, `${gid}/${setlistId}`, { ...preserved, ...extra, name, songIds, cachedAt: Date.now() });
 }
@@ -3245,6 +3315,92 @@ function genId() {
 function esc(s) {
   return String(s).replace(/[&<>"']/g,
     c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+function normalizeSingers(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(s => {
+      if (!s) return null;
+      if (typeof s === 'string') {
+        const name = s.trim();
+        return name ? { id: name, name } : null;
+      }
+      const name = String(s.name || '').trim();
+      if (!name) return null;
+      return { id: s.id || genId(), name };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+function getGroupSingers() {
+  return normalizeSingers(currentGroupData && currentGroupData.singers);
+}
+
+function cacheGroupSingers(gid, singers) {
+  try {
+    const groupCache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
+    if (!groupCache[gid]) groupCache[gid] = {};
+    groupCache[gid].singers = singers;
+    localStorage.setItem('bandnotes_group_cache', JSON.stringify(groupCache));
+  } catch {}
+}
+
+async function persistGroupSingers(singers) {
+  if (!currentGroupId) return;
+  const list = normalizeSingers(singers);
+  await db.collection('groups').doc(currentGroupId).update({ singers: list });
+  currentGroupData = { ...(currentGroupData || {}), singers: list };
+  cacheGroupSingers(currentGroupId, list);
+  return list;
+}
+
+async function ensureGroupSingers() {
+  if (!currentGroupId) return [];
+  if (currentGroupData && Array.isArray(currentGroupData.singers)) {
+    return getGroupSingers();
+  }
+  try {
+    const gdoc = await db.collection('groups').doc(currentGroupId).get();
+    if (gdoc.exists) {
+      const list = normalizeSingers(gdoc.data().singers);
+      currentGroupData = { ...(currentGroupData || {}), singers: list };
+      cacheGroupSingers(currentGroupId, list);
+      return list;
+    }
+  } catch {}
+  return getGroupSingers();
+}
+
+async function addGroupSinger(name) {
+  name = String(name || '').trim();
+  if (!name) return null;
+  const singers = getGroupSingers();
+  const dup = singers.find(s => s.name.toLowerCase() === name.toLowerCase());
+  if (dup) { hint('Already in the list', 2000); return dup; }
+  singers.push({ id: genId(), name });
+  await persistGroupSingers(singers);
+  return singers.find(s => s.name.toLowerCase() === name.toLowerCase()) || null;
+}
+
+function assignmentForSong(singerBySong, songId) {
+  const rec = singerBySong && singerBySong[songId];
+  if (!rec) return { singerId: '', singerName: '' };
+  if (typeof rec === 'string') return { singerId: rec, singerName: rec };
+  return { singerId: rec.id || '', singerName: rec.name || '' };
+}
+
+function singerNameFromSetlist(sl, songId) {
+  return assignmentForSong(sl && sl.singerBySong, songId).singerName;
+}
+
+function singerBySongFromSelected() {
+  const map = {};
+  selectedSetlistSongs.forEach(s => {
+    if (s.singerId && s.singerName) map[s.id] = { id: s.singerId, name: s.singerName };
+  });
+  return map;
 }
 
 // ─────────────────── Generic confirm modal ───────────────
@@ -4883,7 +5039,7 @@ document.getElementById('mi-reorder').addEventListener('click', () => {
   const s = currentSession();
   if (!s || !s.setlistId) return;
   document.getElementById('create-setlist-modal').dataset.fromViewer = '1';
-  openEditSetlistModal(s.setlistId, s.name, s.songIds || s.songPdfs.map(sp => sp.songId));
+  openEditSetlistModal(s.setlistId, { name: s.name, songIds: s.songIds || s.songPdfs.map(sp => sp.songId), singerBySong: s.singerBySong || {} });
 });
 
 // ─────────────────── UI helpers ──────────────────────────
@@ -5050,7 +5206,7 @@ async function loadMyGroups() {
         const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
         isAdmin = g.adminUid === fbUid || adminGroups.includes(gid);
         // Cache group details for offline use
-        groupCache[gid] = { name: g.name, adminUid: g.adminUid, inviteCode: g.inviteCode, isAdmin };
+        groupCache[gid] = { name: g.name, adminUid: g.adminUid, inviteCode: g.inviteCode, isAdmin, singers: normalizeSingers(g.singers) };
         localStorage.setItem('bandnotes_group_cache', JSON.stringify(groupCache));
       } catch (e) {
         // Offline fallback — use cached details
@@ -5246,6 +5402,13 @@ async function openGroupDetail(gid, gdata) {
     libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, true); });
     menu.appendChild(libItem);
 
+    // Singers
+    const singersItem = document.createElement('div');
+    singersItem.className = 'gd-settings-item';
+    singersItem.textContent = '🎤 Singers';
+    singersItem.addEventListener('click', () => { menu.classList.remove('open'); openManageSingersModal(); });
+    menu.appendChild(singersItem);
+
     // Rename Group
     const renameItem = document.createElement('div');
     renameItem.className = 'gd-settings-item';
@@ -5340,7 +5503,16 @@ async function loadGroupSetlists(gid) {
     // ── Render active setlists ──────────────────────────
     for (const doc of activeDocs) {
       const sl = doc.data();
-      if (sl.songIds && sl.songIds.length) cacheSetlistMeta(gid, doc.id, sl.name, sl.songIds);
+      if (sl.songIds && sl.songIds.length) {
+        cacheSetlistMeta(gid, doc.id, sl.name, sl.songIds, {
+          performed:    sl.performed    || false,
+          performedAt:  sl.performedAt  || null,
+          archived:     sl.archived     || false,
+          createdAt:    sl.createdAt    || null,
+          uploadedAt:   sl.uploadedAt   || null,
+          singerBySong: sl.singerBySong || {},
+        });
+      }
       const ts = sl.createdAt || sl.uploadedAt || 0;
       const d  = new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const row = document.createElement('div');
@@ -5371,6 +5543,7 @@ async function loadGroupSetlists(gid) {
         <div class="setlist-ctx-menu">
           <button data-action="perform">${sl.performed ? 'Un-mark performed' : 'Mark as performed'}</button>
           ${!sl.performed ? `<button data-action="edit">Edit setlist</button>` : ''}
+          <button data-action="singers">Assign singers</button>
           <button data-action="duplicate">Duplicate</button>
           <button data-action="arch">Archive</button>
           <div class="setlist-ctx-divider"></div>
@@ -5408,11 +5581,12 @@ async function loadGroupSetlists(gid) {
               const cached = await getCachedSetlist(currentGroupId, id);
               if (cached) {
                 await cacheSetlistMeta(currentGroupId, id, cached.name, cached.songIds || [], {
-                  performed:   nowPerformed,
-                  performedAt: nowPerformed ? Date.now() : null,
-                  archived:    cached.archived    || false,
-                  createdAt:   cached.createdAt   || null,
-                  uploadedAt:  cached.uploadedAt  || null,
+                  performed:    nowPerformed,
+                  performedAt:  nowPerformed ? Date.now() : null,
+                  archived:     cached.archived    || false,
+                  createdAt:    cached.createdAt   || null,
+                  uploadedAt:   cached.uploadedAt  || null,
+                  singerBySong: cached.singerBySong || sl.singerBySong || {},
                 });
               }
               setLoading(false);
@@ -5434,9 +5608,14 @@ async function loadGroupSetlists(gid) {
           editBtn.addEventListener('click', e => {
             e.stopPropagation();
             row.classList.remove('ctx-open');
-            openEditSetlistModal(doc.id, sl.name, sl.songIds || []);
+            openEditSetlistModal(doc.id, sl);
           });
         }
+        row.querySelector('[data-action="singers"]').addEventListener('click', e => {
+          e.stopPropagation();
+          row.classList.remove('ctx-open');
+          openEditSetlistModal(doc.id, sl, { singersOnly: true });
+        });
         row.querySelector('[data-action="duplicate"]').addEventListener('click', e => {
           e.stopPropagation();
           row.classList.remove('ctx-open');
@@ -5445,6 +5624,7 @@ async function loadGroupSetlists(gid) {
           dupInput.value  = sl.name + ' (copy)';
           dupModal.dataset.songIds = JSON.stringify(sl.songIds || []);
           dupModal.dataset.songs   = sl.songs || '';
+          dupModal.dataset.singerBySong = JSON.stringify(sl.singerBySong || {});
           dupModal.classList.add('open');
           setTimeout(() => { dupInput.select(); dupInput.focus(); }, 80);
         });
@@ -5660,7 +5840,7 @@ async function loadGroupSetlists(gid) {
 }
 
 let _psData = null;   // { songMap, allSetlists } cached after first fetch
-let _psSortBySong = false;
+let _psSortMode = 'setlist'; // 'setlist' | 'song' | 'singer'
 let _sharedAnns = []; // [{ songId, songName, annotations, sharedBy, sharedAt }]
 
 // ── Shared Annotations ───────────────────────────────────────────────────
@@ -5762,7 +5942,7 @@ function renderPlayedSongs() {
   const listEl = document.getElementById('played-songs-list');
   const btn    = document.getElementById('btn-ps-sort');
   const { songMap, allSetlists } = _psData;
-  btn.textContent = _psSortBySong ? 'By Setlist' : 'By Song';
+  btn.textContent = _psSortMode === 'setlist' ? 'By Song' : _psSortMode === 'song' ? 'By Singer' : 'By Setlist';
 
   if (!allSetlists.length) {
     listEl.innerHTML = '<div class="groups-empty">No setlists yet.</div>';
@@ -5771,7 +5951,7 @@ function renderPlayedSongs() {
 
   let html = '';
 
-  if (!_psSortBySong) {
+  if (_psSortMode === 'setlist') {
     // ── By Setlist (default) ───────────────────────────────────────────────────
     const hasPerformed = allSetlists.some(d => d.data().performed);
     if (!hasPerformed) {
@@ -5785,16 +5965,18 @@ function renderPlayedSongs() {
       const archiveTag = sl.archived  ? ' <span style="font-size:11px;color:var(--muted);">📦</span>' : '';
       html += `<div class="ps-setlist-hdr">${esc(sl.name)}${perfTag}${archiveTag}<span class="ps-setlist-date">${dateStr}</span></div>`;
       if (sl.songIds && sl.songIds.length) {
-        sl.songIds.forEach(sid => { html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}</div>`; });
+        sl.songIds.forEach(sid => {
+          const singer = singerNameFromSetlist(sl, sid);
+          html += `<div class="ps-song-item">${esc(songMap[sid] || sid)}${singer ? `<span class="ps-singer">${esc(singer)}</span>` : ''}</div>`;
+        });
       } else {
         html += `<div class="ps-empty-label">No song list recorded</div>`;
       }
     });
-  } else {
+  } else if (_psSortMode === 'song') {
     // ── By Song ───────────────────────────────────────────────────────────────
-    // Build map: songId -> [ { setlistName, dateStr, performed } ]
     const songAppearances = {};
-    const songOrder = [];  // preserve encounter order (alphabetical via songMap)
+    const songOrder = [];
     allSetlists.forEach(sldoc => {
       const sl = sldoc.data();
       if (!sl.songIds || !sl.songIds.length) return;
@@ -5802,10 +5984,12 @@ function renderPlayedSongs() {
       const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
       sl.songIds.forEach(sid => {
         if (!songAppearances[sid]) { songAppearances[sid] = []; songOrder.push(sid); }
-        songAppearances[sid].push({ name: sl.name, dateStr, performed: !!sl.performed, archived: !!sl.archived });
+        songAppearances[sid].push({
+          name: sl.name, dateStr, performed: !!sl.performed, archived: !!sl.archived,
+          singer: singerNameFromSetlist(sl, sid),
+        });
       });
     });
-    // Sort songs alphabetically by name
     const sortedSids = [...new Set(songOrder)].sort((a, b) =>
       (songMap[a] || a).localeCompare(songMap[b] || b)
     );
@@ -5817,7 +6001,45 @@ function renderPlayedSongs() {
         html += `<div class="ps-setlist-hdr">${esc(songMap[sid] || sid)}<span class="ps-setlist-date">${appearances.length}×</span></div>`;
         appearances.forEach(a => {
           const tags = (a.performed ? ' 🎤' : '') + (a.archived ? ' 📦' : '');
-          html += `<div class="ps-song-item">${esc(a.name)}${tags}${a.dateStr ? `<span style="float:right;font-size:11px;opacity:0.55;">${esc(a.dateStr)}</span>` : ''}</div>`;
+          const singer = a.singer ? `<span class="ps-singer">${esc(a.singer)}</span>` : '';
+          html += `<div class="ps-song-item">${esc(a.name)}${tags}${singer}${a.dateStr ? `<span style="float:right;font-size:11px;opacity:0.55;">${esc(a.dateStr)}</span>` : ''}</div>`;
+        });
+      });
+    }
+  } else {
+    // ── By Singer ──────────────────────────────────────────────────────────────
+    const bySinger = {};
+    allSetlists.forEach(sldoc => {
+      const sl = sldoc.data();
+      if (!sl.songIds || !sl.songIds.length) return;
+      const ts = sl.performedAt || sl.createdAt || sl.uploadedAt || 0;
+      const dateStr = ts ? new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      sl.songIds.forEach(sid => {
+        const singer = singerNameFromSetlist(sl, sid) || 'Unassigned';
+        if (!bySinger[singer]) bySinger[singer] = [];
+        bySinger[singer].push({
+          song: songMap[sid] || sid,
+          setlist: sl.name,
+          dateStr,
+          performed: !!sl.performed,
+          archived: !!sl.archived,
+        });
+      });
+    });
+    const names = Object.keys(bySinger).sort((a, b) => {
+      if (a === 'Unassigned') return 1;
+      if (b === 'Unassigned') return -1;
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+    if (!names.length) {
+      html = '<div class="groups-empty">No songs found in any setlist.</div>';
+    } else {
+      names.forEach(name => {
+        const items = bySinger[name];
+        html += `<div class="ps-setlist-hdr">${esc(name)}<span class="ps-setlist-date">${items.length}×</span></div>`;
+        items.forEach(a => {
+          const tags = (a.performed ? ' 🎤' : '') + (a.archived ? ' 📦' : '');
+          html += `<div class="ps-song-item">${esc(a.song)} · ${esc(a.setlist)}${tags}${a.dateStr ? `<span style="float:right;font-size:11px;opacity:0.55;">${esc(a.dateStr)}</span>` : ''}</div>`;
         });
       });
     }
@@ -5847,11 +6069,12 @@ async function showPlayedSongs(gid) {
         const sl = d.data();
         // Cache full data for offline use
         cacheSetlistMeta(gid, d.id, sl.name, sl.songIds || [], {
-          performed:   sl.performed   || false,
-          performedAt: sl.performedAt || null,
-          archived:    sl.archived    || false,
-          createdAt:   sl.createdAt   || null,
-          uploadedAt:  sl.uploadedAt  || null,
+          performed:    sl.performed    || false,
+          performedAt:  sl.performedAt  || null,
+          archived:     sl.archived     || false,
+          createdAt:    sl.createdAt    || null,
+          uploadedAt:   sl.uploadedAt   || null,
+          singerBySong: sl.singerBySong || {},
         });
       });
     } catch (fetchErr) {
@@ -5994,7 +6217,14 @@ async function openGroupSetlist(setlistId, sl) {
       }
 
       // Cache setlist metadata so we can redisplay it offline
-      cacheSetlistMeta(currentGroupId, setlistId, sl.name, sl.songIds);
+      cacheSetlistMeta(currentGroupId, setlistId, sl.name, sl.songIds, {
+        singerBySong: sl.singerBySong || {},
+        performed:    sl.performed    || false,
+        performedAt:  sl.performedAt  || null,
+        archived:     sl.archived     || false,
+        createdAt:    sl.createdAt    || null,
+        uploadedAt:   sl.uploadedAt   || null,
+      });
       // Mark this setlist as fully backed up (all PDFs present)
       try {
         const bu = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + currentGroupId) || '[]'));
@@ -6003,15 +6233,16 @@ async function openGroupSetlist(setlistId, sl) {
       } catch {}
 
       const session = {
-        id:          genId(),
-        name:        sl.name,
-        groupId:     currentGroupId,
-        setlistId:   setlistId,
-        songIds:     sl.songIds,
+        id:           genId(),
+        name:         sl.name,
+        groupId:      currentGroupId,
+        setlistId:    setlistId,
+        songIds:      sl.songIds,
+        singerBySong: sl.singerBySong || {},
         songPdfs,
         annotations,
-        isTemporary: true,
-        createdAt:   Date.now(),
+        isTemporary:  true,
+        createdAt:    Date.now(),
       };
       app.sessions.unshift(session);
       app.currentId = session.id;
@@ -6292,7 +6523,7 @@ async function loadSongLibrary(gid, isAdmin) {
         sl.songIds.forEach(sid => {
           playCounts[sid]  = (playCounts[sid]  || 0) + 1;
           if (!playHistory[sid]) playHistory[sid] = [];
-          playHistory[sid].push({ name: sl.name, date: dateStr });
+          playHistory[sid].push({ name: sl.name, date: dateStr, singer: singerNameFromSetlist(sl, sid) });
         });
       }
     });
@@ -6349,7 +6580,7 @@ async function loadSongLibrary(gid, isAdmin) {
           const listEl2  = document.getElementById('song-history-list');
           titleEl.textContent = `🎤 "${song.name}" — Played ${count}×`;
           listEl2.innerHTML = history.map(h =>
-            `<div class="song-history-item"><span>🎼 ${esc(h.name)}</span>${h.date ? `<span class="song-history-date">${esc(h.date)}</span>` : ''}</div>`
+            `<div class="song-history-item"><span>🎼 ${esc(h.name)}${h.singer ? ` · ${esc(h.singer)}` : ''}</span>${h.date ? `<span class="song-history-date">${esc(h.date)}</span>` : ''}</div>`
           ).join('');
           modal.classList.add('open');
         });
@@ -7639,11 +7870,11 @@ document.getElementById('btn-played-songs').addEventListener('click', () => {
 document.getElementById('btn-played-songs-close').addEventListener('click', () => {
   document.getElementById('played-songs-modal').classList.remove('open');
   _psData = null;
-  _psSortBySong = false;
+  _psSortMode = 'setlist';
 });
 document.getElementById('btn-ps-sort').addEventListener('click', () => {
   if (!_psData) return;
-  _psSortBySong = !_psSortBySong;
+  _psSortMode = _psSortMode === 'setlist' ? 'song' : _psSortMode === 'song' ? 'singer' : 'setlist';
   renderPlayedSongs();
 });
 
@@ -7833,11 +8064,13 @@ document.getElementById('btn-duplicate-setlist-confirm').addEventListener('click
   modal.classList.remove('open');
   const songIds = JSON.parse(modal.dataset.songIds || '[]');
   const songs   = modal.dataset.songs || '';
+  let singerBySong = {};
+  try { singerBySong = JSON.parse(modal.dataset.singerBySong || '{}') || {}; } catch {}
   setLoading(true, 'Duplicating…');
   try {
     const newId = genId();
     await db.collection('groups').doc(currentGroupId).collection('setlists').doc(newId).set({
-      name, songIds, songs, createdBy: fbUid, createdAt: Date.now(),
+      name, songIds, songs, singerBySong, createdBy: fbUid, createdAt: Date.now(),
     });
     setLoading(false);
     hint(`"${name}" created! ✅`, 2500);
@@ -7851,8 +8084,77 @@ document.getElementById('inp-duplicate-setlist').addEventListener('keydown', e =
   if (e.key === 'Enter') document.getElementById('btn-duplicate-setlist-confirm').click();
 });
 
+// ─────────────────── Singers (per group) ─────────────────
+let _singerAddForSongId = null;
+
+function renderSingersList() {
+  const listEl = document.getElementById('singers-list');
+  const singers = getGroupSingers();
+  if (!singers.length) {
+    listEl.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No singers yet</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  singers.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'singer-row';
+    row.innerHTML = `<span class="singer-row-name">${esc(s.name)}</span><button class="sl-remove-btn" title="Remove">✕</button>`;
+    row.querySelector('.sl-remove-btn').addEventListener('click', () => {
+      showConfirm(`Remove "${s.name}"?`, 'Past setlists keep the name of who sang. This only removes them from the dropdown.', 'Remove', async () => {
+        try {
+          await persistGroupSingers(getGroupSingers().filter(x => x.id !== s.id));
+          renderSingersList();
+          renderSelectedSongs();
+        } catch (err) {
+          alert('Could not remove singer: ' + err.message);
+        }
+      });
+    });
+    listEl.appendChild(row);
+  });
+}
+
+async function openManageSingersModal(forSongId) {
+  _singerAddForSongId = forSongId || null;
+  await ensureGroupSingers();
+  renderSingersList();
+  document.getElementById('inp-add-singer').value = '';
+  document.getElementById('manage-singers-modal').classList.add('open');
+  setTimeout(() => document.getElementById('inp-add-singer').focus(), 80);
+}
+
+async function submitAddSinger() {
+  const inp = document.getElementById('inp-add-singer');
+  const name = inp.value.trim();
+  if (!name) { alert('Please enter a name.'); return; }
+  try {
+    const added = await addGroupSinger(name);
+    inp.value = '';
+    renderSingersList();
+    if (added && _singerAddForSongId) {
+      const song = selectedSetlistSongs.find(s => s.id === _singerAddForSongId);
+      if (song) { song.singerId = added.id; song.singerName = added.name; }
+      _singerAddForSongId = null;
+    }
+    renderSelectedSongs();
+    hint(`Added ${name}`, 2000);
+  } catch (err) {
+    alert('Could not add singer: ' + err.message);
+  }
+}
+
+document.getElementById('btn-add-singer').addEventListener('click', submitAddSinger);
+document.getElementById('inp-add-singer').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); submitAddSinger(); }
+});
+document.getElementById('btn-manage-singers-done').addEventListener('click', () => {
+  document.getElementById('manage-singers-modal').classList.remove('open');
+  _singerAddForSongId = null;
+  renderSelectedSongs();
+});
+
 // ─────────────────── Setlist Builder ────────────────────
-let selectedSetlistSongs = [];  // [{ id, name }]
+let selectedSetlistSongs = [];  // [{ id, name, singerId, singerName }]
 let setlistLibrarySongs  = [];  // [{ id, name }]  — cached from Firestore
 let setlistAlphaFilter   = '';  // '' = no filter, 'A'–'Z' = filtered
 let songLibraryAlphaFilter = '';  // '' = no filter, 'A'–'Z' = filtered
@@ -7940,36 +8242,73 @@ function renderAvailableSongs() {
   });
 }
 
-async function openEditSetlistModal(setlistId, name, songIds) {
-  selectedSetlistSongs = [];
-  setlistAlphaFilter = '';
-  document.getElementById('create-setlist-title').textContent = 'Edit Setlist ✏️';
-  document.getElementById('create-setlist-modal').dataset.setlistId = setlistId;
-  document.getElementById('inp-create-setlist-name').value = name;
-  initAlphaFilter();
-  if (songIds.length) {
-    setLoading(true, 'Loading songs…');
-    try {
-      for (const songId of songIds) {
-        const d = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
-        if (d.exists) selectedSetlistSongs.push({ id: songId, name: d.data().name });
-      }
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  }
-  renderSelectedSongs();
-  document.getElementById('create-setlist-modal').classList.add('open');
-  loadSetlistBuilderLibrary();
-  setTimeout(() => document.getElementById('inp-create-setlist-name').select(), 120);
+function setSetlistBuilderSingersOnly(on) {
+  const modal = document.getElementById('create-setlist-modal');
+  modal.dataset.singersOnly = on ? '1' : '';
+  document.getElementById('setlist-library-wrap').style.display = on ? 'none' : '';
+  document.getElementById('inp-create-setlist-name').disabled = !!on;
 }
 
-function openCreateSetlistModal() {
+async function openEditSetlistModal(setlistId, sl = {}, opts = {}) {
+  selectedSetlistSongs = [];
+  setlistAlphaFilter = '';
+  const singersOnly = !!(opts && opts.singersOnly);
+  const modal = document.getElementById('create-setlist-modal');
+  modal.dataset.setlistId = setlistId;
+  setSetlistBuilderSingersOnly(singersOnly);
+  document.getElementById('create-setlist-title').textContent = singersOnly ? 'Assign Singers 🎤' : 'Edit Setlist ✏️';
+  let name = sl.name || '';
+  let songIds = sl.songIds || [];
+  let singerBySong = sl.singerBySong || {};
+  initAlphaFilter();
+  setLoading(true, 'Loading songs…');
+  try {
+    await ensureGroupSingers();
+    try {
+      const doc = await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        name = data.name || name;
+        songIds = data.songIds || songIds;
+        singerBySong = data.singerBySong || singerBySong;
+      }
+    } catch {}
+    document.getElementById('inp-create-setlist-name').value = name;
+    const singers = getGroupSingers();
+    if (songIds.length) {
+      for (const songId of songIds) {
+        const d = await db.collection('groups').doc(currentGroupId).collection('songs').doc(songId).get();
+        if (!d.exists) continue;
+        const asg = assignmentForSong(singerBySong, songId);
+        let singerId = asg.singerId;
+        let singerName = asg.singerName;
+        if (singerName && !singers.some(s => s.id === singerId)) {
+          const match = singers.find(s => s.name.toLowerCase() === singerName.toLowerCase());
+          if (match) singerId = match.id;
+        }
+        selectedSetlistSongs.push({ id: songId, name: d.data().name, singerId, singerName });
+      }
+    }
+  } catch (err) { console.error(err); }
+  setLoading(false);
+  renderSelectedSongs();
+  modal.classList.add('open');
+  if (!singersOnly) loadSetlistBuilderLibrary();
+  setTimeout(() => {
+    const inp = document.getElementById('inp-create-setlist-name');
+    if (!singersOnly) inp.select();
+  }, 120);
+}
+
+async function openCreateSetlistModal() {
   selectedSetlistSongs = [];
   setlistAlphaFilter = '';
   initAlphaFilter();
+  setSetlistBuilderSingersOnly(false);
   document.getElementById('create-setlist-title').textContent = 'New Setlist 🎶';
   document.getElementById('create-setlist-modal').dataset.setlistId = '';
   document.getElementById('inp-create-setlist-name').value = '';
+  await ensureGroupSingers();
   renderSelectedSongs();
   document.getElementById('create-setlist-modal').classList.add('open');
   loadSetlistBuilderLibrary();
@@ -7998,7 +8337,7 @@ function addSongToSetlist(songId, songName) {
     hint('Already in setlist', 1500);
     return;
   }
-  selectedSetlistSongs.push({ id: songId, name: songName });
+  selectedSetlistSongs.push({ id: songId, name: songName, singerId: '', singerName: '' });
   renderSelectedSongs();
   // Auto-clear the alpha filter after adding
   if (setlistAlphaFilter) {
@@ -8024,28 +8363,49 @@ function moveSetlistSong(idx, dir) {
 
 function renderSelectedSongs() {
   const container = document.getElementById('setlist-selected-songs');
+  if (!container) return;
   if (!selectedSetlistSongs.length) {
     container.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No songs yet — tap ＋ to add</div>';
     return;
   }
+  const singersOnly = document.getElementById('create-setlist-modal').dataset.singersOnly === '1';
+  const singers = getGroupSingers();
   container.innerHTML = '';
   selectedSetlistSongs.forEach((song, i) => {
     const row = document.createElement('div');
-    row.className = 'sl-selected-row';
+    row.className = 'sl-selected-row' + (singersOnly ? ' singers-only' : '');
+    let opts = `<option value="">Singer…</option>`;
+    singers.forEach(s => {
+      opts += `<option value="${esc(s.id)}"${s.id === song.singerId ? ' selected' : ''}>${esc(s.name)}</option>`;
+    });
+    opts += `<option value="__add__">＋ Add singer…</option>`;
     row.innerHTML = `
       <button class="sl-order-btn" data-dir="-1" title="Move up">↑</button>
       <button class="sl-order-btn" data-dir="1" title="Move down">↓</button>
       <span class="sl-selected-name">${esc(song.name)}</span>
+      <select class="sl-singer-select" aria-label="Singer for ${esc(song.name)}">${opts}</select>
       <button class="sl-remove-btn" title="Remove">✕</button>`;
     row.querySelector('[data-dir="-1"]').addEventListener('click', () => moveSetlistSong(i, -1));
     row.querySelector('[data-dir="1"]').addEventListener('click', () => moveSetlistSong(i, 1));
     row.querySelector('.sl-remove-btn').addEventListener('click', () => removeFromSetlist(song.id));
+    row.querySelector('.sl-singer-select').addEventListener('change', e => {
+      const val = e.target.value;
+      if (val === '__add__') {
+        e.target.value = song.singerId || '';
+        openManageSingersModal(song.id);
+        return;
+      }
+      const match = singers.find(s => s.id === val);
+      song.singerId = match ? match.id : '';
+      song.singerName = match ? match.name : '';
+    });
     container.appendChild(row);
   });
 }
 
 document.getElementById('btn-create-setlist-cancel').addEventListener('click', () => {
   document.getElementById('create-setlist-modal').classList.remove('open');
+  setSetlistBuilderSingersOnly(false);
   selectedSetlistSongs = [];
 });
 document.getElementById('btn-create-setlist-save').addEventListener('click', async () => {
@@ -8053,29 +8413,36 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
   if (!name)                        { alert('Please enter a setlist name.'); return; }
   if (!selectedSetlistSongs.length) { alert('Please add at least one song.'); return; }
   if (!currentGroupId) { return; }
-  const existingId = document.getElementById('create-setlist-modal').dataset.setlistId;
-  document.getElementById('create-setlist-modal').classList.remove('open');
+  const modal = document.getElementById('create-setlist-modal');
+  const existingId = modal.dataset.setlistId;
+  const singersOnly = modal.dataset.singersOnly === '1';
+  modal.classList.remove('open');
   setLoading(true, existingId ? 'Saving changes…' : 'Saving setlist…');
   try {
     const songIds = selectedSetlistSongs.map(s => s.id);
     const songs   = selectedSetlistSongs.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
+    const singerBySong = singerBySongFromSelected();
     if (existingId) {
-      await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ name, songIds, songs });
+      if (singersOnly) {
+        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ singerBySong });
+      } else {
+        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ name, songIds, songs, singerBySong });
+      }
       hint(`Changes saved!`, 3000);
     } else {
       const setlistId = genId();
       await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
-        name, songIds, songs, createdBy: fbUid, createdAt: Date.now()
+        name, songIds, songs, singerBySong, createdBy: fbUid, createdAt: Date.now()
       });
       hint(`"${name}" saved!`, 3000);
     }
     setLoading(false);
     selectedSetlistSongs = [];
-    const _modal = document.getElementById('create-setlist-modal');
-    const _fromViewer = _modal.dataset.fromViewer === '1';
-    delete _modal.dataset.fromViewer;
+    setSetlistBuilderSingersOnly(false);
+    const _fromViewer = modal.dataset.fromViewer === '1';
+    delete modal.dataset.fromViewer;
     if (_fromViewer && existingId) {
-      openGroupSetlist(existingId, { name, songIds });
+      openGroupSetlist(existingId, { name, songIds, singerBySong });
     } else {
       loadGroupSetlists(currentGroupId);
     }

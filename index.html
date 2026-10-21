@@ -743,6 +743,29 @@
       user-select: none;
       -webkit-user-select: none;
     }
+    .singer-float {
+      display: none;
+      position: absolute;
+      top: calc(var(--hdr) + var(--sat) + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 8;
+      pointer-events: none;
+      max-width: calc(100% - 32px);
+      padding: 4px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.94);
+      color: #111;
+      border: 1px solid rgba(0,0,0,0.14);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.16);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .singer-float.show { display: block; }
 
     /* ── Chord Helper ─────────────────────────────────── */
     #chord-fab {
@@ -2075,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.55</div>
+  <div class="version-badge">V 4.56</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2507,6 +2530,7 @@
     <button class="btn-fullscreen" id="btn-fs-viewer" title="Full screen">⛶</button>
     <div class="vhdr-menu" id="btn-menu">⋯</div>
   </div>
+  <div class="singer-float" id="singer-float"></div>
 
   <!-- Dropdown menu -->
   <div class="dropdown-menu" id="dropdown">
@@ -3861,11 +3885,22 @@ function goToSlide(idx) {
 }
 
 // ─────────────────── Update song nav in header ───────────
+function updateSingerFloat() {
+  const el = document.getElementById('singer-float');
+  if (!el) return;
+  const slide = app.slides && app.slides[app.slideIdx];
+  const sess = currentSession();
+  const name = slide && slide.songId && sess ? singerNameFromSetlist(sess, slide.songId) : '';
+  el.textContent = name || '';
+  el.classList.toggle('show', !!name);
+}
+
 function updateSlideNav() {
   const total   = app.slides ? app.slides.length : 0;
   const counter = document.getElementById('slide-counter');
   const prevBtn = document.getElementById('btn-slide-prev');
   const nextBtn = document.getElementById('btn-slide-next');
+  updateSingerFloat();
 
   if (!counter) return;
 
@@ -5008,6 +5043,7 @@ function goBack() {
   app.pages     = [];
   app.slides    = [];
   app.slideIdx  = 0;
+  updateSingerFloat();
   _sharedAnns   = [];
   inkResetMemory();
   document.getElementById('shared-notes-chip').style.display = 'none';

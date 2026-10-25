@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.60</div>
+  <div class="version-badge">V 4.61</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5265,15 +5265,33 @@ function genInviteCode() {
 let currentGroupId   = null;
 let currentGroupData = null;
 
+let myMemberRoles = {};
+
 function leaderUidsOf(g) {
   return Array.isArray(g && g.leaderUids) ? g.leaderUids.filter(Boolean) : [];
 }
-function roleForGroup(g, uid) {
+function legacyLocalAdmin(gid) {
+  try {
+    return JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
+  } catch { return false; }
+}
+function roleForGroup(g, uid, gid) {
   uid = uid || fbUid;
   if (!g || !uid) return 'member';
+  const id = gid || (g === currentGroupData ? currentGroupId : null);
+  const saved = id ? myMemberRoles[id] : '';
+  if (saved === 'member') return 'member';
   if (g.adminUid && g.adminUid === uid) return 'admin';
-  if (leaderUidsOf(g).includes(uid)) return 'leader';
+  if (leaderUidsOf(g).includes(uid) || saved === 'leader') return 'leader';
+  if (id && legacyLocalAdmin(id)) return 'admin';
   return 'member';
+}
+async function loadMyMemberRole(gid) {
+  if (!fbUid || !gid) return;
+  try {
+    const d = await db.collection('groups').doc(gid).collection('members').doc(fbUid).get();
+    myMemberRoles[gid] = (d.exists && d.data().role) || '';
+  } catch {}
 }
 function groupRecord(gid) {
   if (gid && gid === currentGroupId && currentGroupData) return currentGroupData;
@@ -5283,10 +5301,12 @@ function groupRecord(gid) {
   } catch { return null; }
 }
 function canManageGroup(gid) {
-  return roleForGroup(groupRecord(gid || currentGroupId)) !== 'member';
+  const id = gid || currentGroupId;
+  return roleForGroup(groupRecord(id), fbUid, id) !== 'member';
 }
 function isGroupAdmin(gid) {
-  return roleForGroup(groupRecord(gid || currentGroupId)) === 'admin';
+  const id = gid || currentGroupId;
+  return roleForGroup(groupRecord(id), fbUid, id) === 'admin';
 }
 function roleLabel(role) {
   if (role === 'admin') return '👑 Admin';
@@ -5355,7 +5375,16 @@ async function loadMyGroups() {
         if (groupCache[gid]) g = groupCache[gid];
         else continue;
       }
-      const role = roleForGroup(g);
+      await loadMyMemberRole(gid);
+      if (legacyLocalAdmin(gid) && myMemberRoles[gid] !== 'member' && g.adminUid !== fbUid) {
+        try {
+          await db.collection('groups').doc(gid).update({ adminUid: fbUid });
+          g.adminUid = fbUid;
+          if (groupCache[gid]) groupCache[gid].adminUid = fbUid;
+          localStorage.setItem('bandnotes_group_cache', JSON.stringify(groupCache));
+        } catch {}
+      }
+      const role = roleForGroup(g, fbUid, gid);
       const row = document.createElement('div');
       row.className = 'group-row';
       row.innerHTML = `
@@ -5455,7 +5484,7 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
     const groupId = gdoc.id;
     const gdata   = gdoc.data();
 
-    const isOriginalAdmin = gdata.adminUid === fbUid;
+    const isOriginalAdmin = gdata.adminUid === fbUid || legacyLocalAdmin(groupId);
 
     // Restore/add group to local list. Joining does not grant admin or leader.
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
@@ -5476,7 +5505,7 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
       await memberRef.set({
         name: getProfileName() || prev.name || 'Unknown',
         joinedAt: prev.joinedAt || Date.now(),
-        role: prev.role || 'member'
+        role: prev.role || (isOriginalAdmin ? '' : 'member')
       });
     } catch (memberErr) {
       setLoading(false);
@@ -5502,7 +5531,8 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
 async function openGroupDetail(gid, gdata) {
   currentGroupId   = gid;
   currentGroupData = gdata;
-  const role = roleForGroup(gdata);
+  await loadMyMemberRole(gid);
+  const role = roleForGroup(gdata, fbUid, gid);
   const isAdmin = role === 'admin';
   const canManage = role !== 'member';
   document.getElementById('group-detail-title').textContent   = gdata.name;

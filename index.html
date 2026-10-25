@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.62</div>
+  <div class="version-badge">V 4.63</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2135,12 +2135,19 @@
   <div class="modal-box">
     <div class="modal-title">Who are you? 🥁</div>
     <div>
-      <div class="field-label">Your name (shown on this device only)</div>
+      <div class="field-label">Your name</div>
       <input class="text-input" id="inp-profile-name" type="text"
-             placeholder="e.g. Dave" maxlength="30"
+             placeholder="e.g. Sarah" maxlength="30"
+             autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div>
+      <div class="field-label">This device</div>
+      <input class="text-input" id="inp-profile-device" type="text"
+             placeholder="e.g. Kindle Fire, iPad" maxlength="40"
              autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div class="modal-actions">
+      <button class="btn-ghost" id="btn-profile-signout" type="button">Sign out this device</button>
       <button class="btn-primary" id="btn-profile-save">Save →</button>
     </div>
   </div>
@@ -3495,18 +3502,23 @@ function loadProfile() {
   try { return JSON.parse(localStorage.getItem(PROFILE) || 'null'); }
   catch { return null; }
 }
-function saveProfile(name) {
-  localStorage.setItem(PROFILE, JSON.stringify({ name }));
+function saveProfile(name, device) {
+  localStorage.setItem(PROFILE, JSON.stringify({ name, device: device || '' }));
 }
 function getProfileName() {
   const p = loadProfile();
   return p && p.name ? p.name : null;
 }
+function getProfileDevice() {
+  const p = loadProfile();
+  return p && p.device ? p.device : '';
+}
 function updateProfileDisplay() {
   const name = getProfileName();
+  const device = getProfileDevice();
   const el = document.getElementById('profile-display');
   if (name) {
-    el.textContent = name;
+    el.textContent = device ? (name + ' · ' + device) : name;
     el.style.fontStyle = '';
     el.style.color = '';
   } else {
@@ -3517,19 +3529,66 @@ function updateProfileDisplay() {
 }
 function showProfileModal(required = false) {
   const inp = document.getElementById('inp-profile-name');
+  const dev = document.getElementById('inp-profile-device');
   inp.value = getProfileName() || '';
+  dev.value = getProfileDevice() || '';
   document.getElementById('profile-modal').classList.add('open');
-  // If required (first run), hide the ability to dismiss without saving
   document.getElementById('profile-modal').dataset.required = required ? '1' : '';
+  const signOutBtn = document.getElementById('btn-profile-signout');
+  if (signOutBtn) signOutBtn.style.display = required ? 'none' : '';
   setTimeout(() => inp.focus(), 120);
 }
+async function syncProfileToGroups() {
+  const name = getProfileName();
+  const device = getProfileDevice();
+  if (!name || !fbUid) return;
+  let ids = [];
+  try { ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]'); } catch {}
+  for (const gid of ids) {
+    try {
+      const ref = db.collection('groups').doc(gid).collection('members').doc(fbUid);
+      const existing = await ref.get();
+      const prev = existing.exists ? existing.data() : {};
+      const payload = {
+        name,
+        device: device || '',
+        joinedAt: prev.joinedAt || Date.now()
+      };
+      if (prev.role) payload.role = prev.role;
+      else if (!existing.exists) payload.role = 'member';
+      await ref.set(payload, { merge: true });
+    } catch (err) {
+      console.warn('Could not update member profile', gid, err);
+    }
+  }
+}
 
-document.getElementById('btn-profile-save').addEventListener('click', () => {
+document.getElementById('btn-profile-save').addEventListener('click', async () => {
   const name = document.getElementById('inp-profile-name').value.trim();
+  const device = document.getElementById('inp-profile-device').value.trim();
   if (!name) { alert('Please enter your name.'); return; }
-  saveProfile(name);
+  if (!device) { alert('Please name this device, such as Kindle Fire or iPad.'); return; }
+  saveProfile(name, device);
   document.getElementById('profile-modal').classList.remove('open');
   updateProfileDisplay();
+  await syncProfileToGroups();
+});
+document.getElementById('btn-profile-signout').addEventListener('click', () => {
+  showConfirm(
+    'Sign out of this device?',
+    'This device will stop using the current person. The next person enters their name and which device this is. Your other devices are not affected. The old row stays in People until you remove it.',
+    'Sign out',
+    async () => {
+      localStorage.removeItem(PROFILE);
+      localStorage.removeItem('bandnotes_admin_groups');
+      myMemberRoles = {};
+      fbUid = null;
+      try { await auth.signOut(); } catch {}
+      try { fbUid = await waitForAuth(); } catch { return; }
+      updateProfileDisplay();
+      showProfileModal(true);
+    }
+  );
 });
 document.getElementById('btn-edit-profile').addEventListener('click', () => showProfileModal(false));
 
@@ -5442,7 +5501,7 @@ document.getElementById('btn-create-group-save').addEventListener('click', async
     });
     // Add self as member
     await ref.collection('members').doc(fbUid).set({
-      name: getProfileName() || 'Unknown', joinedAt: Date.now()
+      name: getProfileName() || 'Unknown', device: getProfileDevice() || '', joinedAt: Date.now()
     });
     // Save group id locally
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
@@ -5517,6 +5576,7 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
       const prev = existing && existing.exists ? existing.data() : {};
       await memberRef.set({
         name: getProfileName() || prev.name || 'Unknown',
+        device: getProfileDevice() || prev.device || '',
         joinedAt: prev.joinedAt || Date.now(),
         role: prev.role || (isOriginalAdmin ? '' : 'member')
       });
@@ -8341,7 +8401,10 @@ async function openPeopleModal() {
     const snap = await db.collection('groups').doc(currentGroupId).collection('members').get();
     const leaders = new Set(leaderUidsOf(currentGroupData));
     const people = [];
-    snap.forEach(doc => people.push({ uid: doc.id, name: (doc.data().name || 'Unnamed') }));
+    snap.forEach(doc => {
+      const d = doc.data();
+      people.push({ uid: doc.id, name: d.name || 'Unnamed', device: d.device || '' });
+    });
     if (currentGroupData.adminUid && !people.some(p => p.uid === currentGroupData.adminUid)) {
       people.unshift({ uid: currentGroupData.adminUid, name: getProfileName() || 'Admin' });
     }
@@ -8362,7 +8425,8 @@ async function openPeopleModal() {
       const row = document.createElement('div');
       row.className = 'singer-row';
       const role = isAd ? 'Admin' : isLd ? 'Worship leader' : 'Member';
-      row.innerHTML = `<span class="singer-row-name">${esc(p.name)}<div style="font-size:12px;color:var(--muted);font-weight:500;">${role}</div></span>`;
+      const where = p.device ? esc(p.device) : 'Device not set';
+      row.innerHTML = `<span class="singer-row-name">${esc(p.name)}<div style="font-size:12px;color:var(--muted);font-weight:500;">${role} · ${where}</div></span>`;
       if (!isAd) {
         const actions = document.createElement('div');
         actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';

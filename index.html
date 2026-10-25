@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.61</div>
+  <div class="version-badge">V 4.62</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2313,7 +2313,7 @@
 <div class="modal-bg" id="people-modal">
   <div class="modal-box" style="max-height:85vh;overflow-y:auto;gap:14px;">
     <div class="modal-title">👥 People</div>
-    <div style="font-size:14px;color:var(--muted);line-height:1.45;">Worship leaders can manage songs, setlists, and singers. Members can open charts and keep their own notes. They cannot edit the setlist.</div>
+    <div style="font-size:14px;color:var(--muted);line-height:1.45;">Each device login is a separate row. Remove anyone who has left, and remove old logins you no longer use. The Admin row stays.</div>
     <div id="people-list" style="border:1.5px solid var(--border);border-radius:12px;overflow:hidden;min-height:48px;"></div>
     <div class="modal-actions">
       <button class="btn-primary" id="btn-people-done">Done</button>
@@ -5280,6 +5280,7 @@ function roleForGroup(g, uid, gid) {
   if (!g || !uid) return 'member';
   const id = gid || (g === currentGroupData ? currentGroupId : null);
   const saved = id ? myMemberRoles[id] : '';
+  if (saved === 'absent') return 'member';
   if (saved === 'member') return 'member';
   if (g.adminUid && g.adminUid === uid) return 'admin';
   if (leaderUidsOf(g).includes(uid) || saved === 'leader') return 'leader';
@@ -5290,7 +5291,15 @@ async function loadMyMemberRole(gid) {
   if (!fbUid || !gid) return;
   try {
     const d = await db.collection('groups').doc(gid).collection('members').doc(fbUid).get();
-    myMemberRoles[gid] = (d.exists && d.data().role) || '';
+    myMemberRoles[gid] = d.exists ? ((d.data().role) || '') : 'absent';
+  } catch {}
+}
+function forgetLocalGroup(gid) {
+  try {
+    const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]').filter(id => id !== gid);
+    localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
+    const admins = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').filter(id => id !== gid);
+    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(admins));
   } catch {}
 }
 function groupRecord(gid) {
@@ -5376,6 +5385,10 @@ async function loadMyGroups() {
         else continue;
       }
       await loadMyMemberRole(gid);
+      if (myMemberRoles[gid] === 'absent' && g.adminUid !== fbUid) {
+        forgetLocalGroup(gid);
+        continue;
+      }
       if (legacyLocalAdmin(gid) && myMemberRoles[gid] !== 'member' && g.adminUid !== fbUid) {
         try {
           await db.collection('groups').doc(gid).update({ adminUid: fbUid });
@@ -5532,6 +5545,14 @@ async function openGroupDetail(gid, gdata) {
   currentGroupId   = gid;
   currentGroupData = gdata;
   await loadMyMemberRole(gid);
+  if (myMemberRoles[gid] === 'absent' && gdata.adminUid !== fbUid) {
+    forgetLocalGroup(gid);
+    document.getElementById('group-detail-screen').classList.remove('active');
+    document.getElementById('groups-screen').classList.add('active');
+    hint('You are no longer in this group.', 4000);
+    loadMyGroups();
+    return;
+  }
   const role = roleForGroup(gdata, fbUid, gid);
   const isAdmin = role === 'admin';
   const canManage = role !== 'member';
@@ -8324,7 +8345,12 @@ async function openPeopleModal() {
     if (currentGroupData.adminUid && !people.some(p => p.uid === currentGroupData.adminUid)) {
       people.unshift({ uid: currentGroupData.adminUid, name: getProfileName() || 'Admin' });
     }
-    people.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    people.sort((a, b) => {
+      const aa = a.uid === currentGroupData.adminUid ? 0 : 1;
+      const bb = b.uid === currentGroupData.adminUid ? 0 : 1;
+      if (aa !== bb) return aa - bb;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
     if (!people.length) {
       list.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No one has joined yet.</div>';
       return;
@@ -8338,11 +8364,21 @@ async function openPeopleModal() {
       const role = isAd ? 'Admin' : isLd ? 'Worship leader' : 'Member';
       row.innerHTML = `<span class="singer-row-name">${esc(p.name)}<div style="font-size:12px;color:var(--muted);font-weight:500;">${role}</div></span>`;
       if (!isAd) {
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:6px;flex-shrink:0;';
         const btn = document.createElement('button');
         btn.className = 'ps-sort-btn';
         btn.textContent = isLd ? 'Make member' : 'Make leader';
         btn.addEventListener('click', () => setMemberLeader(p.uid, !isLd));
-        row.appendChild(btn);
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'ps-sort-btn';
+        removeBtn.style.color = '#ff3b30';
+        removeBtn.style.borderColor = '#ff3b30';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', () => removeMember(p.uid, p.name));
+        actions.appendChild(btn);
+        actions.appendChild(removeBtn);
+        row.appendChild(actions);
       }
       list.appendChild(row);
     });
@@ -8374,6 +8410,21 @@ async function setMemberLeader(uid, makeLeader) {
   } catch (err) {
     alert('Could not update role: ' + err.message);
   }
+}
+async function removeMember(uid, name) {
+  if (!isGroupAdmin() || !currentGroupId || uid === currentGroupData.adminUid) return;
+  showConfirm(`Remove ${name}?`, 'They lose this group the next time their device refreshes. Your Admin login stays.', 'Remove', async () => {
+    try {
+      const ids = leaderUidsOf(currentGroupData).filter(id => id !== uid);
+      await db.collection('groups').doc(currentGroupId).collection('members').doc(uid).delete();
+      await db.collection('groups').doc(currentGroupId).update({ leaderUids: ids });
+      currentGroupData = { ...currentGroupData, leaderUids: ids };
+      hint(`${name} removed`, 2000);
+      openPeopleModal();
+    } catch (err) {
+      alert('Could not remove: ' + err.message);
+    }
+  });
 }
 document.getElementById('btn-people-done').addEventListener('click', () => {
   document.getElementById('people-modal').classList.remove('open');

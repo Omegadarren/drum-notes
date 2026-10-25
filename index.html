@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.59</div>
+  <div class="version-badge">V 4.60</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2305,6 +2305,18 @@
     </div>
     <div class="modal-actions">
       <button class="btn-primary" id="btn-manage-singers-done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PEOPLE / ROLES MODAL ==================== -->
+<div class="modal-bg" id="people-modal">
+  <div class="modal-box" style="max-height:85vh;overflow-y:auto;gap:14px;">
+    <div class="modal-title">👥 People</div>
+    <div style="font-size:14px;color:var(--muted);line-height:1.45;">Worship leaders can manage songs, setlists, and singers. Members can open charts and keep their own notes. They cannot edit the setlist.</div>
+    <div id="people-list" style="border:1.5px solid var(--border);border-radius:12px;overflow:hidden;min-height:48px;"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="btn-people-done">Done</button>
     </div>
   </div>
 </div>
@@ -5110,11 +5122,8 @@ document.getElementById('btn-menu').addEventListener('click', e => {
   e.stopPropagation();
   // Show edit setlist item only for group setlists where user is admin
   const s = currentSession();
-  const isAdmin = s && s.groupId
-    ? JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(s.groupId)
-    : false;
-  document.getElementById('mi-reorder').style.display =
-    (s && s.setlistId && isAdmin) ? '' : 'none';
+  const canEditSetlist = s && s.groupId && s.setlistId && canManageGroup(s.groupId);
+  document.getElementById('mi-reorder').style.display = canEditSetlist ? '' : 'none';
   document.getElementById('dropdown').classList.toggle('open');
 });
 // Touch press feedback on dropdown items
@@ -5256,6 +5265,35 @@ function genInviteCode() {
 let currentGroupId   = null;
 let currentGroupData = null;
 
+function leaderUidsOf(g) {
+  return Array.isArray(g && g.leaderUids) ? g.leaderUids.filter(Boolean) : [];
+}
+function roleForGroup(g, uid) {
+  uid = uid || fbUid;
+  if (!g || !uid) return 'member';
+  if (g.adminUid && g.adminUid === uid) return 'admin';
+  if (leaderUidsOf(g).includes(uid)) return 'leader';
+  return 'member';
+}
+function groupRecord(gid) {
+  if (gid && gid === currentGroupId && currentGroupData) return currentGroupData;
+  try {
+    const cache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
+    return cache[gid] || null;
+  } catch { return null; }
+}
+function canManageGroup(gid) {
+  return roleForGroup(groupRecord(gid || currentGroupId)) !== 'member';
+}
+function isGroupAdmin(gid) {
+  return roleForGroup(groupRecord(gid || currentGroupId)) === 'admin';
+}
+function roleLabel(role) {
+  if (role === 'admin') return '👑 Admin';
+  if (role === 'leader') return 'Worship leader';
+  return 'Member';
+}
+
 document.getElementById('btn-groups').addEventListener('click', async () => {
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('groups-screen').classList.add('active');
@@ -5303,34 +5341,30 @@ async function loadMyGroups() {
     listEl.innerHTML = '';
     const groupCache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
     for (const gid of myGroupIds) {
-      let g, isAdmin;
+      let g;
       try {
         const gdoc = await db.collection('groups').doc(gid).get();
         if (!gdoc.exists) continue;
         g = gdoc.data();
-        const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
-        isAdmin = g.adminUid === fbUid || adminGroups.includes(gid);
-        // Cache group details for offline use
-        groupCache[gid] = { name: g.name, adminUid: g.adminUid, inviteCode: g.inviteCode, isAdmin, singers: normalizeSingers(g.singers) };
+        groupCache[gid] = {
+          name: g.name, adminUid: g.adminUid, inviteCode: g.inviteCode,
+          leaderUids: leaderUidsOf(g), singers: normalizeSingers(g.singers)
+        };
         localStorage.setItem('bandnotes_group_cache', JSON.stringify(groupCache));
       } catch (e) {
-        // Offline fallback — use cached details
-        if (groupCache[gid]) {
-          g = groupCache[gid];
-          isAdmin = groupCache[gid].isAdmin;
-        } else {
-          continue;
-        }
+        if (groupCache[gid]) g = groupCache[gid];
+        else continue;
       }
+      const role = roleForGroup(g);
       const row = document.createElement('div');
       row.className = 'group-row';
       row.innerHTML = `
         <div class="group-row-icon">🎸</div>
         <div class="group-row-info">
           <div class="group-row-name">${esc(g.name)}</div>
-          <div class="group-row-meta">${isAdmin ? '👑 Admin' : 'Member'}</div>
+          <div class="group-row-meta">${roleLabel(role)}</div>
         </div>
-        ${isAdmin ? '<span class="group-row-badge">ADMIN</span>' : ''}
+        ${role === 'admin' ? '<span class="group-row-badge">ADMIN</span>' : role === 'leader' ? '<span class="group-row-badge">LEADER</span>' : ''}
         <div class="group-row-arrow">›</div>`;
       row.addEventListener('click', () => openGroupDetail(gid, g));
       listEl.appendChild(row);
@@ -5362,7 +5396,7 @@ document.getElementById('btn-create-group-save').addEventListener('click', async
     fbUid = uid;
     const inviteCode = genInviteCode();
     const ref = await db.collection('groups').add({
-      name, adminUid: fbUid, inviteCode, createdAt: Date.now()
+      name, adminUid: fbUid, inviteCode, leaderUids: [], createdAt: Date.now()
     });
     // Add self as member
     await ref.collection('members').doc(fbUid).set({
@@ -5421,31 +5455,28 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
     const groupId = gdoc.id;
     const gdata   = gdoc.data();
 
-    // Invite code is the admin's secret — if the stored adminUid doesn't match the
-    // current UID (e.g. localStorage was wiped and a new anonymous UID was issued),
-    // attempt to claim admin ownership back by updating Firestore.
-    // This may fail if rules haven't recognised us yet — that's OK, we proceed anyway.
     const isOriginalAdmin = gdata.adminUid === fbUid;
-    const isLostAdmin     = !isOriginalAdmin;
-    if (isLostAdmin) {
-      try { await gdoc.ref.update({ adminUid: fbUid }); }
-      catch (adminErr) { console.warn('[BandNotes] Could not reclaim adminUid (rules):', adminErr.code); }
-    }
 
-    // Restore/add group to local list
+    // Restore/add group to local list. Joining does not grant admin or leader.
     const ids = JSON.parse(localStorage.getItem('bandnotes_groups') || '[]');
     if (!ids.includes(groupId)) ids.unshift(groupId);
     localStorage.setItem('bandnotes_groups', JSON.stringify(ids));
 
-    // Always restore admin status locally when joining via invite code
-    const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
-    if (!adminGroups.includes(groupId)) adminGroups.unshift(groupId);
-    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+    if (isOriginalAdmin) {
+      const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
+      if (!adminGroups.includes(groupId)) adminGroups.unshift(groupId);
+      localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
+    }
 
-    // Register as member under current UID
+    // Register as a view-only member. Do not overwrite a leader role.
     try {
-      await gdoc.ref.collection('members').doc(fbUid).set({
-        name: getProfileName() || 'Unknown', joinedAt: Date.now()
+      const memberRef = gdoc.ref.collection('members').doc(fbUid);
+      const existing = await memberRef.get().catch(() => null);
+      const prev = existing && existing.exists ? existing.data() : {};
+      await memberRef.set({
+        name: getProfileName() || prev.name || 'Unknown',
+        joinedAt: prev.joinedAt || Date.now(),
+        role: prev.role || 'member'
       });
     } catch (memberErr) {
       setLoading(false);
@@ -5459,7 +5490,7 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
 
     document.getElementById('join-group-modal').classList.remove('open');
     setLoading(false);
-    hint(`${isLostAdmin ? 'Group restored' : 'Joined'}: "${gdata.name}"!`, 3000);
+    hint(`${isOriginalAdmin ? 'Group restored' : 'Joined'}: "${gdata.name}"!`, 3000);
     loadMyGroups();
   } catch (err) {
     setLoading(false);
@@ -5471,16 +5502,11 @@ document.getElementById('btn-join-group-save').addEventListener('click', async (
 async function openGroupDetail(gid, gdata) {
   currentGroupId   = gid;
   currentGroupData = gdata;
-  // Check admin via UID match OR local ownership record (survives auth/UID resets)
-  const adminGroups = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]');
-  const isAdmin = gdata.adminUid === fbUid || adminGroups.includes(gid);
-  // Keep local record in sync with UID match so it persists going forward
-  if (gdata.adminUid === fbUid && !adminGroups.includes(gid)) {
-    adminGroups.unshift(gid);
-    localStorage.setItem('bandnotes_admin_groups', JSON.stringify(adminGroups));
-  }
+  const role = roleForGroup(gdata);
+  const isAdmin = role === 'admin';
+  const canManage = role !== 'member';
   document.getElementById('group-detail-title').textContent   = gdata.name;
-  document.getElementById('btn-upload-setlist').style.display = isAdmin ? '' : 'none';
+  document.getElementById('btn-upload-setlist').style.display = canManage ? '' : 'none';
   document.getElementById('btn-gd-settings').style.display    = '';
 
   // Build settings dropdown
@@ -5488,8 +5514,7 @@ async function openGroupDetail(gid, gdata) {
   menu.innerHTML = '';
   menu.classList.remove('open');
 
-  if (isAdmin) {
-    // Invite code block
+  if (canManage) {
     const inviteBlock = document.createElement('div');
     inviteBlock.className = 'gd-invite-block';
     inviteBlock.innerHTML = `
@@ -5499,22 +5524,29 @@ async function openGroupDetail(gid, gdata) {
         <button class="gd-copy-btn" id="btn-copy-code">📋 Copy</button>
       </div>`;
     menu.appendChild(inviteBlock);
+  }
 
-    // Song Library
-    const libItem = document.createElement('div');
-    libItem.className = 'gd-settings-item';
-    libItem.textContent = '📚 Song Library';
-    libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, true); });
-    menu.appendChild(libItem);
+  const libItem = document.createElement('div');
+  libItem.className = 'gd-settings-item';
+  libItem.textContent = '📚 Song Library';
+  libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, canManage); });
+  menu.appendChild(libItem);
 
-    // Singers
+  if (canManage) {
     const singersItem = document.createElement('div');
     singersItem.className = 'gd-settings-item';
     singersItem.textContent = '🎤 Singers';
     singersItem.addEventListener('click', () => { menu.classList.remove('open'); openManageSingersModal(); });
     menu.appendChild(singersItem);
+  }
 
-    // Rename Group
+  if (isAdmin) {
+    const peopleItem = document.createElement('div');
+    peopleItem.className = 'gd-settings-item';
+    peopleItem.textContent = '👥 People';
+    peopleItem.addEventListener('click', () => { menu.classList.remove('open'); openPeopleModal(); });
+    menu.appendChild(peopleItem);
+
     const renameItem = document.createElement('div');
     renameItem.className = 'gd-settings-item';
     renameItem.textContent = '✏️ Rename Group';
@@ -5526,7 +5558,6 @@ async function openGroupDetail(gid, gdata) {
     });
     menu.appendChild(renameItem);
 
-    // Delete Group
     const deleteItem = document.createElement('div');
     deleteItem.className = 'gd-settings-item danger';
     deleteItem.textContent = '🗑 Delete Group';
@@ -5536,14 +5567,6 @@ async function openGroupDetail(gid, gdata) {
     });
     menu.appendChild(deleteItem);
   } else {
-    // Song Library (member)
-    const libItem = document.createElement('div');
-    libItem.className = 'gd-settings-item';
-    libItem.textContent = '📚 Song Library';
-    libItem.addEventListener('click', () => { menu.classList.remove('open'); openSongLibrary(gid, false); });
-    menu.appendChild(libItem);
-
-    // Leave Group
     const leaveItem = document.createElement('div');
     leaveItem.className = 'gd-settings-item danger';
     leaveItem.textContent = '🚪 Leave Group';
@@ -5593,7 +5616,7 @@ async function loadGroupSetlists(gid) {
     const snap = await db.collection('groups').doc(gid).collection('setlists')
       .orderBy('createdAt', 'desc').get();
     listEl.innerHTML = '';
-    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
+    const isAdmin = canManageGroup(gid);
     const backedUpIds = new Set(JSON.parse(localStorage.getItem('bn_backed_up_' + gid) || '[]'));
 
     // Split into active and archived
@@ -8152,7 +8175,7 @@ document.getElementById('btn-rename-song-save').addEventListener('click', async 
     document.getElementById('rename-song-modal').classList.remove('open');
     setLoading(false);
     hint(`Renamed to "${name}"`, 2500);
-    const isAdmin = JSON.parse(localStorage.getItem('bandnotes_admin_groups') || '[]').includes(gid);
+    const isAdmin = canManageGroup(gid);
     loadSongLibrary(gid, isAdmin);
   } catch (err) {
     setLoading(false);
@@ -8256,6 +8279,74 @@ document.getElementById('btn-manage-singers-done').addEventListener('click', () 
   document.getElementById('manage-singers-modal').classList.remove('open');
   _singerAddForSongId = null;
   renderSelectedSongs();
+});
+
+async function openPeopleModal() {
+  if (!isGroupAdmin()) { hint('Only the admin can change roles.'); return; }
+  const list = document.getElementById('people-list');
+  list.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Loading…</div>';
+  document.getElementById('people-modal').classList.add('open');
+  try {
+    const snap = await db.collection('groups').doc(currentGroupId).collection('members').get();
+    const leaders = new Set(leaderUidsOf(currentGroupData));
+    const people = [];
+    snap.forEach(doc => people.push({ uid: doc.id, name: (doc.data().name || 'Unnamed') }));
+    if (currentGroupData.adminUid && !people.some(p => p.uid === currentGroupData.adminUid)) {
+      people.unshift({ uid: currentGroupData.adminUid, name: getProfileName() || 'Admin' });
+    }
+    people.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+    if (!people.length) {
+      list.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">No one has joined yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    people.forEach(p => {
+      const isAd = p.uid === currentGroupData.adminUid;
+      const isLd = leaders.has(p.uid);
+      const row = document.createElement('div');
+      row.className = 'singer-row';
+      const role = isAd ? 'Admin' : isLd ? 'Worship leader' : 'Member';
+      row.innerHTML = `<span class="singer-row-name">${esc(p.name)}<div style="font-size:12px;color:var(--muted);font-weight:500;">${role}</div></span>`;
+      if (!isAd) {
+        const btn = document.createElement('button');
+        btn.className = 'ps-sort-btn';
+        btn.textContent = isLd ? 'Make member' : 'Make leader';
+        btn.addEventListener('click', () => setMemberLeader(p.uid, !isLd));
+        row.appendChild(btn);
+      }
+      list.appendChild(row);
+    });
+  } catch (err) {
+    list.innerHTML = '<div class="groups-empty" style="padding:14px;font-size:15px;">Could not load people.</div>';
+  }
+}
+
+async function setMemberLeader(uid, makeLeader) {
+  if (!isGroupAdmin() || !currentGroupId) return;
+  let ids = leaderUidsOf(currentGroupData).filter(id => id && id !== currentGroupData.adminUid);
+  if (makeLeader) { if (!ids.includes(uid)) ids.push(uid); }
+  else ids = ids.filter(id => id !== uid);
+  try {
+    await db.collection('groups').doc(currentGroupId).update({ leaderUids: ids });
+    await db.collection('groups').doc(currentGroupId).collection('members').doc(uid)
+      .set({ role: makeLeader ? 'leader' : 'member' }, { merge: true });
+    currentGroupData = { ...currentGroupData, leaderUids: ids };
+    const cache = JSON.parse(localStorage.getItem('bandnotes_group_cache') || '{}');
+    cache[currentGroupId] = {
+      ...(cache[currentGroupId] || {}),
+      name: currentGroupData.name,
+      adminUid: currentGroupData.adminUid,
+      leaderUids: ids
+    };
+    localStorage.setItem('bandnotes_group_cache', JSON.stringify(cache));
+    hint(makeLeader ? 'Worship leader saved' : 'Set back to member', 2000);
+    openPeopleModal();
+  } catch (err) {
+    alert('Could not update role: ' + err.message);
+  }
+}
+document.getElementById('btn-people-done').addEventListener('click', () => {
+  document.getElementById('people-modal').classList.remove('open');
 });
 
 // ─────────────────── Setlist Builder ────────────────────

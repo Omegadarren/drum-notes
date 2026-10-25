@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.58</div>
+  <div class="version-badge">V 4.59</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -3932,13 +3932,15 @@ function updateSlideNav() {
 }
 
 // ─────────────────── Render PDF pages ────────────────────
-async function renderPages(container, pdfDoc, songId) {
+async function renderPages(container, pdfDoc, songId, renderGen) {
   const W    = container.clientWidth || window.innerWidth;
   const DPR  = window.devicePixelRatio || 1;   // iPad Pro = 2
   const zoom = app.zoomFactor || 1.0;
 
   for (let p = 1; p <= pdfDoc.numPages; p++) {
+    if (renderGen != null && container._renderGen !== renderGen) return;
     const page  = await pdfDoc.getPage(p);
+    if (renderGen != null && container._renderGen !== renderGen) return;
     const vp0   = page.getViewport({ scale: 1 });
     // Render at physical pixel density × user zoom for crisp text
     const scale = (W / vp0.width) * DPR * zoom;
@@ -3979,19 +3981,28 @@ async function renderPages(container, pdfDoc, songId) {
     wrap.appendChild(inkCanvas);
     wrap.appendChild(lassoLayer);
     wrap.appendChild(annLayer);
+    if (renderGen != null) wrap.dataset.renderGen = String(renderGen);
+    if (renderGen != null && container._renderGen !== renderGen) return;
     container.appendChild(wrap);
 
     // Tag with songId so annotations can be routed correctly
-    app.pages.push({
+    const pageRec = {
       wrap, canvas, annLayer, lassoLayer, inkCanvas, inkCtx,
       w: vp.width / DPR, h: vp.height / DPR,
       songId: songId || null,
       songPageIndex: p - 1,
-    });
+      renderGen,
+    };
+    app.pages.push(pageRec);
 
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
-    initLassoLayer(app.pages[app.pages.length - 1]);
+    if (renderGen != null && container._renderGen !== renderGen) {
+      wrap.remove();
+      app.pages = app.pages.filter(pg => pg !== pageRec);
+      return;
+    }
+    initLassoLayer(pageRec);
   }
 }
 
@@ -3999,14 +4010,24 @@ async function renderPages(container, pdfDoc, songId) {
 async function reRenderSlide(slideData) {
   if (!slideData || !slideData.pdfDoc) return;
   const slide = slideData.el;
+  const gen = (slide._renderGen || 0) + 1;
+  slide._renderGen = gen;
 
   // Drop app.pages entries that belong to this slide
-  app.pages = app.pages.filter(p => p.wrap.closest && p.wrap.closest('.song-slide') !== slide);
+  app.pages = app.pages.filter(p => !(p.wrap && slide.contains(p.wrap)));
 
   // Remove existing page canvases
   slide.querySelectorAll('.page-wrap').forEach(el => el.remove());
 
-  await renderPages(slide, slideData.pdfDoc, slideData.songId);
+  await renderPages(slide, slideData.pdfDoc, slideData.songId, gen);
+  if (slide._renderGen !== gen) return;
+
+  // A rotate can start a second draw before this one finishes. Keep only this draw.
+  slide.querySelectorAll('.page-wrap').forEach(el => {
+    if (el.dataset.renderGen !== String(gen)) el.remove();
+  });
+  app.pages = app.pages.filter(p => p.wrap && p.wrap.isConnected);
+
   slideData.renderedAtZoom  = app.zoomFactor;
   slideData.renderedAtWidth = slide.clientWidth;
 
@@ -4026,7 +4047,8 @@ async function reRenderIfSlideWidthChanged() {
   const slideData = app.slides && app.slides[app.slideIdx];
   if (!slideData || !slideData.el) return;
   const w = slideData.el.clientWidth;
-  if (Math.abs((slideData.renderedAtWidth || 0) - w) < 8) return;
+  if (!w || Math.abs((slideData.renderedAtWidth || 0) - w) < 8) return;
+  slideData.renderedAtWidth = w;
   await reRenderSlide(slideData);
 }
 
@@ -8560,8 +8582,9 @@ renderStart();
     resizeTimer = setTimeout(() => {
       if (app.slides && app.slides.length > 1) {
         goToSlide(app.slideIdx);
+      } else {
+        reRenderIfSlideWidthChanged();
       }
-      reRenderIfSlideWidthChanged();
     }, 180);
   }
   window.addEventListener('resize', onViewportChange);

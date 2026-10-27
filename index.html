@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.67</div>
+  <div class="version-badge">V 4.68</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -3732,27 +3732,27 @@ async function launchViewer(session) {
 
   try {
     if (session.songPdfs && session.songPdfs.length) {
-      // Multi-song setlist: one slide per song
+      // Keep every song in the setlist, but do not draw them all.
+      // A long setlist was painting every page at once and the iPad reloaded.
       for (const sp of session.songPdfs) {
         const slide = createSongSlide(track);
-        const bytes  = dataUrlToBytes(sp.pdfData);
-        const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
-        await renderPages(slide, pdfDoc, sp.songId);
-        app.slides.push({ el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null, pdfDoc, renderedAtZoom: app.zoomFactor, renderedAtWidth: slide.clientWidth });
+        app.slides.push({
+          el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null,
+          pdfBytes: sp.pdfData, pdfDoc: null, _ready: false,
+          renderedAtZoom: 0, renderedAtWidth: 0
+        });
       }
     } else {
-      // Legacy single-PDF session
       const slide = createSongSlide(track);
-      const bytes = dataUrlToBytes(session.pdfData);
-      app.pdfDoc  = await pdfjsLib.getDocument({ data: bytes }).promise;
-      await renderPages(slide, app.pdfDoc, null);
-      app.slides.push({ el: slide, songName: session.name, songId: null, pdfDoc: app.pdfDoc, renderedAtZoom: app.zoomFactor, renderedAtWidth: slide.clientWidth });
+      app.slides.push({
+        el: slide, songName: session.name, songId: null, bpm: null,
+        pdfBytes: session.pdfData, pdfDoc: null, _ready: false,
+        renderedAtZoom: 0, renderedAtWidth: 0
+      });
     }
     updateSlideNav();
     await loadAllInkForSession();
-    drawAllAnnotations();
-    redrawAllInk();
-    goToSlide(0);  // trigger chord/cheat-note hooks for first slide
+    goToSlide(0);  // draws the first song only
     if (window.updateZoomUI) window.updateZoomUI();
     // Sync BPM label to first slide
     const firstBpm = app.slides[0] && app.slides[0].bpm;
@@ -3952,7 +3952,50 @@ function goToSlide(idx) {
     hint('Metronome stopped — no tempo set for this song.', 2500);
   }
   if (window.metroUpdateBpmLabel) window.metroUpdateBpmLabel(slideBpm || null);
-  reRenderIfSlideWidthChanged();
+  ensureSlideRendered(idx);
+}
+
+function releaseSlide(slideData) {
+  if (!slideData || !slideData.el) return;
+  const slide = slideData.el;
+  slide._renderGen = (slide._renderGen || 0) + 1;
+  app.pages = app.pages.filter(p => !(p.wrap && slide.contains(p.wrap)));
+  slide.querySelectorAll('.page-wrap').forEach(el => el.remove());
+  slideData._ready = false;
+  slideData.renderedAtWidth = 0;
+  const doc = slideData.pdfDoc;
+  slideData.pdfDoc = null;
+  if (doc && doc.destroy) setTimeout(() => { try { doc.destroy(); } catch {} }, 0);
+}
+
+let ensureToken = 0;
+async function renderSlideIfNeeded(slideData) {
+  if (!slideData) return;
+  if (!slideData.pdfDoc && slideData.pdfBytes) {
+    slideData.pdfDoc = await pdfjsLib.getDocument({ data: dataUrlToBytes(slideData.pdfBytes) }).promise;
+  }
+  if (!slideData.pdfDoc) return;
+  const w = slideData.el.clientWidth || 0;
+  if (slideData._ready && w && Math.abs((slideData.renderedAtWidth || 0) - w) < 8) return;
+  await reRenderSlide(slideData);
+  slideData._ready = !!slideData.el.querySelector('.page-wrap');
+}
+
+async function ensureSlideRendered(idx) {
+  if (!app.slides || !app.slides[idx]) return;
+  const token = ++ensureToken;
+  try {
+    await renderSlideIfNeeded(app.slides[idx]);
+  } catch (err) {
+    console.warn('Could not draw song', err);
+    return;
+  }
+  if (token !== ensureToken) return;
+  app.slides.forEach((s, i) => {
+    if (Math.abs(i - idx) > 1) releaseSlide(s);
+  });
+  renderSlideIfNeeded(app.slides[idx - 1]).catch(() => {});
+  renderSlideIfNeeded(app.slides[idx + 1]).catch(() => {});
 }
 
 // ─────────────────── Update song nav in header ───────────
@@ -4788,10 +4831,6 @@ function showDeleteConfirm(ann, labelEl) {
 
 // ─────────────────── Back / navigation ───────────────────
 document.getElementById('btn-back').addEventListener('click', goBack);
-document.getElementById('btn-back').addEventListener('touchend', e => {
-  e.preventDefault();
-  goBack();
-});
 
 document.getElementById('btn-slide-prev').addEventListener('click', () => goToSlide(app.slideIdx - 1));
 document.getElementById('btn-slide-next').addEventListener('click', () => goToSlide(app.slideIdx + 1));
@@ -4810,7 +4849,8 @@ function buildJumpMenu() {
     const item = document.createElement('div');
     item.className = 'jump-item' + (i === app.slideIdx ? ' current' : '');
     item.innerHTML = `<span class="jump-item-num">${i + 1}</span>${esc(slide.songName || 'Song ' + (i + 1))}`;
-    item.addEventListener('click', () => {
+    item.addEventListener('click', e => {
+      e.stopPropagation();
       document.getElementById('jump-dropdown').classList.remove('open');
       goToSlide(i);
     });

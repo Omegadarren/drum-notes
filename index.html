@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.66</div>
+  <div class="version-badge">V 4.67</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5131,10 +5131,18 @@ let pedalSolo = null;
 let pedalRecent = [];
 let pedalChordAt = 0;
 
-function pedalVertical(key) {
+function pedalAxis(key) {
   if (key === 'ArrowUp' || key === 'PageUp') return 'up';
   if (key === 'ArrowDown' || key === 'PageDown') return 'down';
+  if (key === 'ArrowLeft') return 'left';
+  if (key === 'ArrowRight') return 'right';
   return '';
+}
+function pedalHome() {
+  if (!app.slides || !app.slides.length) return;
+  goToSlide(0);
+  const slide = app.slides[0].el;
+  if (slide) slide.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function runPedalSolo() {
@@ -5162,10 +5170,11 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   if (e.repeat) return;
   const now = Date.now();
-  const dir = pedalVertical(key);
+  const dir = pedalAxis(key);
+  const pair = (dir === 'up' || dir === 'down') ? 'vertical' : (dir === 'left' || dir === 'right') ? 'horizontal' : '';
   pedalRecent = pedalRecent.filter(p => now - p.at < 450);
-  const chord = dir && pedalRecent.some(p => p.dir && p.dir !== dir);
-  pedalRecent.push({ key, dir, at: now });
+  const chord = pair && pedalRecent.some(p => p.pair === pair && p.dir !== dir);
+  pedalRecent.push({ key, dir, pair, at: now });
   if (chord) {
     clearTimeout(pedalTimer);
     pedalTimer = null;
@@ -5173,7 +5182,8 @@ document.addEventListener('keydown', e => {
     pedalRecent = [];
     if (now - pedalChordAt > 500) {
       pedalChordAt = now;
-      toggleMetroFromPedal();
+      if (pair === 'horizontal') pedalHome();
+      else toggleMetroFromPedal();
     }
     return;
   }

@@ -2010,7 +2010,7 @@
     font-size:11px; font-weight:700; width:fit-content; max-width:min(260px,80%);
   }
   .arr-cut-tag .arr-section-name-input {
-    font-size:12px; border-bottom-color:rgba(255,255,255,0.4);
+    font-size:16px; border-bottom-color:rgba(255,255,255,0.4);
     font-weight:700; color:#fff; min-width:60px;
   }
   .arr-cut-tag .arr-section-remove-btn { color:rgba(255,255,255,0.8); font-size:15px; }
@@ -2026,7 +2026,7 @@
   }
   .arr-section-name-input {
     flex:1; background:none; border:none; border-bottom:1px solid var(--border);
-    color:var(--text); font-size:15px; font-weight:700; outline:none; padding:2px 4px;
+    color:var(--text); font-size:16px; font-weight:700; outline:none; padding:2px 4px;
   }
   .arr-section-name-input:focus { border-bottom-color:var(--accent); }
   .arr-section-remove-btn {
@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.68</div>
+  <div class="version-badge">V 4.69</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -7302,6 +7302,35 @@ function arrGetSectionCrops(sec) {
   return result;
 }
 
+function pinArrangeInput(input) {
+  const scroller = input.closest('.arr-slicer-wrap') || input.closest('.arr-section-list');
+  const nudge = () => {
+    window.scrollTo(0, 0);
+    if (!scroller || document.activeElement !== input) return;
+    const vv = window.visualViewport;
+    const visibleBottom = (vv ? vv.offsetTop + vv.height : window.innerHeight) - 12;
+    const rect = input.getBoundingClientRect();
+    if (rect.bottom > visibleBottom) {
+      scroller.scrollTop += rect.bottom - visibleBottom + 16;
+    }
+    const comfort = Math.min(160, visibleBottom * 0.35);
+    const again = input.getBoundingClientRect();
+    if (again.top < comfort && scroller.scrollTop > 0) {
+      scroller.scrollTop = Math.max(0, scroller.scrollTop - (comfort - again.top));
+    }
+  };
+  [40, 280, 520].forEach(ms => setTimeout(nudge, ms));
+  if (!window.visualViewport) return;
+  const onVv = () => nudge();
+  window.visualViewport.addEventListener('resize', onVv);
+  window.visualViewport.addEventListener('scroll', onVv);
+  input.addEventListener('blur', () => {
+    window.visualViewport.removeEventListener('resize', onVv);
+    window.visualViewport.removeEventListener('scroll', onVv);
+    window.scrollTo(0, 0);
+  }, { once: true });
+}
+
 function arrShowTab(tab) {
   document.getElementById('arr-tab-slice').classList.toggle('active',   tab === 'slice');
   document.getElementById('arr-tab-arrange').classList.toggle('active', tab === 'arrange');
@@ -7344,6 +7373,7 @@ function arrMakeCutEl(sec, row) {
   nameInp.addEventListener('click',     e => e.stopPropagation());
   nameInp.addEventListener('mousedown', e => e.stopPropagation());
   nameInp.addEventListener('touchstart',e => e.stopPropagation(), { passive: true });
+  nameInp.addEventListener('focus', () => pinArrangeInput(nameInp));
 
   const rmBtn = document.createElement('button');
   rmBtn.className   = 'arr-section-remove-btn';
@@ -7392,6 +7422,7 @@ function arrBuildSlicerPanel(body) {
   firstInp.placeholder = 'Section name…';
   firstInp.addEventListener('input',   e => { firstSec.name = e.target.value; });
   firstInp.addEventListener('keydown', e => e.stopPropagation());
+  firstInp.addEventListener('focus', () => pinArrangeInput(firstInp));
   firstHdr.appendChild(firstInp);
   // Allow deleting the first section (if 2+ sections exist);
   // the next section inherits the start position (page 0, y 0).
@@ -8909,6 +8940,9 @@ renderStart();
 (function() {
   let resizeTimer;
   function onViewportChange() {
+    if (document.getElementById('arrange-screen').classList.contains('active')) return;
+    const vv = window.visualViewport;
+    if (vv && vv.height < window.innerHeight * 0.8) return;
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (app.slides && app.slides.length > 1) {

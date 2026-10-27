@@ -2098,7 +2098,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.63</div>
+  <div class="version-badge">V 4.64</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5115,8 +5115,7 @@ function scrollChartPage(dir) {
   if (!slide) return;
   const view = slide.clientHeight || 0;
   if (!view) return;
-  const overlap = 36;
-  const step = Math.max(80, view - overlap);
+  const step = Math.max(80, Math.round(view * 0.75));
   const maxTop = Math.max(0, slide.scrollHeight - view);
   const next = Math.min(maxTop, Math.max(0, slide.scrollTop + dir * step));
   slide.scrollTo({ top: next, behavior: 'smooth' });

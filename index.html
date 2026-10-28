@@ -1692,9 +1692,41 @@
     /* Setlist builder song rows */
     .sl-selected-row { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
     .sl-selected-row:last-child { border-bottom:none; }
-    .sl-selected-name { flex:1; font-size:16px; min-width:80px; }
+    .sl-selected-name { flex:1; font-size:16px; min-width:120px; }
+    .sl-song-controls { display:flex; align-items:center; gap:8px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; }
+    .sl-default-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .sl-default-label input { width: 16px; height: 16px; margin: 0; }
     .sl-order-btn { background:none; border:none; color:var(--muted); font-size:20px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
     .sl-remove-btn { background:none; border:none; color:var(--muted); font-size:18px; padding:4px 8px; cursor:pointer; touch-action:manipulation; }
+    .sl-key-select {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 7px 6px;
+      min-width: 108px;
+      flex: 0 0 auto;
+    }
+    .view-key-select {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      padding: 4px 6px;
+      flex-shrink: 0;
+      max-width: 118px;
+    }
     .sl-singer-select {
       background: var(--bg);
       border: 1.5px solid var(--border);
@@ -2098,7 +2130,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.70</div>
+  <div class="version-badge">V 4.72</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -2272,7 +2304,7 @@
              autocomplete="off" autocorrect="off" spellcheck="false">
     </div>
     <div>
-      <div class="field-label">Songs in this setlist <span style="color:var(--muted);font-weight:400;">— singer is for this setlist only</span></div>
+      <div class="field-label">Songs in this setlist <span style="color:var(--muted);font-weight:400;">— key and singer are for this setlist only</span></div>
       <div id="setlist-selected-songs" style="border:1.5px solid var(--border);border-radius:12px;min-height:48px;margin-bottom:10px;overflow:hidden;">
         <div class="groups-empty" id="setlist-selected-empty" style="padding:14px;font-size:15px;">No songs yet</div>
       </div>
@@ -2501,6 +2533,7 @@
   <div class="vhdr">
     <div class="vhdr-back" id="btn-back">‹</div>
     <div class="vhdr-title" id="view-title">—</div>
+    <select id="view-key" class="view-key-select" style="display:none" title="Key for this song in this setlist"></select>
     <button class="btn-slide-nav" id="btn-slide-prev" style="display:none" disabled>◀</button>
     <span class="slide-counter" id="slide-counter" style="display:none"></span>
     <button class="btn-slide-nav" id="btn-slide-next" style="display:none" disabled>▶</button>
@@ -2707,8 +2740,13 @@ function idbGet(storeName, key) {
     req.onerror   = () => reject(req.error);
   })).catch(() => null);
 }
-async function cacheSongPdf(gid, songId, songName, pdfData) {
-  await idbPut(IDB_STORE, `${gid}/${songId}`, { songId, songName, pdfData, cachedAt: Date.now() });
+async function cacheSongPdf(gid, songId, songName, pdfData, extra = {}) {
+  const prev = await getCachedSongPdf(gid, songId);
+  await idbPut(IDB_STORE, `${gid}/${songId}`, {
+    songId, songName, pdfData,
+    defaultKey: extra.defaultKey != null ? extra.defaultKey : (prev && prev.defaultKey) || '',
+    cachedAt: Date.now()
+  });
 }
 async function getCachedSongPdf(gid, songId) {
   return idbGet(IDB_STORE, `${gid}/${songId}`);
@@ -2725,6 +2763,7 @@ async function cacheSetlistMeta(gid, setlistId, name, songIds, extra = {}) {
         createdAt:       existing.createdAt,
         uploadedAt:      existing.uploadedAt,
         singerBySong:    existing.singerBySong,
+        keyBySong:       existing.keyBySong,
       }
     : {};
   await idbPut(IDB_META, `${gid}/${setlistId}`, { ...preserved, ...extra, name, songIds, cachedAt: Date.now() });
@@ -3450,6 +3489,7 @@ function setlistSongsTooltip(sl) {
   const ids = Array.isArray(sl.songIds) ? sl.songIds : [];
   let assigned = 0;
   const rows = lines.map((line, i) => {
+    const shown = ids[i] ? songNameInKey(line, sl.keyBySong && sl.keyBySong[ids[i]]) : line;
     const singer = ids[i] ? singerNameFromSetlist(sl, ids[i]) : '';
     if (singer) assigned++;
     const who = ids.length
@@ -3457,7 +3497,7 @@ function setlistSongsTooltip(sl) {
           ? `<span class="songs-tip-singer">${esc(singer)}</span>`
           : `<span class="songs-tip-none">none</span>`)
       : '';
-    return `<div class="songs-tip-row"><span class="songs-tip-name">${esc(line)}</span>${who}</div>`;
+    return `<div class="songs-tip-row"><span class="songs-tip-name">${esc(shown)}</span>${who}</div>`;
   }).join('');
   const sum = ids.length
     ? `<div class="songs-tip-sum${assigned === ids.length ? ' done' : ''}">Singers ${assigned} of ${ids.length}</div>`
@@ -3471,6 +3511,216 @@ function singerBySongFromSelected() {
     if (s.singerId && s.singerName) map[s.id] = { id: s.singerId, name: s.singerName };
   });
   return map;
+}
+
+const CHART_KEYS = ['C','C#','D','Eb','E','F','F#','G','Ab','A','Bb','B'];
+const CHART_KEY_INDEX = {
+  C:0, 'C#':1, Db:1, D:2, 'D#':3, Eb:3, E:4, F:5, 'F#':6, Gb:6,
+  G:7, 'G#':8, Ab:8, A:9, 'A#':10, Bb:10, B:11
+};
+const CHORD_TOKEN = /^([A-G](?:#|b)?)(m|maj|min|sus|dim|aug|add)?(\d*)(?:\/([A-G](?:#|b)?))?$/;
+const KEY_LINE = /^Key\s*[-–]\s*([A-G](?:#|b)?)/;
+
+function normalizeChartKey(k) {
+  if (!k) return '';
+  const raw = String(k).trim().replace('♯', '#').replace('♭', 'b');
+  if (CHART_KEY_INDEX[raw] == null) return '';
+  return CHART_KEYS[CHART_KEY_INDEX[raw]];
+}
+function songNameInKey(name, key) {
+  const next = normalizeChartKey(key);
+  if (!name || !next) return name || '';
+  const renamed = String(name).replace(/(-chords-)([A-G](?:#|b)?)(?=\s|\(|-|$)/i, '$1' + next);
+  if (renamed !== String(name)) return renamed;
+  const title = songBaseTitle(name);
+  return title ? `${title}-chords-${next}` : String(name);
+}
+function songBaseTitle(name) {
+  let n = String(name || '').replace(/^Legacy\s*-\s*/i, '').trim();
+  n = n.replace(/\s*\(\d+\)\s*$/, '');
+  if (!/-chords-/i.test(n)) n = n.replace(/\s*\(([A-G](?:#|b)?)\)\s*$/i, '').trim();
+  const m = n.match(/^(.*?)-chords-/i);
+  if (m) n = m[1].trim();
+  return n.replace(/-Bridge only$/i, '').trim();
+}
+function keyFromSongName(name) {
+  const raw = String(name || '').replace(/^Legacy\s*-\s*/i, '').trim();
+  const chords = raw.match(/-chords-([A-G](?:#|b)?)/i);
+  if (chords) return normalizeChartKey(chords[1]);
+  const paren = raw.match(/\(([A-G](?:#|b)?)\)\s*$/i);
+  if (paren) return normalizeChartKey(paren[1]);
+  return '';
+}
+function legacyFolderName(name) {
+  const title = songBaseTitle(name);
+  const key = keyFromSongName(name);
+  return key ? `Legacy - ${title} (${key})` : `Legacy - ${title}`;
+}
+function transposeChordToken(text, steps) {
+  const m = CHORD_TOKEN.exec(String(text || '').trim());
+  if (!m || CHART_KEY_INDEX[m[1]] == null) return null;
+  const shift = n => CHART_KEYS[(CHART_KEY_INDEX[n] + steps + 120) % 12];
+  const root = shift(m[1]);
+  let bass = '';
+  if (m[4]) {
+    if (CHART_KEY_INDEX[m[4]] == null) return null;
+    bass = '/' + shift(m[4]);
+  }
+  return root + (m[2] || '') + (m[3] || '') + bass;
+}
+function keyOptionHtml(chosen) {
+  const key = normalizeChartKey(chosen);
+  let html = `<option value=""${!key ? ' selected' : ''}>Original</option>`;
+  CHART_KEYS.forEach(k => {
+    html += `<option value="${k}"${k === key ? ' selected' : ''}>${k}</option>`;
+  });
+  return html;
+}
+function keyChoiceForSong(songId) {
+  const sess = currentSession();
+  const chosen = sess && sess.keyBySong && songId ? normalizeChartKey(sess.keyBySong[songId]) : '';
+  if (chosen) return chosen;
+  const slide = (app.slides || []).find(s => s.songId === songId);
+  return normalizeChartKey(slide && slide.defaultKey);
+}
+function keyBySongFromSelected() {
+  const map = {};
+  selectedSetlistSongs.forEach(s => {
+    const key = normalizeChartKey(s.key);
+    if (key) map[s.id] = key;
+  });
+  return map;
+}
+
+async function paintTransposedChords(page, ctx, viewport, songId) {
+  const target = keyChoiceForSong(songId);
+  if (!target) return '';
+  let tc;
+  try { tc = await page.getTextContent(); } catch { return ''; }
+  const items = (tc.items || []).filter(it => it && it.str && it.transform);
+  const slide = (app.slides || []).find(s => s.songId === songId);
+  let source = slide && slide.originalKey || '';
+  for (const item of items) {
+    const m = KEY_LINE.exec(item.str.trim());
+    if (m) { source = normalizeChartKey(m[1]); break; }
+  }
+  if (slide && source) slide.originalKey = source;
+  if (!source || source === target) return source;
+  const steps = (CHART_KEY_INDEX[target] - CHART_KEY_INDEX[source] + 12) % 12;
+  if (!steps) return source;
+
+  function boxOf(item) {
+    const tx = item.transform;
+    const x = tx[4];
+    const y = tx[5];
+    const h = Math.abs(tx[3]) || item.height || 12;
+    const w = item.width || 0;
+    const pt = viewport.convertToViewportPoint(x, y);
+    const scale = viewport.scale || 1;
+    return { vx: pt[0], baseline: pt[1], vw: w * scale, vh: h * scale, pdfX: x, pdfY: y, pdfW: w, pdfH: h };
+  }
+  const boxes = items.map(boxOf);
+  const consumed = new Set();
+  const scale = viewport.scale || 1;
+
+  function isAttachable(str) {
+    return /^(sus|maj|min|dim|aug|add|m|\d+)$/.test(str);
+  }
+  function suffixesFor(i) {
+    const box = boxes[i];
+    const found = [];
+    items.forEach((n, j) => {
+      if (j === i || consumed.has(j)) return;
+      const s = (n.str || '').trim();
+      if (!isAttachable(s)) return;
+      const b = boxes[j];
+      const dx = b.pdfX - (box.pdfX + box.pdfW);
+      if (dx < -1.5 || dx > 12) return;
+      if (b.pdfY < box.pdfY - 2) return;
+      if (b.pdfY > box.pdfY + box.pdfH + 6) return;
+      found.push(j);
+    });
+    found.sort((a, b) => boxes[a].pdfX - boxes[b].pdfX);
+    return found;
+  }
+
+  ctx.save();
+  items.forEach((item, i) => {
+    if (consumed.has(i)) return;
+    const raw = item.str || '';
+    const token = raw.trim();
+    const keyMatch = KEY_LINE.exec(token);
+    if (!keyMatch && isAttachable(token)) return;
+    if (!keyMatch && !transposeChordToken(token, steps)) return;
+
+    const attached = keyMatch ? [] : suffixesFor(i);
+    let sourceToken = token;
+    let sup = '';
+    attached.forEach(j => {
+      const s = items[j].str.trim();
+      if (/^\d+$/.test(s)) sup += s;
+      else sourceToken += s;
+      consumed.add(j);
+    });
+    const chord = keyMatch ? null : transposeChordToken(sourceToken, steps);
+    if (!keyMatch && !chord) return;
+    if (!keyMatch && chord === sourceToken && !sup) return;
+
+    const box = boxes[i];
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'alphabetic';
+    if (keyMatch) {
+      const full = raw.replace(KEY_LINE, 'Key - ' + target);
+      let fontPx = box.vh * 0.82;
+      ctx.font = `700 ${fontPx}px Helvetica, Arial, sans-serif`;
+      const natural = ctx.measureText(full).width || 1;
+      fontPx = Math.min(box.vh * 0.95, fontPx * (box.vw / natural));
+      ctx.font = `700 ${fontPx}px Helvetica, Arial, sans-serif`;
+      ctx.fillRect(box.vx - 1, box.baseline - box.vh - 1, box.vw + 2, box.vh + 2);
+      ctx.fillStyle = '#111111';
+      ctx.fillText(full, box.vx, box.baseline - box.vh * 0.02);
+      return;
+    }
+    const label = chord;
+    let nextPdfX = box.pdfX + Math.max(box.pdfW + 28, 40);
+    items.forEach((n, j) => {
+      if (j === i || attached.includes(j)) return;
+      const b = boxes[j];
+      if (b.pdfX <= box.pdfX + box.pdfW * 0.5) return;
+      if (Math.abs(b.pdfY - box.pdfY) > 2.5) return;
+      const t = (n.str || '').trim();
+      if (CHORD_TOKEN.test(t)) nextPdfX = Math.min(nextPdfX, b.pdfX);
+    });
+    const avail = Math.max(box.vw + 2, (nextPdfX - box.pdfX) * scale - 2);
+    let fontPx = Math.max(9, box.vh * 0.92);
+    const fitWidth = () => {
+      ctx.font = `700 ${fontPx}px Helvetica, Arial, sans-serif`;
+      const word = ctx.measureText(label).width;
+      const extra = sup ? fontPx * 0.55 : 0;
+      return { word, total: word + extra };
+    };
+    let sized = fitWidth();
+    while (sized.total > avail && fontPx > 8) {
+      fontPx -= 0.35;
+      sized = fitWidth();
+    }
+    const drawBaseline = box.baseline - box.vh * 0.02;
+    ctx.fillRect(box.vx - 0.5, box.baseline - box.vh, Math.max(box.vw, sized.word) + 1.5, box.vh);
+    attached.forEach(j => {
+      const b = boxes[j];
+      ctx.fillRect(b.vx - 0.5, b.baseline - b.vh, b.vw + 1.5, b.vh + 0.5);
+    });
+    ctx.fillStyle = '#111111';
+    ctx.font = `700 ${fontPx}px Helvetica, Arial, sans-serif`;
+    ctx.fillText(label, box.vx, drawBaseline);
+    if (sup) {
+      const supPx = Math.max(8, fontPx * 0.72);
+      ctx.font = `700 ${supPx}px Helvetica, Arial, sans-serif`;
+      ctx.fillText(sup, box.vx + sized.word + 1, drawBaseline - fontPx * 0.28);
+    }
+  });
+  ctx.restore();
+  return source;
 }
 
 // ─────────────────── Generic confirm modal ───────────────
@@ -3738,6 +3988,7 @@ async function launchViewer(session) {
         const slide = createSongSlide(track);
         app.slides.push({
           el: slide, songName: sp.songName, songId: sp.songId, bpm: sp.bpm || null,
+          defaultKey: sp.defaultKey || '',
           pdfBytes: sp.pdfData, pdfDoc: null, _ready: false,
           renderedAtZoom: 0, renderedAtWidth: 0
         });
@@ -4025,7 +4276,7 @@ function updateSlideNav() {
     if (nextBtn) nextBtn.style.display = 'none';
 
     if (total === 1 && app.slides[0]) {
-      document.getElementById('view-title').textContent = app.slides[0].songName || '';
+      document.getElementById('view-title').textContent = songNameInKey(app.slides[0].songName, keyChoiceForSong(app.slides[0].songId));
     }
     return;
   }
@@ -4042,7 +4293,7 @@ function updateSlideNav() {
   }
   buildJumpMenu();
   // Show current song name in title
-  document.getElementById('view-title').textContent = app.slides[app.slideIdx].songName || '';
+  document.getElementById('view-title').textContent = songNameInKey(app.slides[app.slideIdx].songName, keyChoiceForSong(app.slides[app.slideIdx].songId));
 }
 
 // ─────────────────── Render PDF pages ────────────────────
@@ -4116,6 +4367,7 @@ async function renderPages(container, pdfDoc, songId, renderGen) {
       app.pages = app.pages.filter(pg => pg !== pageRec);
       return;
     }
+    try { await paintTransposedChords(page, ctx, vp, songId); } catch (err) { console.warn('key change', err); }
     initLassoLayer(pageRec);
   }
 }
@@ -4848,7 +5100,7 @@ function buildJumpMenu() {
   app.slides.forEach((slide, i) => {
     const item = document.createElement('div');
     item.className = 'jump-item' + (i === app.slideIdx ? ' current' : '');
-    item.innerHTML = `<span class="jump-item-num">${i + 1}</span>${esc(slide.songName || 'Song ' + (i + 1))}`;
+    item.innerHTML = `<span class="jump-item-num">${i + 1}</span>${esc(songNameInKey(slide.songName, keyChoiceForSong(slide.songId)) || ('Song ' + (i + 1)))}`;
     item.addEventListener('click', e => {
       e.stopPropagation();
       document.getElementById('jump-dropdown').classList.remove('open');
@@ -5307,7 +5559,7 @@ document.getElementById('mi-reorder').addEventListener('click', () => {
   const s = currentSession();
   if (!s || !s.setlistId) return;
   document.getElementById('create-setlist-modal').dataset.fromViewer = '1';
-  openEditSetlistModal(s.setlistId, { name: s.name, songIds: s.songIds || s.songPdfs.map(sp => sp.songId), singerBySong: s.singerBySong || {} });
+  openEditSetlistModal(s.setlistId, { name: s.name, songIds: s.songIds || s.songPdfs.map(sp => sp.songId), singerBySong: s.singerBySong || {}, keyBySong: s.keyBySong || {} });
 });
 
 // ─────────────────── UI helpers ──────────────────────────
@@ -5845,6 +6097,7 @@ async function loadGroupSetlists(gid) {
           createdAt:    sl.createdAt    || null,
           uploadedAt:   sl.uploadedAt   || null,
           singerBySong: sl.singerBySong || {},
+          keyBySong:    sl.keyBySong || {},
         });
       }
       const ts = sl.createdAt || sl.uploadedAt || 0;
@@ -5921,6 +6174,7 @@ async function loadGroupSetlists(gid) {
                   createdAt:    cached.createdAt   || null,
                   uploadedAt:   cached.uploadedAt  || null,
                   singerBySong: cached.singerBySong || sl.singerBySong || {},
+                  keyBySong:    cached.keyBySong || sl.keyBySong || {},
                 });
               }
               setLoading(false);
@@ -5959,6 +6213,7 @@ async function loadGroupSetlists(gid) {
           dupModal.dataset.songIds = JSON.stringify(sl.songIds || []);
           dupModal.dataset.songs   = sl.songs || '';
           dupModal.dataset.singerBySong = JSON.stringify(sl.singerBySong || {});
+          dupModal.dataset.keyBySong = JSON.stringify(sl.keyBySong || {});
           dupModal.classList.add('open');
           setTimeout(() => { dupInput.select(); dupInput.focus(); }, 80);
         });
@@ -6214,7 +6469,7 @@ function shareNotesForCurrentSong() {
   const slide    = app.slides[app.slideIdx];
   const songId   = slide?.songId || sess.songIds?.[0];
   if (!songId) { hint('Cannot share — no song ID.'); return; }
-  const songName = slide?.songName || sess.name;
+  const songName = songNameInKey(slide?.songName || sess.name, keyChoiceForSong(songId));
   const anns     = sess.annotations.filter(a => a.songId === songId);
   if (!anns.length) { hint('No notes to share for this song.', 2500); return; }
   const name = getProfileName() || 'Someone';
@@ -6271,6 +6526,13 @@ function importSharedAnnotations() {
 }
 let _archiveSortDesc = false; // archived setlist name sort direction
 let _archiveOpen     = false; // remember expand/collapse state
+let _legacyOpen      = false;
+
+function isLegacySong(song) {
+  if (!song) return false;
+  if (song.legacy) return true;
+  return /^Legacy\s*-/i.test(song.name || '');
+}
 
 function renderPlayedSongs() {
   const listEl = document.getElementById('played-songs-list');
@@ -6409,6 +6671,7 @@ async function showPlayedSongs(gid) {
           createdAt:    sl.createdAt    || null,
           uploadedAt:   sl.uploadedAt   || null,
           singerBySong: sl.singerBySong || {},
+          keyBySong:    sl.keyBySong || {},
         });
       });
     } catch (fetchErr) {
@@ -6465,6 +6728,7 @@ async function openGroupSetlist(setlistId, sl) {
         let songName  = null;
         let pdfData   = null;
         let songBpm   = null;
+        let defaultKey = '';
         let fromCache = false;
         let anns      = [];
 
@@ -6477,6 +6741,7 @@ async function openGroupSetlist(setlistId, sl) {
               const song = songDoc.data();
               songName = song.name;
               songBpm  = song.bpm || null;
+              defaultKey = song.defaultKey || '';
               const url  = await storage.ref(song.storagePath).getDownloadURL();
               const buf  = await new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
@@ -6492,7 +6757,7 @@ async function openGroupSetlist(setlistId, sl) {
                 binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
               pdfData = 'data:application/pdf;base64,' + btoa(binary);
               // Cache for offline use
-              cacheSongPdf(currentGroupId, songId, songName, pdfData);
+              cacheSongPdf(currentGroupId, songId, songName, pdfData, { defaultKey });
             }
           } catch (fetchErr) {
             // Live fetch failed — fall through to cache below
@@ -6505,6 +6770,7 @@ async function openGroupSetlist(setlistId, sl) {
           if (cached) {
             pdfData   = cached.pdfData;
             songName  = cached.songName;
+            defaultKey = cached.defaultKey || defaultKey;
             fromCache = true;
           }
         }
@@ -6533,7 +6799,7 @@ async function openGroupSetlist(setlistId, sl) {
           if (stored) songBpm = parseInt(stored, 10) || null;
         }
 
-        return { sp: { songId, songName, pdfData, bpm: songBpm }, anns, fromCache };
+        return { sp: { songId, songName, pdfData, bpm: songBpm, defaultKey }, anns, fromCache };
       }));
       for (const result of songResults) {
         if (!result) continue;
@@ -6553,6 +6819,7 @@ async function openGroupSetlist(setlistId, sl) {
       // Cache setlist metadata so we can redisplay it offline
       cacheSetlistMeta(currentGroupId, setlistId, sl.name, sl.songIds, {
         singerBySong: sl.singerBySong || {},
+        keyBySong:    sl.keyBySong || {},
         performed:    sl.performed    || false,
         performedAt:  sl.performedAt  || null,
         archived:     sl.archived     || false,
@@ -6573,6 +6840,7 @@ async function openGroupSetlist(setlistId, sl) {
         setlistId:    setlistId,
         songIds:      sl.songIds,
         singerBySong: sl.singerBySong || {},
+        keyBySong:    sl.keyBySong || {},
         songPdfs,
         annotations,
         isTemporary:  true,
@@ -6868,12 +7136,16 @@ async function loadSongLibrary(gid, isAdmin) {
       return;
     }
     listEl.innerHTML = '';
-    snap.forEach(doc => {
+    const currentDocs = [];
+    const legacyDocs = [];
+    snap.forEach(doc => (isLegacySong(doc.data()) ? legacyDocs : currentDocs).push(doc));
+    function renderLibrarySong(doc, parent) {
       const song  = doc.data();
       const count = playCounts[doc.id] || 0;
       const history = playHistory[doc.id] || [];
       const row  = document.createElement('div');
       row.className = 'song-row';
+      row.dataset.alpha = (song.name || '').replace(/^Legacy\s*-\s*/i, '');
       row.innerHTML = `
         <div class="song-row-icon">🎵</div>
         <div class="song-row-info">
@@ -6887,6 +7159,8 @@ async function loadSongLibrary(gid, isAdmin) {
           ${isAdmin ? `<button data-action="arrange">✂️ Arrange sections</button>` : ''}
           ${isAdmin ? `<button data-action="replace">🔄 Replace PDF</button>` : ''}
           ${isAdmin ? `<button data-action="rename">✏️ Rename</button>` : ''}
+          ${isAdmin && isLegacySong(song) ? `<button data-action="makedefault">Make default</button>` : ''}
+          ${isAdmin && !isLegacySong(song) ? `<button data-action="tolegacy">Add to Legacy</button>` : ''}
           ${isAdmin ? `<div class="setlist-ctx-divider"></div><button data-action="delete" class="ctx-danger">🗑 Delete</button>` : ''}
         </div>` : ''}
         <div class="group-row-arrow">›</div>`;
@@ -6957,9 +7231,39 @@ async function loadSongLibrary(gid, isAdmin) {
             }
           });
         });
+        const toLegacyBtn = row.querySelector('[data-action="tolegacy"]');
+        if (toLegacyBtn) toLegacyBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          row.classList.remove('ctx-open');
+          addSongToLegacyFolder(gid, doc.id, song, isAdmin);
+        });
+        const makeDefBtn = row.querySelector('[data-action="makedefault"]');
+        if (makeDefBtn) makeDefBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          row.classList.remove('ctx-open');
+          makeLegacySongDefault(gid, doc.id, song, isAdmin);
+        });
       }
-      listEl.appendChild(row);
-    });
+      parent.appendChild(row);
+    }
+    currentDocs.forEach(doc => renderLibrarySong(doc, listEl));
+    if (legacyDocs.length) {
+      const label = `Legacy · ${legacyDocs.length} older key${legacyDocs.length === 1 ? '' : 's'}`;
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className = 'archive-toggle-btn';
+      toggleBtn.textContent = label + (_legacyOpen ? ' · tap to hide ›' : ' · tap to view ›');
+      const legacyRows = document.createElement('div');
+      legacyRows.id = 'song-legacy-rows';
+      legacyRows.style.display = _legacyOpen ? '' : 'none';
+      toggleBtn.addEventListener('click', () => {
+        _legacyOpen = legacyRows.style.display === 'none';
+        legacyRows.style.display = _legacyOpen ? '' : 'none';
+        toggleBtn.textContent = label + (_legacyOpen ? ' · tap to hide ›' : ' · tap to view ›');
+      });
+      listEl.appendChild(toggleBtn);
+      listEl.appendChild(legacyRows);
+      legacyDocs.forEach(doc => renderLibrarySong(doc, legacyRows));
+    }
     // Wire up alpha filter
     songLibraryAlphaFilter = '';
     initSongLibraryAlphaFilter();
@@ -7083,7 +7387,7 @@ async function openLibrarySong(songId, song) {
       groupId:     currentGroupId,
       fromLibrary: true,
       songIds:     [songId],
-      songPdfs:    [{ songId, songName: song.name, pdfData,
+      songPdfs:    [{ songId, songName: song.name, pdfData, defaultKey: song.defaultKey || '',
         bpm: song.bpm || parseInt(localStorage.getItem('bandnotes_song_bpm_' + currentGroupId + '_' + songId) || '0', 10) || null,
       }],
       annotations,
@@ -8430,12 +8734,14 @@ document.getElementById('btn-duplicate-setlist-confirm').addEventListener('click
   const songIds = JSON.parse(modal.dataset.songIds || '[]');
   const songs   = modal.dataset.songs || '';
   let singerBySong = {};
+  let keyBySong = {};
   try { singerBySong = JSON.parse(modal.dataset.singerBySong || '{}') || {}; } catch {}
+  try { keyBySong = JSON.parse(modal.dataset.keyBySong || '{}') || {}; } catch {}
   setLoading(true, 'Duplicating…');
   try {
     const newId = genId();
     await db.collection('groups').doc(currentGroupId).collection('setlists').doc(newId).set({
-      name, songIds, songs, singerBySong, createdBy: fbUid, createdAt: Date.now(),
+      name, songIds, songs, singerBySong, keyBySong, createdBy: fbUid, createdAt: Date.now(),
     });
     setLoading(false);
     hint(`"${name}" created! ✅`, 2500);
@@ -8652,7 +8958,8 @@ function setSongLibraryAlphaFilter(letter) {
   songLibraryAlphaFilter = letter;
   initSongLibraryAlphaFilter();
   document.getElementById('song-library-list').querySelectorAll('.song-row').forEach(r => {
-    r.style.display = !letter || r.querySelector('.song-row-name').textContent.toUpperCase().startsWith(letter) ? '' : 'none';
+    const label = (r.dataset.alpha || r.querySelector('.song-row-name').textContent).toUpperCase();
+    r.style.display = !letter || label.startsWith(letter) ? '' : 'none';
   });
 }
 
@@ -8727,6 +9034,7 @@ async function openEditSetlistModal(setlistId, sl = {}, opts = {}) {
   let name = sl.name || '';
   let songIds = sl.songIds || [];
   let singerBySong = sl.singerBySong || {};
+  let keyBySong = sl.keyBySong || {};
   initAlphaFilter();
   setLoading(true, 'Loading songs…');
   try {
@@ -8738,6 +9046,7 @@ async function openEditSetlistModal(setlistId, sl = {}, opts = {}) {
         name = data.name || name;
         songIds = data.songIds || songIds;
         singerBySong = data.singerBySong || singerBySong;
+        keyBySong = data.keyBySong || keyBySong;
       }
     } catch {}
     document.getElementById('inp-create-setlist-name').value = name;
@@ -8753,7 +9062,7 @@ async function openEditSetlistModal(setlistId, sl = {}, opts = {}) {
           const match = singers.find(s => s.name.toLowerCase() === singerName.toLowerCase());
           if (match) singerId = match.id;
         }
-        selectedSetlistSongs.push({ id: songId, name: d.data().name, singerId, singerName });
+        selectedSetlistSongs.push({ id: songId, name: d.data().name, singerId, singerName, key: normalizeChartKey(keyBySong[songId]) });
       }
     }
   } catch (err) { console.error(err); }
@@ -8790,7 +9099,9 @@ async function loadSetlistBuilderLibrary() {
     const snap = await db.collection('groups').doc(currentGroupId).collection('songs')
       .orderBy('name', 'asc').get();
     snap.forEach(doc => {
-      setlistLibrarySongs.push({ id: doc.id, name: doc.data().name });
+      const data = doc.data();
+      if (isLegacySong(data)) return;
+      setlistLibrarySongs.push({ id: doc.id, name: data.name });
     });
     renderAvailableSongs();
   } catch (err) {
@@ -8804,7 +9115,7 @@ function addSongToSetlist(songId, songName) {
     hint('Already in setlist', 1500);
     return;
   }
-  selectedSetlistSongs.push({ id: songId, name: songName, singerId: '', singerName: '' });
+  selectedSetlistSongs.push({ id: songId, name: songName, singerId: '', singerName: '', key: '' });
   renderSelectedSongs();
   // Auto-clear the alpha filter after adding
   if (setlistAlphaFilter) {
@@ -8812,6 +9123,102 @@ function addSongToSetlist(songId, songName) {
     initAlphaFilter();
     renderAvailableSongs();
   }
+}
+
+async function applySetlistDefaultKeys(songs) {
+  for (const song of songs) {
+    if (!song.makeDefault || !normalizeChartKey(song.key)) continue;
+    const newName = songNameInKey(song.name, song.key);
+    await db.collection('groups').doc(currentGroupId).collection('songs').doc(song.id).update({
+      name: newName,
+      defaultKey: song.key
+    });
+    const cached = await getCachedSongPdf(currentGroupId, song.id);
+    if (cached && cached.pdfData) await cacheSongPdf(currentGroupId, song.id, newName, cached.pdfData, { defaultKey: song.key });
+    song.name = newName;
+    song.defaultKey = song.key;
+  }
+}
+
+async function detectPdfKey(storagePath) {
+  if (!storagePath) return '';
+  const url = await storage.ref(storagePath).getDownloadURL();
+  const buf = await fetch(url).then(r => r.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  try {
+    const limit = Math.min(pdf.numPages, 6);
+    for (let n = 1; n <= limit; n++) {
+      const page = await pdf.getPage(n);
+      const tc = await page.getTextContent();
+      for (const item of tc.items || []) {
+        const m = KEY_LINE.exec(String(item.str || '').trim());
+        if (m) return normalizeChartKey(m[1]);
+      }
+    }
+  } finally {
+    try { pdf.destroy(); } catch {}
+  }
+  return '';
+}
+
+function addSongToLegacyFolder(gid, songId, song, isAdmin) {
+  const next = legacyFolderName(song.name);
+  showConfirm(
+    `Move "${songBaseTitle(song.name)}" to Legacy?`,
+    'Setlists that already use this song still open it. It leaves the main library and the list for new setlists.',
+    'Add to Legacy',
+    async () => {
+      setLoading(true, 'Moving to Legacy…');
+      try {
+        await db.collection('groups').doc(gid).collection('songs').doc(songId).update({ name: next, legacy: true });
+        setLoading(false);
+        hint('Moved to Legacy', 2500);
+        loadSongLibrary(gid, isAdmin);
+      } catch (err) {
+        setLoading(false);
+        alert('Could not move song: ' + err.message);
+      }
+    },
+    false
+  );
+}
+
+async function makeLegacySongDefault(gid, songId, song, isAdmin) {
+  const title = songBaseTitle(song.name);
+  showConfirm(
+    `Make "${title}" the main library song?`,
+    'Other main copies of this title move into Legacy. Setlists keep the copy they already use.',
+    'Make Default',
+    async () => {
+      setLoading(true, 'Updating library…');
+      try {
+        let key = keyFromSongName(song.name) || song.defaultKey || '';
+        if (!key) key = await detectPdfKey(song.storagePath);
+        const snap = await db.collection('groups').doc(gid).collection('songs').get();
+        const songs = db.collection('groups').doc(gid).collection('songs');
+        for (const doc of snap.docs) {
+          if (doc.id === songId) continue;
+          const data = doc.data();
+          if (isLegacySong(data)) continue;
+          if (songBaseTitle(data.name).toLowerCase() !== title.toLowerCase()) continue;
+          await songs.doc(doc.id).update({ name: legacyFolderName(data.name), legacy: true });
+        }
+        const newName = key ? `${title}-chords-${normalizeChartKey(key)}` : title;
+        await songs.doc(songId).update({
+          name: newName,
+          legacy: false,
+          defaultKey: firebase.firestore.FieldValue.delete()
+        });
+        setLoading(false);
+        hint(`"${newName}" is now the main copy`, 3000);
+        loadSongLibrary(gid, isAdmin);
+      } catch (err) {
+        setLoading(false);
+        alert('Could not update library: ' + err.message);
+      }
+    },
+    false
+  );
 }
 
 function removeFromSetlist(songId) {
@@ -8849,12 +9256,31 @@ function renderSelectedSongs() {
     row.innerHTML = `
       <button class="sl-order-btn" data-dir="-1" title="Move up">↑</button>
       <button class="sl-order-btn" data-dir="1" title="Move down">↓</button>
-      <span class="sl-selected-name">${esc(song.name)}</span>
-      <select class="sl-singer-select" aria-label="Singer for ${esc(song.name)}">${opts}</select>
-      <button class="sl-remove-btn" title="Remove">✕</button>`;
+      <span class="sl-selected-name">${esc(songNameInKey(song.name, song.key))}</span>
+      <span class="sl-song-controls">
+        <select class="sl-singer-select" aria-label="Singer for ${esc(song.name)}">${opts}</select>
+        <select class="sl-key-select" aria-label="Key for ${esc(song.name)}">${keyOptionHtml(song.key)}</select>
+        <label class="sl-default-label" style="${song.key ? '' : 'display:none'}">
+          <input type="checkbox" class="sl-default-check" ${song.makeDefault ? 'checked' : ''}> Make default
+        </label>
+        <button class="sl-remove-btn" title="Remove">✕</button>
+      </span>`;
     row.querySelector('[data-dir="-1"]').addEventListener('click', () => moveSetlistSong(i, -1));
     row.querySelector('[data-dir="1"]').addEventListener('click', () => moveSetlistSong(i, 1));
     row.querySelector('.sl-remove-btn').addEventListener('click', () => removeFromSetlist(song.id));
+    const defaultLabel = row.querySelector('.sl-default-label');
+    const defaultCheck = row.querySelector('.sl-default-check');
+    row.querySelector('.sl-key-select').addEventListener('change', e => {
+      song.key = normalizeChartKey(e.target.value);
+      if (!song.key) song.makeDefault = false;
+      if (defaultLabel) defaultLabel.style.display = song.key ? '' : 'none';
+      if (defaultCheck && !song.key) defaultCheck.checked = false;
+      const nameEl = row.querySelector('.sl-selected-name');
+      if (nameEl) nameEl.textContent = songNameInKey(song.name, song.key);
+    });
+    if (defaultCheck) defaultCheck.addEventListener('change', e => {
+      song.makeDefault = !!e.target.checked;
+    });
     row.querySelector('.sl-singer-select').addEventListener('change', e => {
       const val = e.target.value;
       if (val === '__add__') {
@@ -8886,20 +9312,22 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
   modal.classList.remove('open');
   setLoading(true, existingId ? 'Saving changes…' : 'Saving setlist…');
   try {
+    await applySetlistDefaultKeys(selectedSetlistSongs);
     const songIds = selectedSetlistSongs.map(s => s.id);
-    const songs   = selectedSetlistSongs.map((s, i) => `${i + 1}. ${s.name}`).join('\n');
+    const songs   = selectedSetlistSongs.map((s, i) => `${i + 1}. ${songNameInKey(s.name, s.key || s.defaultKey)}`).join('\n');
     const singerBySong = singerBySongFromSelected();
+    const keyBySong = keyBySongFromSelected();
     if (existingId) {
       if (singersOnly) {
-        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ singerBySong });
+        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ singerBySong, keyBySong });
       } else {
-        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ name, songIds, songs, singerBySong });
+        await db.collection('groups').doc(currentGroupId).collection('setlists').doc(existingId).update({ name, songIds, songs, singerBySong, keyBySong });
       }
       hint(`Changes saved!`, 3000);
     } else {
       const setlistId = genId();
       await db.collection('groups').doc(currentGroupId).collection('setlists').doc(setlistId).set({
-        name, songIds, songs, singerBySong, createdBy: fbUid, createdAt: Date.now()
+        name, songIds, songs, singerBySong, keyBySong, createdBy: fbUid, createdAt: Date.now()
       });
       hint(`"${name}" saved!`, 3000);
     }
@@ -8909,7 +9337,7 @@ document.getElementById('btn-create-setlist-save').addEventListener('click', asy
     const _fromViewer = modal.dataset.fromViewer === '1';
     delete modal.dataset.fromViewer;
     if (_fromViewer && existingId) {
-      openGroupSetlist(existingId, { name, songIds, singerBySong });
+      openGroupSetlist(existingId, { name, songIds, singerBySong, keyBySong });
     } else {
       loadGroupSetlists(currentGroupId);
     }

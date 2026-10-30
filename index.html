@@ -2138,7 +2138,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.74</div>
+  <div class="version-badge">V 4.75</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5173,10 +5173,17 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
   document.getElementById('note-size-display').textContent = next + 'pt';
 });
 
+function isIOSDevice() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
 document.getElementById('mi-print').addEventListener('click', () => {
   closeDropdown();
-  // Must reach window.print() in this tap. iPad ignores it after an await.
-  printAll();
+  const old = document.getElementById('_print-content');
+  if (old) old.remove();
+  printAll(isIOSDevice());
 });
 document.getElementById('mi-print-pdf').addEventListener('click', () => {
   closeDropdown();
@@ -5268,10 +5275,46 @@ function stackPagesForPrint(pages) {
   return sheets;
 }
 
-function printAll() {
+function printSheetsOnIOS(sheets) {
+  const prev = document.getElementById('_print-frame');
+  if (prev) prev.remove();
+  const frame = document.createElement('iframe');
+  frame.id = '_print-frame';
+  frame.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;border:0;background:#fff;z-index:9998;';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument || frame.contentWindow.document;
+  const imgs = sheets.map(sheet => `<img src="${sheet.toDataURL('image/jpeg', 0.92)}">`).join('');
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head><title>Print</title><style>
+    @page { margin: 0.35in; size: letter portrait; }
+    html, body { margin: 0; background: #fff; }
+    img { display: block; width: 100%; height: auto; break-after: page; page-break-after: always; }
+    img:last-child { break-after: auto; page-break-after: auto; }
+    .back { position: fixed; top: 12px; right: 12px; z-index: 2; font: 600 17px -apple-system, Arial, sans-serif; padding: 10px 16px; border-radius: 12px; border: none; background: #e53935; color: #fff; }
+    @media print { .back { display: none !important; } }
+  </style></head><body><button class="back" onclick="parent.document.getElementById('_print-frame').remove()">Back</button>${imgs}</body></html>`);
+  doc.close();
+  const win = frame.contentWindow;
+  const html = document.documentElement;
+  const prevHtml = html.style.overflow;
+  const prevBody = document.body.style.overflow;
+  html.style.overflow = 'visible';
+  document.body.style.overflow = 'visible';
+  win.focus();
+  win.print();
+  html.style.overflow = prevHtml;
+  document.body.style.overflow = prevBody;
+  win.addEventListener('afterprint', () => { if (frame.parentNode) frame.remove(); }, { once: true });
+}
+
+function printAll(onIOS) {
   const pages = pagesForPrint();
   if (!pages.length) { hint('No pages loaded'); return; }
   const sheets = stackPagesForPrint(pages);
+  if (onIOS) {
+    printSheetsOnIOS(sheets);
+    return;
+  }
 
   let pd = document.getElementById('_print-content');
   if (pd) pd.parentNode.removeChild(pd);

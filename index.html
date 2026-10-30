@@ -1973,6 +1973,13 @@
     overflow-y: auto;
   }
   #_print-content.ready { display: block; }
+  #_print-content .print-page,
+  #_print-content .print-page canvas,
+  #_print-content .print-page img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
 
   @media print {
     @page { margin: 0.35in; size: letter portrait; }
@@ -1999,6 +2006,7 @@
       break-after: auto;
       page-break-after: auto;
     }
+    .print-page canvas,
     .print-page img {
       display: block !important;
       width: 100% !important;
@@ -2130,7 +2138,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.73</div>
+  <div class="version-badge">V 4.74</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5167,6 +5175,7 @@ document.getElementById('btn-note-size-up').addEventListener('click', () => {
 
 document.getElementById('mi-print').addEventListener('click', () => {
   closeDropdown();
+  // Must reach window.print() in this tap. iPad ignores it after an await.
   printAll();
 });
 document.getElementById('mi-print-pdf').addEventListener('click', () => {
@@ -5259,46 +5268,35 @@ function stackPagesForPrint(pages) {
   return sheets;
 }
 
-async function printAll() {
-  if (app.slides && app.slides.length) await ensureSlideRendered(app.slideIdx);
+function printAll() {
   const pages = pagesForPrint();
   if (!pages.length) { hint('No pages loaded'); return; }
-  hint('Preparing print…', 3000);
-  const images = stackPagesForPrint(pages).map(c => c.toDataURL('image/jpeg', 0.92));
+  const sheets = stackPagesForPrint(pages);
 
   let pd = document.getElementById('_print-content');
   if (pd) pd.parentNode.removeChild(pd);
   pd = document.createElement('div');
   pd.id = '_print-content';
 
-  const imgs = images.map((src) => {
+  sheets.forEach(sheet => {
     const wrapper = document.createElement('div');
     wrapper.className = 'print-page';
-    const img = document.createElement('img');
-    img.src = src;
-    wrapper.appendChild(img);
+    sheet.style.width = '100%';
+    sheet.style.height = 'auto';
+    wrapper.appendChild(sheet);
     pd.appendChild(wrapper);
-    return img;
   });
   document.body.appendChild(pd);
+  pd.classList.add('ready');
 
+  let cleaned = false;
   function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
     if (pd.parentNode) pd.parentNode.removeChild(pd);
   }
-  window.addEventListener('afterprint', cleanup, { once: true });
-
-  const decodeAll = imgs.map(img =>
-    typeof img.decode === 'function' ? img.decode() : Promise.resolve()
-  );
-
-  Promise.all(decodeAll).then(() => {
-    pd.classList.add('ready');
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      window.print();
-      // Fallback cleanup if afterprint doesn't fire (some iOS versions)
-      setTimeout(cleanup, 6000);
-    }));
-  });
+  window.addEventListener('afterprint', () => setTimeout(cleanup, 400), { once: true });
+  window.print();
 }
 
 async function savePDF(pdfWin) {

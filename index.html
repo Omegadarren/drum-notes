@@ -1975,7 +1975,7 @@
   #_print-content.ready { display: block; }
 
   @media print {
-    @page { margin: 0; size: auto; }
+    @page { margin: 0.35in; size: letter portrait; }
     html, body { height: auto !important; overflow: visible !important;
                  background: #000 !important; margin: 0 !important; padding: 0 !important; }
     body > * { display: none !important; }
@@ -1988,8 +1988,8 @@
     /* Each wrapper div is one print page */
     .print-page {
       display: block !important;
-      width: 100vw !important;
-      height: 100vh !important;
+      width: 100% !important;
+      height: auto !important;
       overflow: hidden !important;
       margin: 0 !important; padding: 0 !important;
       break-after: page;
@@ -2002,7 +2002,7 @@
     .print-page img {
       display: block !important;
       width: 100% !important;
-      height: 100% !important;
+      height: auto !important;
       object-fit: contain !important;
       object-position: center top !important;
       -webkit-print-color-adjust: exact;
@@ -2130,7 +2130,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.72</div>
+  <div class="version-badge">V 4.73</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -5178,7 +5178,7 @@ document.getElementById('mi-print-pdf').addEventListener('click', () => {
   savePDF(pdfWin);
 });
 
-function compositePage(pg) {
+function compositePageCanvas(pg) {
   const sess = currentSession();
   const DPR  = window.devicePixelRatio || 1;
   const tmp  = document.createElement('canvas');
@@ -5201,13 +5201,70 @@ function compositePage(pg) {
     }
   }
   drawInkOnExportCtx(ctx, pg, tmp.width, tmp.height);
-  return tmp.toDataURL('image/png');
+  return tmp;
 }
 
-function printAll() {
-  if (!app.pages.length) { hint('No pages loaded'); return; }
+function pagesForPrint() {
+  const slide = app.slides && app.slides[app.slideIdx];
+  const pages = (app.pages || []).filter(pg => pg && pg.canvas);
+  if (!slide) return pages;
+  const onThisSlide = pages.filter(pg => pg.wrap && slide.el && slide.el.contains(pg.wrap));
+  const mine = onThisSlide.length
+    ? onThisSlide
+    : pages.filter(pg => slide.songId && pg.songId === slide.songId);
+  const used = mine.length ? mine : pages;
+  return used.slice().sort((a, b) => (a.songPageIndex || 0) - (b.songPageIndex || 0));
+}
+
+// Stack short arrangement slices onto letter sheets. A full chart already
+// fills one sheet, so an unsliced song still prints one page per chart page.
+function stackPagesForPrint(pages) {
+  const sheetW = 1275;
+  const sheetH = 1650;
+  const margin = 28;
+  const gap = 16;
+  const innerW = sheetW - margin * 2;
+  const innerH = sheetH - margin * 2;
+  const sheets = [];
+  let canvas = null;
+  let ctx = null;
+  let y = 0;
+
+  function newSheet() {
+    canvas = document.createElement('canvas');
+    canvas.width = sheetW;
+    canvas.height = sheetH;
+    ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, sheetW, sheetH);
+    y = margin;
+    sheets.push(canvas);
+  }
+
+  newSheet();
+  pages.forEach(pg => {
+    const src = compositePageCanvas(pg);
+    if (!src.width || !src.height) return;
+    let drawW = innerW;
+    let drawH = src.height * (innerW / src.width);
+    if (drawH > innerH) {
+      drawH = innerH;
+      drawW = src.width * (innerH / src.height);
+    }
+    if (y > margin && y + drawH > margin + innerH) newSheet();
+    const x = margin + (innerW - drawW) / 2;
+    ctx.drawImage(src, x, y, drawW, drawH);
+    y += drawH + gap;
+  });
+  return sheets;
+}
+
+async function printAll() {
+  if (app.slides && app.slides.length) await ensureSlideRendered(app.slideIdx);
+  const pages = pagesForPrint();
+  if (!pages.length) { hint('No pages loaded'); return; }
   hint('Preparing print…', 3000);
-  const images = app.pages.map(compositePage);
+  const images = stackPagesForPrint(pages).map(c => c.toDataURL('image/jpeg', 0.92));
 
   let pd = document.getElementById('_print-content');
   if (pd) pd.parentNode.removeChild(pd);
@@ -5245,70 +5302,20 @@ function printAll() {
 }
 
 async function savePDF(pdfWin) {
-  if (!app.pages.length) { hint('No pages loaded'); return; }
+  if (app.slides && app.slides.length) await ensureSlideRendered(app.slideIdx);
+  const pages = pagesForPrint();
+  if (!pages.length) { hint('No pages loaded'); return; }
   if (!window.jspdf) { hint('PDF library not loaded yet, try again'); return; }
   hint('Building PDF…');
   const { jsPDF } = window.jspdf;
   const sess = currentSession();
-  const DPR  = window.devicePixelRatio || 1;
+  const sheets = stackPagesForPrint(pages);
+  const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
 
-  // First page sets the initial document format
-  const first = app.pages[0].canvas;
-  const dW0 = Math.round(first.width / DPR);
-  const dH0 = Math.round(first.height / DPR);
-
-  const doc = new jsPDF({
-    unit: 'px',
-    format: [dW0, dH0],
-    orientation: dW0 > dH0 ? 'landscape' : 'portrait',
-    hotfixes: ['px_scaling'],
+  sheets.forEach((sheet, i) => {
+    if (i > 0) doc.addPage();
+    doc.addImage(sheet.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 8.5, 11);
   });
-
-  const fontSize = getNoteFontSize();
-  const noteColor = getNoteColor();
-
-  for (let i = 0; i < app.pages.length; i++) {
-    const pg = app.pages[i];
-    const dW = Math.round(pg.canvas.width  / DPR);
-    const dH = Math.round(pg.canvas.height / DPR);
-
-    if (i > 0) doc.addPage([dW, dH], dW > dH ? 'landscape' : 'portrait');
-
-    const imgData = pg.canvas.toDataURL('image/jpeg', 0.88);
-    doc.addImage(imgData, 'JPEG', 0, 0, dW, dH);
-
-    if (sess) {
-      const pageAnns = sess.annotations.filter(ann => ann && ann.text && ann.type !== 'ink' && findPageFor(ann) === pg);
-      if (pageAnns.length) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(fontSize);
-        doc.setTextColor(noteColor);
-        pageAnns.forEach(ann => {
-          const x = ann.xPct * dW;
-          const y = ann.yPct * dH;
-          doc.text('\u2022 ' + ann.text, x, y, { baseline: 'middle' });
-        });
-      }
-    }
-    inkStrokes.forEach(s => {
-      if (!strokeOnPage(s, pg) || !s.points || s.points.length < 1) return;
-      const hex = (s.color || '#ff3b30').replace('#', '');
-      const r = parseInt(hex.slice(0, 2), 16) || 255;
-      const g = parseInt(hex.slice(2, 4), 16) || 59;
-      const b = parseInt(hex.slice(4, 6), 16) || 48;
-      doc.setDrawColor(r, g, b);
-      doc.setLineWidth(Math.max(0.8, (s.width || INK_WIDTH_FRAC) * dW));
-      doc.setLineCap('round');
-      doc.setLineJoin('round');
-      for (let p = 1; p < s.points.length; p++) {
-        const x1 = s.points[p - 1][0] * dW;
-        const y1 = s.points[p - 1][1] * dH;
-        const x2 = s.points[p][0] * dW;
-        const y2 = s.points[p][1] * dH;
-        doc.line(x1, y1, x2, y2);
-      }
-    });
-  }
 
   const name = (sess && sess.name)
     ? sess.name.replace(/[^\w\-. ]/g, '_')

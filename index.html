@@ -2138,7 +2138,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.76</div>
+  <div class="version-badge">V 4.77</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -3575,6 +3575,28 @@ function transposeChordToken(text, steps) {
   }
   return root + (m[2] || '') + (m[3] || '') + bass;
 }
+function transposeChartFragment(text, steps) {
+  const raw = String(text || '');
+  if (!/[A-G]/.test(raw)) return null;
+  const re = /([A-G](?:#|b)?)(m|maj|min|sus|dim|aug|add)?(\d*)(?:\/([A-G](?:#|b)?))?/g;
+  let changed = false;
+  const next = raw.replace(re, (full, _root, _qual, _num, _bass, offset) => {
+    const before = offset > 0 ? raw[offset - 1] : '';
+    const after = raw[offset + full.length] || '';
+    if (before && /[A-Za-z.]/.test(before)) return full;
+    if (after && /[A-Za-z]/.test(after)) return full;
+    const t = transposeChordToken(full, steps);
+    if (!t || t === full) return full;
+    changed = true;
+    return t;
+  });
+  if (!changed) return null;
+  const leftover = next
+    .replace(/([A-G](?:#|b)?)(m|maj|min|sus|dim|aug|add)?(\d*)(?:\/[A-G](?:#|b)?)?/g, '')
+    .replace(/[^A-Za-z]+/g, '');
+  if (leftover) return null;
+  return next;
+}
 function keyOptionHtml(chosen) {
   const key = normalizeChartKey(chosen);
   let html = `<option value=""${!key ? ' selected' : ''}>Original</option>`;
@@ -3657,10 +3679,12 @@ async function paintTransposedChords(page, ctx, viewport, songId) {
     const raw = item.str || '';
     const token = raw.trim();
     const keyMatch = KEY_LINE.exec(token);
+    const pureChord = !keyMatch ? transposeChordToken(token, steps) : null;
+    const fragment = !keyMatch && !pureChord ? transposeChartFragment(token, steps) : null;
     if (!keyMatch && isAttachable(token)) return;
-    if (!keyMatch && !transposeChordToken(token, steps)) return;
+    if (!keyMatch && !pureChord && !fragment) return;
 
-    const attached = keyMatch ? [] : suffixesFor(i);
+    const attached = (keyMatch || fragment) ? [] : suffixesFor(i);
     let sourceToken = token;
     let sup = '';
     attached.forEach(j => {
@@ -3669,9 +3693,9 @@ async function paintTransposedChords(page, ctx, viewport, songId) {
       else sourceToken += s;
       consumed.add(j);
     });
-    const chord = keyMatch ? null : transposeChordToken(sourceToken, steps);
-    if (!keyMatch && !chord) return;
-    if (!keyMatch && chord === sourceToken && !sup) return;
+    const chord = keyMatch || fragment ? null : transposeChordToken(sourceToken, steps);
+    if (!keyMatch && !fragment && !chord) return;
+    if (!keyMatch && !fragment && chord === sourceToken && !sup) return;
 
     const box = boxes[i];
     ctx.fillStyle = '#ffffff';
@@ -3688,7 +3712,7 @@ async function paintTransposedChords(page, ctx, viewport, songId) {
       ctx.fillText(full, box.vx, box.baseline - box.vh * 0.02);
       return;
     }
-    const label = chord;
+    const label = fragment || chord;
     let nextPdfX = box.pdfX + Math.max(box.pdfW + 28, 40);
     items.forEach((n, j) => {
       if (j === i || attached.includes(j)) return;

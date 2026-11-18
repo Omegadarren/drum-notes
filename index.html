@@ -2103,6 +2103,15 @@
   .arr-card-btn:active { background:var(--surface); }
   .arr-move-btn  { padding:4px 6px; }
   .arr-move-btn:disabled { opacity:0.25; cursor:not-allowed; pointer-events:none; }
+  .arr-deleted-label {
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--muted); padding:16px 14px 6px;
+  }
+  .arr-section-card.arr-section-deleted {
+    opacity:0.55;
+    cursor:default;
+    background:transparent;
+  }
 
   /* Arranger — right preview */
   .arr-right { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; background:var(--pdf-bg); }
@@ -2138,7 +2147,7 @@
     <button class="btn-refresh" id="btn-refresh" title="Refresh app">↺</button>
     <button class="btn-fullscreen" id="btn-fs-start" title="Full screen">⛶</button>
   </div>
-  <div class="version-badge">V 4.77</div>
+  <div class="version-badge">V 4.78</div>
 
   <img class="hero-photo"
        src="band-hero.jpg"
@@ -7959,7 +7968,7 @@ function arrRenderSectionList() {
       <button class="arr-card-btn arr-move-btn" data-role="up"   title="Move up"${idx === 0 ? ' disabled' : ''}>↑</button>
       <button class="arr-card-btn arr-move-btn" data-role="down" title="Move down"${idx === total - 1 ? ' disabled' : ''}>↓</button>
       <button class="arr-card-btn" data-role="dup"  title="Add another copy">+</button>
-      <button class="arr-card-btn" data-role="del"  title="Remove from arrangement">✕</button>`;
+      <button class="arr-card-btn" data-role="del"  title="Set aside — you can restore it from Deleted">✕</button>`;
 
     card.addEventListener('dragstart', e => {
       dragSrcIdx   = idx;
@@ -8004,6 +8013,30 @@ function arrRenderSectionList() {
 
     listEl.appendChild(card);
   });
+
+  const usedIds = new Set(arrState.arrangement.map(a => a.sectionId));
+  const deleted = arrSortedSections().filter(sec => !usedIds.has(sec.id));
+  if (deleted.length) {
+    const hdr = document.createElement('div');
+    hdr.className = 'arr-deleted-label';
+    hdr.textContent = 'Deleted';
+    listEl.appendChild(hdr);
+    deleted.forEach(sec => {
+      const pageCount = arrGetSectionCrops(sec).length;
+      const card = document.createElement('div');
+      card.className = 'arr-section-card arr-section-deleted';
+      card.innerHTML = `
+        <span class="arr-card-name">${esc(sec.name)}</span>
+        <span class="arr-card-meta">${pageCount}p</span>
+        <button class="arr-card-btn" data-role="restore" title="Put this section back in the song">Restore</button>`;
+      card.querySelector('[data-role="restore"]').addEventListener('click', e => {
+        e.stopPropagation();
+        arrState.arrangement.push({ instanceId: genId(), sectionId: sec.id });
+        arrRenderSectionList();
+      });
+      listEl.appendChild(card);
+    });
+  }
 
   arrRenderPreview(previewEl);
 }
